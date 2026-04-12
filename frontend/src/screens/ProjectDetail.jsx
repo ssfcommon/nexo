@@ -1,0 +1,611 @@
+import React, { useEffect, useState } from 'react';
+import { api, ASSET_ORIGIN } from '../api.js';
+import { Avatar, AvatarStack, PriorityTag, ProgressBar, deptDotColor, COMPLEXITIES } from '../components/ui.jsx';
+import { NewMeetingModal } from '../components/QuickActions.jsx';
+import Modal, { Field, inputCls } from '../components/Modal.jsx';
+import { fireConfetti } from '../components/Confetti.jsx';
+import KanbanBoard from '../components/KanbanBoard.jsx';
+import GanttChart from '../components/GanttChart.jsx';
+import ConfirmModal from '../components/ConfirmModal.jsx';
+import { useToast } from '../context/ToastContext.jsx';
+import useLiveUpdates from '../hooks/useLiveUpdates.js';
+
+function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke, onEdit, onDelete, onReorder }) {
+  const [newTitle, setNewTitle] = useState('');
+  const [ownerId, setOwnerId] = useState('');
+  const [deadline, setDeadline] = useState('');
+  const [leaveWarn, setLeaveWarn] = useState(null);
+  const [addingSubFor, setAddingSubFor] = useState(null);
+  const [subTitle, setSubTitle] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editComplexity, setEditComplexity] = useState('');
+  const [newComplexity, setNewComplexity] = useState('');
+  const [dragId, setDragId] = useState(null);
+  const [hoverId, setHoverId] = useState(null);
+
+  useEffect(() => {
+    let cancel = false;
+    setLeaveWarn(null);
+    if (ownerId && deadline) {
+      api.checkLeave(ownerId, deadline).then(r => {
+        if (!cancel && r.onLeave) setLeaveWarn(r);
+      }).catch(() => {});
+    }
+    return () => { cancel = true; };
+  }, [ownerId, deadline]);
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (!newTitle.trim()) return;
+    onAdd(newTitle.trim(), ownerId ? Number(ownerId) : null, deadline || null, null, newComplexity || null);
+    setNewTitle('');
+    setOwnerId('');
+    setDeadline('');
+    setNewComplexity('');
+    setLeaveWarn(null);
+  };
+  return (
+    <div className="card !p-0 overflow-hidden">
+      {subtasks.map((s, i) => (
+        <React.Fragment key={s.id}>
+        <div
+          draggable={s.depth === 0}
+          onDragStart={() => setDragId(s.id)}
+          onDragEnd={() => { setDragId(null); setHoverId(null); }}
+          onDragOver={(e) => { e.preventDefault(); if (s.depth === 0 && s.id !== dragId) setHoverId(s.id); }}
+          onDrop={() => { if (dragId && s.id !== dragId && s.depth === 0) { onReorder?.(dragId, s.id); } setDragId(null); setHoverId(null); }}
+          className={'flex items-center gap-3 py-3 group transition ' +
+            (i < subtasks.length - 1 ? 'border-b border-[#F3F4F6] ' : '') +
+            (dragId === s.id ? 'opacity-40 ' : '') +
+            (hoverId === s.id ? 'bg-brand-blueLight ' : '') +
+            (s.depth === 0 ? 'cursor-grab active:cursor-grabbing ' : '')}
+          style={{ paddingLeft: `${(s.depth || 0) * 24 + 16}px`, paddingRight: '16px' }}
+        >
+          <button
+            onClick={() => onToggle(s)}
+            className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+            style={{
+              borderColor: s.status === 'done' ? '#22C55E' : '#D1D5DB',
+              backgroundColor: s.status === 'done' ? '#22C55E' : 'transparent',
+            }}
+          >
+            {s.status === 'done' && <span className="text-white text-xs">✓</span>}
+          </button>
+          <div className="flex-1 min-w-0">
+            {editingId === s.id ? (
+              <form onSubmit={(e) => { e.preventDefault(); if (editTitle.trim()) { onEdit(s.id, { title: editTitle.trim(), complexity: editComplexity || undefined }); setEditingId(null); } }} className="flex items-center gap-1 flex-wrap">
+                <input value={editTitle} onChange={e => setEditTitle(e.target.value)} className="flex-1 h-7 px-2 text-[13px] rounded border border-brand-blue bg-white outline-none min-w-[100px]" autoFocus />
+                <select value={editComplexity} onChange={e => setEditComplexity(e.target.value)} className="h-7 px-1 text-[10px] rounded border border-line-light bg-white">
+                  <option value="">Complexity</option>
+                  {COMPLEXITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <button type="submit" className="text-[11px] text-brand-blue font-semibold">Save</button>
+                <button type="button" onClick={() => setEditingId(null)} className="text-[11px] text-ink-300">Cancel</button>
+              </form>
+            ) : (
+              <p className={'text-[14px] flex items-center gap-2 ' + (s.status === 'done' ? 'line-through text-ink-300' : 'text-ink-900')}>
+                <span className="truncate">{s.title}</span>
+                {s.complexity && (
+                  <span className="tag" style={{ color: s.complexity === 'High Complex' ? '#EF4444' : '#22C55E', backgroundColor: s.complexity === 'High Complex' ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)' }}>{s.complexity === 'High Complex' ? 'HC' : 'LC'}</span>
+                )}
+                {s.assignment_status === 'pending' && (
+                  <span className="tag" style={{ color: '#F59E0B', backgroundColor: 'rgba(245,158,11,0.12)' }}>Pending</span>
+                )}
+                {s.assignment_status === 'declined' && (
+                  <span className="tag" style={{ color: '#EF4444', backgroundColor: 'rgba(239,68,68,0.1)' }}>Declined</span>
+                )}
+                <button onClick={() => { setEditingId(s.id); setEditTitle(s.title); setEditComplexity(s.complexity || ''); }} className="text-ink-300 hover:text-brand-blue flex-shrink-0 opacity-0 group-hover:opacity-100 transition" title="Edit">
+                  <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </button>
+                <button onClick={() => onDelete?.(s.id)} className="text-ink-300 hover:text-danger flex-shrink-0 opacity-0 group-hover:opacity-100 transition" title="Delete">
+                  <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                </button>
+              </p>
+            )}
+            {s.deadline && editingId !== s.id && (
+              <p className="text-[11px] text-ink-500 mt-0.5">
+                Due {new Date(s.deadline).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+              </p>
+            )}
+          </div>
+          {s.owner_initials && (
+            <Avatar
+              user={{ initials: s.owner_initials, avatar_color: s.owner_color, avatar_url: s.owner_avatar, name: s.owner_name }}
+              size={26}
+            />
+          )}
+          {s.owner_id && s.owner_id !== meId && s.status !== 'done' && (
+            <button onClick={() => onPoke(s)} className="text-base" title="Poke" aria-label="Poke">👆</button>
+          )}
+          {(s.depth || 0) < 2 && s.status !== 'done' && (
+            <button onClick={() => setAddingSubFor(addingSubFor === s.id ? null : s.id)} className="text-[14px] text-ink-300 hover:text-brand-blue" title="Add substep">+</button>
+          )}
+        </div>
+        {addingSubFor === s.id && (
+          <form
+            onSubmit={(e) => { e.preventDefault(); if (subTitle.trim()) { onAdd(subTitle.trim(), null, null, s.id); setSubTitle(''); setAddingSubFor(null); } }}
+            className="flex items-center gap-2 px-4 py-2 bg-[#FAFBFC]"
+            style={{ paddingLeft: `${(s.depth || 0) * 24 + 48}px` }}
+          >
+            <input
+              value={subTitle}
+              onChange={e => setSubTitle(e.target.value)}
+              placeholder="Add a substep…"
+              className="flex-1 bg-transparent text-[13px] outline-none placeholder:text-ink-300"
+              autoFocus
+            />
+            <button type="submit" className="text-[12px] text-brand-blue font-semibold">Add</button>
+            <button type="button" onClick={() => setAddingSubFor(null)} className="text-[12px] text-ink-300">Cancel</button>
+          </form>
+        )}
+      </React.Fragment>
+      ))}
+      <form onSubmit={submit} className="px-4 py-3 border-t border-[#F3F4F6] bg-[#FAFBFC] space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="text-ink-300 text-lg">+</span>
+          <input
+            value={newTitle}
+            onChange={e => setNewTitle(e.target.value)}
+            placeholder="Add a subtask…"
+            className="flex-1 bg-transparent text-[14px] outline-none placeholder:text-ink-300"
+          />
+        </div>
+        {newTitle && (
+          <>
+            <div className="flex items-center gap-2">
+              <select
+                value={ownerId}
+                onChange={e => setOwnerId(e.target.value)}
+                className="flex-1 h-9 px-2 text-[13px] rounded-[8px] border border-line-light bg-white"
+              >
+                <option value="">Assign to me</option>
+                {members.map(m => (
+                  <option key={m.id} value={m.id}>Assign to {m.name.split(' ')[0]}</option>
+                ))}
+              </select>
+              <select
+                value={newComplexity}
+                onChange={e => setNewComplexity(e.target.value)}
+                className="h-9 px-2 text-[12px] rounded-[8px] border border-line-light bg-white"
+              >
+                <option value="">Complexity</option>
+                {COMPLEXITIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <input
+                type="date"
+                value={deadline}
+                onChange={e => setDeadline(e.target.value)}
+                className="h-9 px-2 text-[13px] rounded-[8px] border border-line-light bg-white"
+              />
+              <button type="submit" className="pill pill-primary !h-9 !px-3 !text-[13px]">Add</button>
+            </div>
+            {leaveWarn && (
+              <div className="rounded-[8px] px-3 py-2 text-[12px] flex items-start gap-2" style={{ backgroundColor: 'rgba(245,158,11,0.1)', color: '#B45309' }}>
+                <span>⚠️</span>
+                <span>{members.find(m => m.id === Number(ownerId))?.name.split(' ')[0]} is on leave {leaveWarn.from} → {leaveWarn.to}. You can still assign, but they'll see it on return.</span>
+              </div>
+            )}
+          </>
+        )}
+      </form>
+    </div>
+  );
+}
+
+function renderCommentBody(body) {
+  // highlight @Mentions
+  const parts = body.split(/(@\w+)/g);
+  return parts.map((p, i) =>
+    p.startsWith('@')
+      ? <span key={i} className="text-brand-blue font-semibold">{p}</span>
+      : <span key={i}>{p}</span>
+  );
+}
+
+function relTime(iso) {
+  const d = new Date(iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z');
+  const diffMs = Date.now() - d.getTime();
+  const h = Math.round(diffMs / 3600000);
+  if (h < 1) return 'just now';
+  if (h < 24) return `${h}h ago`;
+  const days = Math.round(h / 24);
+  if (days < 7) return `${days}d ago`;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+function EditProjectModal({ open, onClose, project, onUpdated }) {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [deadline, setDeadline] = useState('');
+  const [department, setDepartment] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (open && project) {
+      setTitle(project.title || '');
+      setDescription(project.description || '');
+      setDeadline(project.deadline || '');
+      setDepartment(project.department || 'Operations');
+    }
+  }, [open, project]);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+    setBusy(true);
+    try {
+      await api.updateProject(project.id, {
+        title: title.trim(),
+        description: description.trim() || null,
+        deadline: deadline || null,
+        department,
+      });
+      onUpdated?.();
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="Edit Project">
+      <form onSubmit={submit}>
+        <Field label="Title"><input className={inputCls} value={title} onChange={e => setTitle(e.target.value)} autoFocus required /></Field>
+        <Field label="Department">
+          <select className={inputCls} value={department} onChange={e => setDepartment(e.target.value)}>
+            <option>Operations</option><option>CEO's Office</option><option>Common</option>
+          </select>
+        </Field>
+        <Field label="Description"><textarea className={inputCls + ' h-20 resize-none'} value={description} onChange={e => setDescription(e.target.value)} /></Field>
+        <Field label="Deadline"><input type="date" className={inputCls} value={deadline} onChange={e => setDeadline(e.target.value)} /></Field>
+        <button disabled={busy} type="submit" className="w-full h-11 rounded-[10px] bg-brand-blue text-white font-semibold disabled:opacity-60">{busy ? 'Saving…' : 'Save Changes'}</button>
+      </form>
+    </Modal>
+  );
+}
+
+export default function ProjectDetail({ projectId, me, onBack }) {
+  const showToast = useToast();
+  const [p, setP] = useState(null);
+  const [newComment, setNewComment] = useState('');
+  const [pendingFiles, setPendingFiles] = useState([]);
+  const [meetings, setMeetings] = useState([]);
+  const [meetingModalOpen, setMeetingModalOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [detailView, setDetailView] = useState('list'); // 'list' | 'board' | 'timeline'
+  const [confirmDelete, setConfirmDelete] = useState(null); // { type, id, title }
+
+  const load = () => {
+    api.project(projectId).then(setP);
+    api.projectMeetings(projectId).then(setMeetings).catch(() => setMeetings([]));
+  };
+  useEffect(() => { load(); }, [projectId]);
+
+  useLiveUpdates({
+    'subtask-updated': (data) => { if (data.projectId === projectId) load(); },
+    'comment-created': (data) => { if (data.projectId === projectId) load(); },
+  });
+
+  const pokeSubtask = async (s) => {
+    try {
+      const r = await api.poke(s.owner_id, s.id, projectId);
+      showToast(r.queuedForReturn ? `Poke sent — ${s.owner_name} is on leave` : `Poked ${s.owner_name?.split(' ')[0]} 👆`);
+    } catch (e) {
+      showToast(e.status === 429 ? 'Already poked today' : 'Could not send poke', 'warning');
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!confirmDelete) return;
+    const { type, id } = confirmDelete;
+    try {
+      if (type === 'project') { await api.deleteProject(id); showToast('Project deleted'); onBack(); return; }
+      if (type === 'subtask') { await api.deleteSubtask(id); showToast('Subtask deleted'); }
+      if (type === 'comment') { await api.deleteComment(id); showToast('Comment deleted'); }
+      load();
+    } catch { showToast('Delete failed', 'error'); }
+    setConfirmDelete(null);
+  };
+
+  if (!p) return <div className="p-4 text-ink-300">Loading…</div>;
+
+  const toggleSubtask = async (s) => {
+    const next = s.status === 'done' ? 'pending' : 'done';
+    await api.updateSubtask(s.id, { status: next });
+    if (next === 'done') { fireConfetti(); showToast('Subtask completed'); }
+    load();
+  };
+  const addSubtask = async (title, ownerId, deadline, parentId, complexity) => {
+    await api.createSubtask(projectId, { title, ownerId, deadline, parentId, complexity });
+    showToast('Subtask added');
+    load();
+  };
+  const editSubtask = async (id, patch) => {
+    await api.updateSubtask(id, patch);
+    load();
+  };
+  const deleteSubtask = (id) => {
+    const s = p.subtasks.find(st => st.id === id);
+    setConfirmDelete({ type: 'subtask', id, title: s?.title || 'this subtask' });
+  };
+  const reorderSubtask = async (draggedId, targetId) => {
+    const dragIdx = p.subtasks.findIndex(s => s.id === draggedId);
+    const targetIdx = p.subtasks.findIndex(s => s.id === targetId);
+    if (dragIdx < 0 || targetIdx < 0) return;
+    const targetOrder = p.subtasks[targetIdx].sort_order;
+    await api.updateSubtask(draggedId, { sort_order: targetOrder });
+    // Shift others
+    const dir = dragIdx < targetIdx ? 1 : -1;
+    const start = Math.min(dragIdx, targetIdx);
+    const end = Math.max(dragIdx, targetIdx);
+    for (let i = start; i <= end; i++) {
+      if (p.subtasks[i].id !== draggedId) {
+        await api.updateSubtask(p.subtasks[i].id, { sort_order: p.subtasks[i].sort_order - dir });
+      }
+    }
+    load();
+    showToast('Subtasks reordered');
+  };
+
+  const moveSubtask = async (subtask, newStatus) => {
+    await api.updateSubtask(subtask.id, { status: newStatus });
+    if (newStatus === 'done') { fireConfetti(); showToast('Subtask completed'); }
+    load();
+  };
+
+  const deleteComment = (id) => {
+    setConfirmDelete({ type: 'comment', id, title: 'this comment' });
+  };
+  const submitComment = async (e) => {
+    e.preventDefault();
+    if (!newComment.trim() && pendingFiles.length === 0) return;
+    const attachments = await Promise.all(
+      pendingFiles.map(async f => ({ filename: f.name, dataUrl: await readFileAsDataURL(f) }))
+    );
+    await api.createComment(projectId, newComment.trim() || '(attachment)', attachments);
+    setNewComment('');
+    setPendingFiles([]);
+    showToast('Comment posted');
+    load();
+  };
+
+  const doneCount = p.subtasks.filter(s => s.status === 'done').length;
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center gap-3 pt-2">
+        <button onClick={onBack} className="text-ink-500" aria-label="Back">
+          <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        </button>
+        <h1 className="text-[20px] font-bold text-ink-900 flex-1 min-w-0 truncate">{p.title}</h1>
+        <button onClick={() => setEditOpen(true)} className="w-8 h-8 rounded-full border border-line-light flex items-center justify-center text-ink-300 hover:text-brand-blue hover:border-brand-blue transition" title="Edit project">
+          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button onClick={() => setConfirmDelete({ type: 'project', id: projectId, title: p.title })} className="w-8 h-8 rounded-full border border-line-light flex items-center justify-center text-ink-300 hover:text-danger hover:border-danger transition" title="Delete project">
+          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+        </button>
+        <button onClick={() => window.print()} className="w-8 h-8 rounded-full border border-line-light flex items-center justify-center text-ink-300 hover:text-ink-900 transition" title="Print / Save PDF">
+          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        </button>
+      </div>
+
+      {/* Meta card */}
+      <div className="card">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: deptDotColor(p.department) }} />
+            <span className="text-[13px] text-ink-500">{p.department}</span>
+          </div>
+          <PriorityTag priority={p.priority} />
+          {p.deadline && (
+            <span className="text-[12px] text-ink-500 ml-auto">
+              Due {new Date(p.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </span>
+          )}
+        </div>
+        {p.description && <p className="text-[13px] text-ink-500 mb-3">{p.description}</p>}
+        <div className="flex items-center gap-3 mb-2">
+          <div className="flex-1"><ProgressBar percent={p.progress} /></div>
+          <span className="text-[13px] font-semibold text-brand-blue">{p.progress}%</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] text-ink-300">{doneCount} of {p.subtasks.length} subtasks complete</p>
+          <AvatarStack users={p.members} max={3} size={26} />
+        </div>
+      </div>
+
+      {/* Archive ceremony — shows when all subtasks done */}
+      {p.progress === 100 && p.subtasks.length > 0 && p.status === 'active' && (
+        <div className="card text-center py-5" style={{ background: 'linear-gradient(135deg, #F0FFF4, #EEF1FF)' }}>
+          <p className="text-[28px] mb-1">🎉</p>
+          <p className="text-[16px] font-bold text-ink-900">All subtasks complete!</p>
+          <p className="text-[13px] text-ink-500 mt-1 mb-3">Great work, team. Ready to close this project?</p>
+          <button
+            onClick={async () => {
+              await api.updateProject(projectId, { status: 'completed' });
+              fireConfetti(); fireConfetti();
+              showToast('Project completed! 🎉');
+              load();
+            }}
+            className="pill bg-success text-white !h-10 !px-5 !text-[13px] font-semibold"
+          >
+            ✓ Mark as Complete
+          </button>
+        </div>
+      )}
+      {p.status === 'completed' && (
+        <div className="card flex items-center gap-3 py-3" style={{ backgroundColor: 'rgba(34,197,94,0.06)' }}>
+          <span className="text-[18px]">✅</span>
+          <div className="flex-1">
+            <p className="text-[13px] font-semibold text-success">Project Completed</p>
+            <p className="text-[11px] text-ink-500">All tasks finished. This project is archived.</p>
+          </div>
+          <button
+            onClick={async () => {
+              await api.updateProject(projectId, { status: 'active' });
+              showToast('Project reopened');
+              load();
+            }}
+            className="text-[11px] text-brand-blue font-medium"
+          >
+            Reopen
+          </button>
+        </div>
+      )}
+
+      {/* Checklist / Board / Timeline */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          {['list', 'board', 'timeline'].map(v => (
+            <button key={v} onClick={() => setDetailView(v)}
+              className={'px-3 h-8 rounded-full text-[12px] font-medium transition ' +
+                (detailView === v ? 'bg-brand-blue text-white' : 'bg-[#F3F4F6] text-ink-500 hover:bg-[#E5E7EB]')}>
+              {v === 'list' ? 'List' : v === 'board' ? 'Board' : 'Timeline'}
+            </button>
+          ))}
+        </div>
+        {detailView === 'list' && (
+          <Checklist
+            subtasks={p.subtasks}
+            members={p.members || []}
+            meId={me?.id}
+            projectId={projectId}
+            onToggle={toggleSubtask}
+            onAdd={addSubtask}
+            onPoke={pokeSubtask}
+            onEdit={editSubtask}
+            onDelete={deleteSubtask}
+            onReorder={reorderSubtask}
+          />
+        )}
+        {detailView === 'board' && (
+          <KanbanBoard subtasks={p.subtasks} onMove={moveSubtask} />
+        )}
+        {detailView === 'timeline' && (
+          <GanttChart projectStart={p.created_at?.slice(0, 10)} projectEnd={p.deadline} subtasks={p.subtasks} />
+        )}
+      </div>
+
+      {/* Meetings */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="section-label">Meetings ({meetings.length})</p>
+          <button onClick={() => setMeetingModalOpen(true)} className="text-[13px] text-brand-blue font-semibold">+ Schedule</button>
+        </div>
+        <div className="space-y-2">
+          {meetings.map(m => (
+            <div key={m.id} className="card !p-3 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-[8px] bg-brand-blueLight flex items-center justify-center text-brand-blue">📅</div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-[14px] text-ink-900 truncate">{m.title}</p>
+                <p className="text-[11px] text-ink-500">{m.start_time} · {m.duration_min} min</p>
+              </div>
+              {m.meet_link && (
+                <a href={m.meet_link} target="_blank" rel="noreferrer" className="pill bg-success text-white !h-8 !px-3 !text-[12px]">Join</a>
+              )}
+            </div>
+          ))}
+          {meetings.length === 0 && <p className="text-ink-300 text-sm">No meetings scheduled.</p>}
+        </div>
+      </div>
+
+      <NewMeetingModal
+        open={meetingModalOpen}
+        onClose={() => setMeetingModalOpen(false)}
+        onCreated={() => { load(); showToast('Meeting scheduled'); }}
+        projectId={projectId}
+        members={p.members || []}
+      />
+
+      <EditProjectModal open={editOpen} onClose={() => setEditOpen(false)} project={p} onUpdated={() => { load(); showToast('Project updated'); setEditOpen(false); }} />
+
+      <ConfirmModal
+        open={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title={confirmDelete?.type === 'project' ? 'Delete Project' : confirmDelete?.type === 'subtask' ? 'Delete Subtask' : 'Delete Comment'}
+        message={`Are you sure you want to delete "${confirmDelete?.title}"? This cannot be undone.`}
+      />
+
+      {/* Comments */}
+      <div>
+        <p className="section-label mb-2">Comments ({p.comments.length})</p>
+        <div className="space-y-3">
+          {p.comments.map(c => (
+            <div key={c.id} className="card flex gap-3 !p-3">
+              <Avatar
+                user={{ initials: c.author_initials, avatar_color: c.author_color, avatar_url: c.author_avatar, name: c.author_name }}
+                size={32}
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[13px] font-semibold text-ink-900">{c.author_name}</span>
+                  <span className="text-[11px] text-ink-300">{relTime(c.created_at)}</span>
+                  {c.author_id === me?.id && (
+                    <button onClick={() => deleteComment(c.id)} className="text-ink-300 hover:text-danger text-[11px] ml-auto" title="Delete">
+                      <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                    </button>
+                  )}
+                </div>
+                <p className="text-[13px] text-ink-900 mt-0.5 whitespace-pre-wrap">{renderCommentBody(c.body)}</p>
+                {c.attachments?.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {c.attachments.map(a => {
+                      const fullUrl = ASSET_ORIGIN + a.url;
+                      return a.mime?.startsWith('image/') ? (
+                        <a key={a.id} href={fullUrl} target="_blank" rel="noreferrer">
+                          <img src={fullUrl} alt={a.filename} className="h-20 w-20 rounded-[8px] object-cover border border-line-light" />
+                        </a>
+                      ) : (
+                        <a key={a.id} href={fullUrl} download={a.filename} className="rounded-[8px] border border-line-light px-2 py-1 text-[12px] text-brand-blue">
+                          📎 {a.filename}
+                        </a>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          {p.comments.length === 0 && <p className="text-ink-300 text-sm">No comments yet.</p>}
+        </div>
+        <form onSubmit={submitComment} className="mt-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <input
+              value={newComment}
+              onChange={e => setNewComment(e.target.value)}
+              placeholder="Add a comment… use @Name to mention"
+              className="flex-1 px-4 h-11 rounded-pill border border-line-light bg-white text-[14px]"
+            />
+            <label className="pill pill-outline cursor-pointer !px-3" title="Attach files">
+              📎
+              <input
+                type="file"
+                multiple
+                className="hidden"
+                onChange={e => setPendingFiles(Array.from(e.target.files || []))}
+              />
+            </label>
+            <button type="submit" className="pill pill-primary">Post</button>
+          </div>
+          {pendingFiles.length > 0 && (
+            <div className="flex flex-wrap gap-2 text-[12px] text-ink-500">
+              {pendingFiles.map((f, i) => (
+                <span key={i} className="rounded-full bg-line-light px-2 py-0.5">📎 {f.name}</span>
+              ))}
+              <button type="button" onClick={() => setPendingFiles([])} className="text-danger">clear</button>
+            </div>
+          )}
+        </form>
+      </div>
+    </div>
+  );
+}

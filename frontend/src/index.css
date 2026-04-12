@@ -1,0 +1,345 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Base ─── */
+html, body, #root { height: 100%; }
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background: #FAFBFC;
+  color: #111827;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Selection ─── */
+::selection { background: rgba(74, 108, 247, 0.15); color: #111827; }
+
+/* ─── Scrollbar (subtle) ─── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 100px; }
+::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+
+/* ─── Dark Mode — Deep Navy with Luminosity ─── */
+html.dark-theme body {
+  background: #060B18;
+  color: #E2E8F0;
+}
+
+/* Backgrounds — deeper base, cards clearly pop */
+html.dark-theme .bg-page { background: #060B18 !important; }
+html.dark-theme .bg-white { background: #0D1424 !important; }
+html.dark-theme .bg-\[\#F7F8FA\] { background: #0A1020 !important; }
+html.dark-theme .bg-\[\#FAFBFC\] { background: #060B18 !important; }
+
+/* Cards — visible edge glow, inset highlight at top */
+html.dark-theme .card {
+  background: #0D1424 !important;
+  border: 1px solid rgba(148, 163, 184, 0.1) !important;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(148, 163, 184, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+}
+html.dark-theme .card-hover:hover {
+  border-color: rgba(148, 163, 184, 0.15) !important;
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(148, 163, 184, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Text — bright headings, muted body, dim labels */
+html.dark-theme .text-ink-900 { color: #F8FAFC !important; }
+html.dark-theme .text-ink-700 { color: #CBD5E1 !important; }
+html.dark-theme .text-ink-500 { color: #6B82A8 !important; }
+html.dark-theme .text-ink-400,
+html.dark-theme .text-ink-300,
+html.dark-theme .section-label { color: #3D5278 !important; }
+
+/* Borders — subtle edge, not invisible */
+html.dark-theme .border-line-light,
+html.dark-theme .border-line-medium,
+html.dark-theme .border-\[\#F3F4F6\],
+html.dark-theme .border-\[\#E5E7EB\] { border-color: rgba(148, 163, 184, 0.08) !important; }
+
+/* Dividers */
+html.dark-theme [class*="divide-"] > * + * { border-color: rgba(148, 163, 184, 0.08) !important; }
+
+/* Inputs — recessed feel */
+html.dark-theme .input-base,
+html.dark-theme input,
+html.dark-theme select,
+html.dark-theme textarea {
+  background: #080E1C !important;
+  border-color: rgba(148, 163, 184, 0.12) !important;
+  color: #E2E8F0 !important;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3) !important;
+}
+html.dark-theme .input-base:focus,
+html.dark-theme input:focus,
+html.dark-theme select:focus,
+html.dark-theme textarea:focus {
+  border-color: #4A6CF7 !important;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3), 0 0 0 3px rgba(74, 108, 247, 0.2) !important;
+}
+
+/* Pills — glass with visible border */
+html.dark-theme .pill-outline {
+  background: rgba(148, 163, 184, 0.06) !important;
+  border-color: rgba(148, 163, 184, 0.12) !important;
+  color: #94A3B8 !important;
+}
+html.dark-theme .pill-outline:hover {
+  background: rgba(148, 163, 184, 0.1) !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  color: #CBD5E1 !important;
+}
+
+/* Active pill (brand blue) — subtle glow */
+html.dark-theme .pill-primary,
+html.dark-theme .bg-brand-blue {
+  box-shadow: 0 0 12px rgba(74, 108, 247, 0.3) !important;
+}
+
+/* Progress bar — glow effect */
+html.dark-theme .h-1\.5 > div[style*="background"] {
+  box-shadow: 0 0 8px rgba(74, 108, 247, 0.4);
+}
+
+/* Progress bar track */
+html.dark-theme .bg-ink-100 { background: rgba(148, 163, 184, 0.06) !important; }
+html.dark-theme .bg-\[\#F3F4F6\] { background: rgba(148, 163, 184, 0.06) !important; }
+html.dark-theme .bg-\[\#F9FAFB\] { background: rgba(148, 163, 184, 0.04) !important; }
+
+/* Nav bar — solid dark with top border glow */
+html.dark-theme nav {
+  background: #060B18 !important;
+  border-color: rgba(148, 163, 184, 0.08) !important;
+}
+
+/* Sidebar */
+html.dark-theme aside {
+  background: #060B18 !important;
+  border-color: rgba(148, 163, 184, 0.06) !important;
+}
+
+/* Modals — dramatic shadow */
+html.dark-theme .shadow-modal { box-shadow: 0 24px 80px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(148,163,184,0.08) !important; }
+html.dark-theme .shadow-modal,
+html.dark-theme [class*="shadow-2xl"] { box-shadow: 0 24px 80px rgba(0, 0, 0, 0.7) !important; }
+
+/* Modal backdrop */
+html.dark-theme .bg-black\/40 { background: rgba(0, 0, 0, 0.6) !important; }
+
+/* Tags — slightly brighter on dark */
+html.dark-theme .tag { opacity: 0.95; }
+
+/* Scrollbar */
+html.dark-theme ::-webkit-scrollbar-thumb { background: #1a2235; }
+html.dark-theme ::-webkit-scrollbar-thumb:hover { background: #2a3a55; }
+
+/* Avatar ring */
+html.dark-theme .ring-white { --tw-ring-color: #0D1424 !important; }
+
+/* Inline bg-white overrides for toggle tabs, filter bars, etc. */
+html.dark-theme [style*="background"][style*="#F5F3FF"],
+html.dark-theme [style*="background"][style*="#EEF1FF"],
+html.dark-theme .rounded-card[style*="background"] {
+  background: rgba(74, 108, 247, 0.08) !important;
+}
+
+/* Section toggles that use inline bg-white */
+html.dark-theme .bg-\[\#F7F8FA\],
+html.dark-theme .bg-\[\#F3F4F6\],
+html.dark-theme .bg-\[\#FAFBFC\],
+html.dark-theme .bg-gray-100 {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Hover states */
+html.dark-theme .hover\:bg-\[\#F7F8FA\]:hover { background: rgba(148, 163, 184, 0.06) !important; }
+html.dark-theme .hover\:shadow-md:hover { box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(148,163,184,0.06) !important; }
+
+/* Success/danger/warn subtle backgrounds */
+html.dark-theme [style*="rgba(34,197,94,0.08)"],
+html.dark-theme [style*="rgba(34,197,94,0.06)"] { background-color: rgba(16, 185, 129, 0.12) !important; }
+html.dark-theme [style*="rgba(239,68,68,0.05)"] { background-color: rgba(239, 68, 68, 0.12) !important; }
+html.dark-theme [style*="#FEE2E2"] { background-color: rgba(239, 68, 68, 0.1) !important; }
+html.dark-theme [style*="#FEF2F2"] { background-color: rgba(239, 68, 68, 0.08) !important; }
+html.dark-theme [style*="#F0FFF4"] { background: linear-gradient(135deg, rgba(16,185,129,0.1), rgba(74,108,247,0.1)) !important; }
+
+/* FAB labels */
+html.dark-theme .fab-label {
+  --fab-label-bg: #0D1424 !important;
+  --fab-label-color: #CBD5E1 !important;
+  --fab-label-border: rgba(148, 163, 184, 0.12) !important;
+}
+html.dark-theme .fab-main {
+  box-shadow: 0 8px 40px rgba(74, 108, 247, 0.5), 0 0 0 4px rgba(74, 108, 247, 0.15) !important;
+}
+
+/* Toast — inverted for visibility */
+html.dark-theme .bg-ink-900 { background: #F1F5F9 !important; color: #060B18 !important; }
+
+/* Celebrate toast */
+html.dark-theme .celebrate-toast {
+  background: #0D1424 !important;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  color: #F8FAFC;
+}
+
+/* ─── Component Layer ─── */
+@layer components {
+  /* Card — clean with layered shadow for depth */
+  .card {
+    @apply bg-white rounded-card p-4;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.04),
+      0 1px 2px rgba(0, 0, 0, 0.02),
+      inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+  }
+  .card-hover:hover {
+    border-color: rgba(0, 0, 0, 0.1);
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.06),
+      0 1px 4px rgba(0, 0, 0, 0.04),
+      inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    transform: translateY(-1px);
+  }
+
+  /* Pill — rounded action buttons */
+  .pill {
+    @apply inline-flex items-center justify-center gap-1.5 px-4 h-9 rounded-pill text-sm font-semibold;
+    transition: all 0.15s ease;
+  }
+  .pill:active { transform: scale(0.97); }
+  .pill-primary {
+    @apply bg-brand-blue text-white;
+  }
+  .pill-primary:hover { background: #3B5DE7; }
+  .pill-outline {
+    @apply bg-white border;
+    color: #374151;
+    border-color: #E5E7EB;
+  }
+  .pill-outline:hover { background: #F9FAFB; border-color: #D1D5DB; }
+
+  /* Tag — small inline labels */
+  .tag {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  /* Section label — uppercase section titles */
+  .section-label {
+    @apply text-xs font-semibold tracking-wider uppercase;
+    color: #9CA3AF;
+  }
+
+  /* Input base — consistent form inputs */
+  .input-base {
+    @apply w-full h-11 px-3.5 border bg-white outline-none;
+    border-radius: 10px;
+    border-color: #E5E7EB;
+    font-size: 14px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .input-base::placeholder { color: #9CA3AF; }
+  .input-base:focus {
+    border-color: #4A6CF7;
+    box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.1);
+  }
+
+  /* Toggle switch — refined toggle */
+  .toggle-track {
+    @apply relative w-11 h-6 rounded-full cursor-pointer;
+    transition: background-color 0.2s ease;
+  }
+  .toggle-knob {
+    @apply absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-xs;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .toggle-track[data-on="true"] .toggle-knob {
+    transform: translateX(20px);
+  }
+}
+
+/* ─── Animations ─── */
+@keyframes skeleton-shimmer {
+  0%   { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+.skeleton-shimmer {
+  background-image: linear-gradient(90deg, #F3F4F6 0%, #FAFBFC 50%, #F3F4F6 100%);
+  background-size: 200px 100%;
+  background-repeat: no-repeat;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes confetti-fall {
+  0%   { transform: translate(0, 0) rotate(0) scale(1); opacity: 1; }
+  20%  { opacity: 1; }
+  100% { transform: translate(var(--dx), calc(var(--dy) * -1 + 80vh)) rotate(var(--rot)) scale(0.3); opacity: 0; }
+}
+.confetti-piece {
+  animation: confetti-fall var(--duration, 2s) cubic-bezier(.15,.8,.3,1) forwards;
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
+@keyframes celebrate-pop {
+  0%   { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+  40%  { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+  60%  { transform: translate(-50%, -50%) scale(0.97); }
+  80%  { transform: translate(-50%, -50%) scale(1); }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+.celebrate-toast {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  padding: 12px 28px;
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+  animation: celebrate-pop 2.2s cubic-bezier(.34,1.56,.64,1) forwards;
+  z-index: 10;
+}
+
+@keyframes overdue-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.3); }
+  50%      { box-shadow: 0 0 0 6px rgba(239,68,68,0.0); }
+}
+.overdue-pulse { animation: overdue-pulse 2s ease-in-out infinite; }
+
+@keyframes fadeIn {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* ─── FAB Breathing Glow ─── */
+@keyframes fab-breathe {
+  0%, 100% { box-shadow: 0 0 12px 2px rgba(74, 108, 247, 0.25); }
+  50%      { box-shadow: 0 0 24px 6px rgba(74, 108, 247, 0.45); }
+}
+.fab-breathe {
+  border-radius: 9999px;
+  animation: fab-breathe 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ─── Utilities ─── */
+.transition-default { transition: all 0.15s ease; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ─── Print ─── */
+@media print {
+  nav, .pill, button { display: none !important; }
+  .card { box-shadow: none !important; border: 1px solid #E5E7EB !important; }
+}
