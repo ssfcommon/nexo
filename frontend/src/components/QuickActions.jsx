@@ -13,12 +13,14 @@ export function QuickTaskModal({ open, onClose, onCreated }) {
   const [complexity, setComplexity] = useState(COMPLEXITIES[1]);
   const [recurrence, setRecurrence] = useState('');
   const [description, setDescription] = useState('');
+  const [assignedTo, setAssignedTo] = useState('');
+  const [users, setUsers] = useState([]);
   const [files, setFiles] = useState([]);
   const [links, setLinks] = useState([]);
   const [newLink, setNewLink] = useState('');
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { if (open) { setTitle(''); setDeadline(today()); setComplexity(COMPLEXITIES[1]); setRecurrence(''); setDescription(''); setFiles([]); setLinks([]); setNewLink(''); } }, [open]);
+  useEffect(() => { if (open) { setTitle(''); setDeadline(today()); setComplexity(COMPLEXITIES[1]); setRecurrence(''); setDescription(''); setAssignedTo(''); setFiles([]); setLinks([]); setNewLink(''); api.users().then(setUsers); } }, [open]);
 
   const readFiles = async (fileList) => {
     const result = [];
@@ -35,7 +37,7 @@ export function QuickTaskModal({ open, onClose, onCreated }) {
     setBusy(true);
     try {
       const attachments = await readFiles(files);
-      await api.createTask({ title: title.trim(), deadline, complexity, isQuick: true, recurrence: recurrence || null, description: description || null, attachments, links });
+      await api.createTask({ title: title.trim(), deadline, complexity, isQuick: true, recurrence: recurrence || null, description: description || null, assignedTo: assignedTo || null, attachments, links });
       onCreated?.();
       onClose();
     } finally { setBusy(false); }
@@ -49,6 +51,12 @@ export function QuickTaskModal({ open, onClose, onCreated }) {
         </Field>
         <Field label="Description (optional)">
           <textarea className={inputCls + ' !h-16 py-2'} value={description} onChange={e => setDescription(e.target.value)} placeholder="Details, notes…" />
+        </Field>
+        <Field label="Assign to">
+          <select className={inputCls} value={assignedTo} onChange={e => setAssignedTo(e.target.value)}>
+            <option value="">Myself</option>
+            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Deadline">

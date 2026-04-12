@@ -402,10 +402,10 @@ async function urgentTasks() {
 }
 
 async function createTask(data) {
-  const { title, projectId, deadline, priority, complexity, isQuick, recurrence, alarm_at, description } = data;
+  const { title, projectId, deadline, priority, complexity, isQuick, recurrence, alarm_at, description, assignedTo } = data;
   return unwrap(await supabase.from('tasks').insert({
     title, description: description || null,
-    project_id: projectId || null, owner_id: uid(),
+    project_id: projectId || null, owner_id: assignedTo || uid(),
     deadline: deadline || null,
     status: 'pending',
     is_quick: isQuick ? true : false,
