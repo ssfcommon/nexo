@@ -5,6 +5,9 @@
   "buildCommand": "cd frontend && npm run build",
   "outputDirectory": "frontend/dist",
   "rewrites": [
-    { "source": "/((?!assets/|icons/|sw\\.js|manifest\\.json|logo\\.png).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!assets/|icons/|sw\\.js|manifest\\.json|logo\\.png).*)",
+      "destination": "/index.html"
+    }
   ]
 }
