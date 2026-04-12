@@ -27,7 +27,7 @@ function Row({ icon, label, right, onClick, danger }) {
   const Tag = onClick ? 'button' : 'div';
   const iconEl = typeof icon === 'string' ? icons[icon] || <span className="text-lg">{icon}</span> : icon;
   return (
-    <Tag onClick={onClick} className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-[#F9FAFB] transition">
+    <Tag onClick={onClick} className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-ink-100/60 transition">
       <span className={'w-5 flex-shrink-0 ' + (danger ? 'text-danger' : 'text-ink-300')}>{iconEl}</span>
       <span className={'flex-1 text-[14px] ' + (danger ? 'text-danger' : 'text-ink-900')}>{label}</span>
       {right}
@@ -165,7 +165,7 @@ function ReportsSection() {
           const blob = new Blob([rows.map(r=>r.join(',')).join('\n')], {type:'text/csv'});
           const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
           a.download = `nexo-report-${scope}-${new Date().toISOString().slice(0,10)}.csv`; a.click();
-        }} className="w-9 h-9 rounded-full border border-line-light flex items-center justify-center text-ink-500 hover:bg-[#F7F8FA]" title="Download CSV">📄</button>}
+        }} className="w-9 h-9 rounded-full border border-line-light flex items-center justify-center text-ink-500 hover:bg-ink-100/60" title="Download CSV">📄</button>}
       </div>
 
       {/* Stats */}
@@ -203,7 +203,7 @@ function ReportsSection() {
           <span>Dept</span><span className="text-center">Done</span><span className="text-center">Late</span><span className="text-right">Eff</span>
         </div>
         {r.departments.map((d,i) => (
-          <div key={d.name} className={'grid grid-cols-[2fr_1fr_1fr_1fr] items-center px-3 py-2 text-[13px] ' + (i < r.departments.length-1 ? 'border-b border-[#F3F4F6]' : '')}>
+          <div key={d.name} className={'grid grid-cols-[2fr_1fr_1fr_1fr] items-center px-3 py-2 text-[13px] ' + (i < r.departments.length-1 ? 'border-b border-line-light' : '')}>
             <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }} /><span className="text-ink-900">{d.name}</span></div>
             <span className="text-center text-ink-900">{d.done}</span>
             <span className="text-center text-ink-900">{d.overdue}</span>
@@ -334,20 +334,20 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
           {/* Preferences */}
           <div>
             <p className="section-label mb-2">Preferences {saving && <span className="text-ink-300 normal-case font-normal">· saving…</span>}</p>
-            <div className="card !p-0 overflow-hidden divide-y divide-[#F3F4F6]">
+            <div className="card !p-0 overflow-hidden divide-y divide-line-light">
               <Row icon="moon" label="Dark mode" right={<Toggle on={prefs?.theme === 'dark'} onChange={v => update({ theme: v ? 'dark' : 'light' })} />} />
               <Row icon="bell" label="Notifications" right={<Toggle on={!!prefs?.notifications} onChange={v => update({ notifications: v })} />} />
               <Row icon="calendar" label="Calendar sync"
-                right={<select value={prefs?.calendarSync || 'Google'} onChange={e => update({ calendarSync: e.target.value })} className="text-[13px] bg-transparent text-ink-500 outline-none"><option>Google</option><option>Outlook</option><option>None</option></select>} />
+                right={<select value={prefs?.calendarSync || 'Google'} onChange={e => update({ calendarSync: e.target.value })} className="inline-control text-[13px] text-ink-500 outline-none"><option>Google</option><option>Outlook</option><option>None</option></select>} />
               <Row icon="clock" label="Mood check-in time"
-                right={<input type="time" value={prefs?.moodTime || '09:00'} onChange={e => update({ moodTime: e.target.value })} className="text-[13px] bg-transparent text-ink-500 outline-none" />} />
+                right={<input type="time" value={prefs?.moodTime || '09:00'} onChange={e => update({ moodTime: e.target.value })} className="inline-control text-[13px] text-ink-500 outline-none" />} />
             </div>
           </div>
 
           {/* Account */}
           <div>
             <p className="section-label mb-2">Account</p>
-            <div className="card !p-0 overflow-hidden divide-y divide-[#F3F4F6]">
+            <div className="card !p-0 overflow-hidden divide-y divide-line-light">
               <Row icon="user" label="Edit profile" onClick={() => setEditOpen(true)} right={<span className="text-ink-300">›</span>} />
               <Row icon="lock" label="Privacy" onClick={() => setPrivacyOpen(true)} right={<span className="text-ink-300">›</span>} />
               <Row icon="help" label="Help & feedback" onClick={() => setHelpOpen(true)} right={<span className="text-ink-300">›</span>} />
@@ -358,7 +358,7 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
           {/* Dev tools */}
           <div>
             <p className="section-label mb-2">Developer</p>
-            <div className="card !p-0 overflow-hidden divide-y divide-[#F3F4F6]">
+            <div className="card !p-0 overflow-hidden divide-y divide-line-light">
               <Row icon="refresh" label={resetBusy ? 'Resetting…' : 'Reset demo data'} onClick={resetBusy ? undefined : doReset}
                 right={<span className="text-ink-300 text-[11px]">restores seed</span>} />
               <Row icon="mail" label="Preview email digest" onClick={async () => setDigest(await api.digestPreview())}
