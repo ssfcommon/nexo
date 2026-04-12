@@ -137,7 +137,16 @@ function BugTracker({ me, users }) {
       {/* Add Bug Modal */}
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Report a Bug">
         <form onSubmit={submit}>
-          <Field label="App Name"><input className={inputCls} value={appName} onChange={e => setAppName(e.target.value)} required autoFocus placeholder="e.g. Nexo, HRM Tool, Website" /></Field>
+          <Field label="App Name">
+            <select className={inputCls} value={appName} onChange={e => setAppName(e.target.value)} required autoFocus>
+              <option value="">Select app…</option>
+              <option value="Farlo">Farlo</option>
+              <option value="XPNS">XPNS</option>
+              <option value="Nexo">Nexo</option>
+              <option value="Milaan">Milaan</option>
+              <option value="CEO Dashboard">CEO Dashboard</option>
+            </select>
+          </Field>
           <Field label="Issue"><textarea className={inputCls + ' !h-20 py-2'} value={issue} onChange={e => setIssue(e.target.value)} required placeholder="Describe the bug…" /></Field>
           <Field label="Screenshot (optional)">
             <label className="cursor-pointer">
