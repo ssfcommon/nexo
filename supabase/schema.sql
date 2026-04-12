@@ -493,8 +493,8 @@ CREATE POLICY notifications_update ON nexo.notifications FOR UPDATE TO authentic
 
 -- Tasks: own only for writes, read all for transparency
 CREATE POLICY tasks_select ON nexo.tasks FOR SELECT TO authenticated USING (true);
-CREATE POLICY tasks_insert ON nexo.tasks FOR INSERT TO authenticated WITH CHECK (owner_id = nexo.current_user_id());
-CREATE POLICY tasks_update ON nexo.tasks FOR UPDATE TO authenticated USING (owner_id = nexo.current_user_id());
+CREATE POLICY tasks_insert ON nexo.tasks FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY tasks_update ON nexo.tasks FOR UPDATE TO authenticated USING (true);
 
 -- Leaves: read all (team visibility), write own
 CREATE POLICY leaves_select ON nexo.leaves FOR SELECT TO authenticated USING (true);
