@@ -17,6 +17,7 @@ function BugTracker({ me, users }) {
   const [apps, setApps] = useState([]);
   const [filter, setFilter] = useState('');
   const [addOpen, setAddOpen] = useState(false);
+  const [showResolved, setShowResolved] = useState(false);
   const [appName, setAppName] = useState('');
   const [issue, setIssue] = useState('');
   const [screenshot, setScreenshot] = useState(null);
@@ -68,33 +69,47 @@ function BugTracker({ me, users }) {
       </div>
 
       {/* Bug list */}
-      {bugs.length === 0 && <div className="text-center py-8 text-ink-300 text-[13px]">No bugs reported{filter ? ` for ${filter}` : ''}.</div>}
-      <div className="space-y-2">
-        {bugs.map((b, i) => (
-          <div key={b.id} className="card !p-3">
-            <div className="flex items-start gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: statusColor(b.status) }} />
-                  <span className="text-[11px] text-ink-300 font-semibold uppercase">{b.app_name}</span>
-                  <span className="text-[11px] text-ink-300">#{i + 1}</span>
-                  <select value={b.status} onChange={async (e) => { await api.updateBug(b.id, { status: e.target.value }); load(); }}
-                    className="ml-auto h-6 px-1 text-[10px] rounded border border-line-light bg-white">
-                    <option value="open">Open</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="resolved">Resolved</option>
-                  </select>
-                </div>
-                <p className="text-[13px] text-ink-900">{b.issue}</p>
-                <div className="flex items-center gap-3 mt-2 text-[11px] text-ink-500">
-                  {b.assigned_name && <span className="flex items-center gap-1">
-                    <Avatar user={{ initials: b.assigned_initials, avatar_color: b.assigned_color, avatar_url: b.assigned_avatar }} size={16} />
-                    {b.assigned_name.split(' ')[0]}
-                  </span>}
-                  {b.deadline && <span>Due {b.deadline}</span>}
-                  <span>by {b.reporter_name?.split(' ')[0]}</span>
-                </div>
-              </div>
+      {(() => {
+        const activeBugs = bugs.filter(b => b.status !== 'resolved');
+        const resolvedBugs = bugs.filter(b => b.status === 'resolved');
+        const displayBugs = showResolved ? bugs : activeBugs;
+
+        return (
+          <>
+            {displayBugs.length === 0 && !resolvedBugs.length && (
+              <div className="text-center py-8 text-ink-300 text-[13px]">No bugs reported{filter ? ` for ${filter}` : ''}.</div>
+            )}
+            {displayBugs.length === 0 && resolvedBugs.length > 0 && !showResolved && (
+              <div className="text-center py-8 text-ink-300 text-[13px]">All bugs resolved! 🎉</div>
+            )}
+            <div className="space-y-2">
+              {displayBugs.map((b, i) => {
+                const isResolved = b.status === 'resolved';
+                return (
+                  <div key={b.id} className={'card !p-3 transition-opacity ' + (isResolved ? 'opacity-50' : '')}>
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: statusColor(b.status) }} />
+                          <span className={'text-[11px] font-semibold uppercase ' + (isResolved ? 'text-ink-300 line-through' : 'text-ink-300')}>{b.app_name}</span>
+                          <span className="text-[11px] text-ink-300">#{i + 1}</span>
+                          <select value={b.status} onChange={async (e) => { await api.updateBug(b.id, { status: e.target.value }); load(); }}
+                            className="inline-control ml-auto h-6 px-1 text-[10px] rounded border border-line-light bg-white">
+                            <option value="open">Open</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="resolved">Resolved</option>
+                          </select>
+                        </div>
+                        <p className={'text-[13px] ' + (isResolved ? 'text-ink-400 line-through' : 'text-ink-900')}>{b.issue}</p>
+                        <div className="flex items-center gap-3 mt-2 text-[11px] text-ink-500">
+                          {b.assigned_name && <span className="flex items-center gap-1">
+                            <Avatar user={{ initials: b.assigned_initials, avatar_color: b.assigned_color, avatar_url: b.assigned_avatar }} size={16} />
+                            {b.assigned_name.split(' ')[0]}
+                          </span>}
+                          {b.deadline && <span>Due {b.deadline}</span>}
+                          <span>by {b.reporter_name?.split(' ')[0]}</span>
+                        </div>
+                      </div>
               {b.screenshot_url && (
                 <a href={ASSET_ORIGIN + b.screenshot_url} target="_blank" rel="noreferrer">
                   <img src={ASSET_ORIGIN + b.screenshot_url} alt="screenshot" className="w-16 h-16 rounded-[6px] object-cover border border-line-light flex-shrink-0" />
@@ -102,8 +117,22 @@ function BugTracker({ me, users }) {
               )}
             </div>
           </div>
-        ))}
-      </div>
+                );
+              })}
+            </div>
+
+            {/* Resolved toggle */}
+            {resolvedBugs.length > 0 && (
+              <button
+                onClick={() => setShowResolved(v => !v)}
+                className="w-full text-center text-[12px] font-medium text-ink-400 hover:text-ink-700 py-2 transition"
+              >
+                {showResolved ? 'Hide' : 'Show'} {resolvedBugs.length} resolved bug{resolvedBugs.length !== 1 ? 's' : ''}
+              </button>
+            )}
+          </>
+        );
+      })()}
 
       {/* Add Bug Modal */}
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Report a Bug">
