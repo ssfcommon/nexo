@@ -780,23 +780,31 @@ async function bugApps() {
 }
 
 async function createBug(data) {
-  const { appName, issue, screenshotDataUrl, assignedTo, deadline } = data;
-  let screenshotUrl = null;
-  if (screenshotDataUrl) {
-    const match = /^data:([^;]+);base64,(.+)$/.exec(screenshotDataUrl);
+  const { appName, issue, screenshots = [], assignedTo, deadline } = data;
+  // Support legacy single screenshotDataUrl too
+  const allScreenshots = data.screenshotDataUrl ? [data.screenshotDataUrl, ...screenshots] : screenshots;
+
+  const uploadedUrls = [];
+  for (let i = 0; i < allScreenshots.length; i++) {
+    const match = /^data:([^;]+);base64,(.+)$/.exec(allScreenshots[i]);
     if (match) {
       const bytes = Uint8Array.from(atob(match[2]), c => c.charCodeAt(0));
       const ext = match[1] === 'image/png' ? 'png' : 'jpg';
-      const path = `bug-${Date.now()}.${ext}`;
+      const path = `bug-${Date.now()}-${i}.${ext}`;
       await supabase.storage.from('screenshots').upload(path, bytes, { contentType: match[1] });
       const { data: { publicUrl } } = supabase.storage.from('screenshots').getPublicUrl(path);
-      screenshotUrl = publicUrl;
+      uploadedUrls.push(publicUrl);
     }
   }
+
+  const screenshotUrl = uploadedUrls[0] || null;
+  const extraScreenshots = uploadedUrls.slice(1);
+
   const b = unwrap(await supabase.from('bugs').insert({
     app_name: appName, issue, screenshot_url: screenshotUrl,
     assigned_to: assignedTo || null, deadline: deadline || null,
     reported_by: uid(), status: 'open',
+    metadata: extraScreenshots.length > 0 ? { extra_screenshots: extraScreenshots } : {},
   }).select('*, assigned:users!assigned_to(name, initials, avatar_color, avatar_url), reporter:users!reported_by(name)').single());
 
   if (assignedTo && assignedTo !== uid()) {
@@ -812,10 +820,29 @@ async function createBug(data) {
 
 async function updateBug(id, data) {
   const updates = {};
-  if (data.status) updates.status = data.status;
+  if (data.status) {
+    updates.status = data.status;
+    if (data.status === 'resolved') updates.resolved_at = new Date().toISOString();
+    else updates.resolved_at = null;
+  }
   if (data.assignedTo !== undefined) updates.assigned_to = data.assignedTo;
   if (data.deadline !== undefined) updates.deadline = data.deadline;
+  if (data.resolution !== undefined) updates.metadata = { resolution: data.resolution };
   return unwrap(await supabase.from('bugs').update(updates).eq('id', id).select().single());
+}
+
+async function myBugs() {
+  const { data } = await supabase.from('bugs').select(
+    '*, reporter:users!reported_by(name, initials, avatar_color, avatar_url)'
+  ).eq('assigned_to', uid()).in('status', ['open', 'in_progress']).order('created_at', { ascending: false });
+  return (data || []).map(b => ({
+    ...b,
+    reporter_name: b.reporter?.name,
+    reporter_initials: b.reporter?.initials,
+    reporter_color: b.reporter?.avatar_color,
+    reporter_avatar: b.reporter?.avatar_url,
+    reporter: undefined,
+  }));
 }
 
 // ── Chat ─────────────────────────────────────────────────
@@ -1311,6 +1338,7 @@ export const api = {
   bugApps,
   createBug,
   updateBug,
+  myBugs,
   chatMessages,
   sendChat,
   setAlarm,

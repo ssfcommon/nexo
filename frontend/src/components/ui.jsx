@@ -6,9 +6,10 @@ export function Avatar({ user, size = 32 }) {
   if (!user) return null;
   const url = user.avatar_url || user.owner_avatar || user.author_avatar;
   if (url) {
+    const src = url.startsWith('http') ? url : ASSET_ORIGIN + url;
     return (
       <img
-        src={ASSET_ORIGIN + url}
+        src={src}
         alt={user.name || ''}
         title={user.name}
         className="rounded-full object-cover flex-shrink-0"

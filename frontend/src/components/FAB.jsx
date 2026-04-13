@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { QuickTaskModal, NewProjectModal, NewEventModal } from './QuickActions.jsx';
+import { QuickTaskModal, NewProjectModal, NewEventModal, ReportBugModal } from './QuickActions.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 
 const actions = [
   { id: 'task',    label: 'Task',    icon: '⚡', color: '#4A6CF7', angle: 0 },
   { id: 'project', label: 'Project', icon: '📁', color: '#10B981', angle: 1 },
   { id: 'event',   label: 'Event',   icon: '📅', color: '#F59E0B', angle: 2 },
+  { id: 'bug',     label: 'Bug',     icon: '🐛', color: '#EF4444', angle: 3 },
 ];
 
 export default function FAB() {
@@ -133,6 +134,7 @@ export default function FAB() {
       <QuickTaskModal  open={modal === 'task'}    onClose={() => setModal(null)} onCreated={() => { showToast('Task created'); }} />
       <NewProjectModal open={modal === 'project'} onClose={() => setModal(null)} onCreated={() => { showToast('Project created'); }} />
       <NewEventModal   open={modal === 'event'}   onClose={() => setModal(null)} onCreated={() => { showToast('Event created'); }} />
+      <ReportBugModal  open={modal === 'bug'}     onClose={() => setModal(null)} onCreated={() => { showToast('Bug reported'); }} />
     </>
   );
 }

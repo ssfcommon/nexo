@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Modal, { Field, inputCls } from './Modal.jsx';
 import { api } from '../api.js';
+import { useToast } from '../context/ToastContext.jsx';
 
 import { PRIORITIES, COMPLEXITIES } from './ui.jsx';
 const DEPARTMENTS = ['Operations', "CEO's Office", 'Common'];
@@ -8,6 +9,7 @@ const DEPARTMENTS = ['Operations', "CEO's Office", 'Common'];
 function today() { return new Date().toISOString().slice(0, 10); }
 
 export function QuickTaskModal({ open, onClose, onCreated }) {
+  const showToast = useToast();
   const [title, setTitle] = useState('');
   const [deadline, setDeadline] = useState(today());
   const [complexity, setComplexity] = useState(COMPLEXITIES[1]);
@@ -40,7 +42,7 @@ export function QuickTaskModal({ open, onClose, onCreated }) {
       await api.createTask({ title: title.trim(), deadline, complexity, isQuick: true, recurrence: recurrence || null, description: description || null, assignedTo: assignedTo || null, attachments, links });
       onCreated?.();
       onClose();
-    } finally { setBusy(false); }
+    } catch (err) { showToast(err.message || 'Failed to create task', 'error'); } finally { setBusy(false); }
   };
 
   return (
@@ -104,6 +106,7 @@ export function QuickTaskModal({ open, onClose, onCreated }) {
 }
 
 export function NewProjectModal({ open, onClose, onCreated }) {
+  const showToast = useToast();
   const [title, setTitle] = useState('');
   const [department, setDepartment] = useState('Operations');
   const [description, setDescription] = useState('');
@@ -155,7 +158,7 @@ export function NewProjectModal({ open, onClose, onCreated }) {
       }
       onCreated?.();
       onClose();
-    } finally { setBusy(false); }
+    } catch (err) { showToast(err.message || 'Failed to create project', 'error'); } finally { setBusy(false); }
   };
 
   return (
@@ -319,6 +322,7 @@ export function NewProjectModal({ open, onClose, onCreated }) {
 }
 
 export function NewMeetingModal({ open, onClose, onCreated, projectId, members = [] }) {
+  const showToast = useToast();
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(today());
   const [time, setTime] = useState('10:00');
@@ -346,7 +350,7 @@ export function NewMeetingModal({ open, onClose, onCreated, projectId, members =
       });
       setResult(meeting);
       onCreated?.();
-    } finally { setBusy(false); }
+    } catch (err) { showToast(err.message || 'Failed to schedule meeting', 'error'); } finally { setBusy(false); }
   };
 
   return (
@@ -399,6 +403,7 @@ export function NewMeetingModal({ open, onClose, onCreated, projectId, members =
 }
 
 export function NewEventModal({ open, onClose, onCreated }) {
+  const showToast = useToast();
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(today());
   const [time, setTime] = useState('09:00');
@@ -430,7 +435,7 @@ export function NewEventModal({ open, onClose, onCreated }) {
       });
       onCreated?.();
       onClose();
-    } finally { setBusy(false); }
+    } catch (err) { showToast(err.message || 'Failed to create event', 'error'); } finally { setBusy(false); }
   };
 
   return (
@@ -461,6 +466,94 @@ export function NewEventModal({ open, onClose, onCreated }) {
         <button disabled={busy} type="submit" className="w-full h-11 rounded-[10px] bg-brand-blue text-white font-semibold disabled:opacity-60">
           {busy ? 'Creating…' : 'Create Event'}
         </button>
+      </form>
+    </Modal>
+  );
+}
+
+export function ReportBugModal({ open, onClose, onCreated }) {
+  const showToast = useToast();
+  const [appName, setAppName] = useState('');
+  const [issue, setIssue] = useState('');
+  const [screenshots, setScreenshots] = useState([]);
+  const [previews, setPreviews] = useState([]);
+  const [assignedTo, setAssignedTo] = useState('');
+  const [deadline, setDeadline] = useState('');
+  const [users, setUsers] = useState([]);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { if (open) { setAppName(''); setIssue(''); setScreenshots([]); setPreviews([]); setAssignedTo(''); setDeadline(''); api.users().then(setUsers); } }, [open]);
+
+  const readFile = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
+
+  const addFiles = (fileList) => {
+    const newFiles = Array.from(fileList);
+    setScreenshots(prev => [...prev, ...newFiles]);
+    setPreviews(prev => [...prev, ...newFiles.map(f => URL.createObjectURL(f))]);
+  };
+
+  const removeFile = (index) => {
+    setScreenshots(prev => prev.filter((_, i) => i !== index));
+    setPreviews(prev => { URL.revokeObjectURL(prev[index]); return prev.filter((_, i) => i !== index); });
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!appName.trim() || !issue.trim()) return;
+    setBusy(true);
+    try {
+      const screenshotDataUrls = await Promise.all(screenshots.map(readFile));
+      await api.createBug({ appName: appName.trim(), issue: issue.trim(), screenshots: screenshotDataUrls, assignedTo: assignedTo ? Number(assignedTo) : null, deadline: deadline || null });
+      onCreated?.();
+      onClose();
+    } catch (err) { showToast(err.message || 'Failed to report bug', 'error'); } finally { setBusy(false); }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="Report a Bug">
+      <form onSubmit={submit}>
+        <Field label="App Name">
+          <select className={inputCls} value={appName} onChange={e => setAppName(e.target.value)} required autoFocus>
+            <option value="">Select app…</option>
+            <option value="Farlo">Farlo</option>
+            <option value="XPNS">XPNS</option>
+            <option value="Nexo">Nexo</option>
+            <option value="Milaan">Milaan</option>
+            <option value="CEO Dashboard">CEO Dashboard</option>
+          </select>
+        </Field>
+        <Field label="Issue"><textarea className={inputCls + ' !h-20 py-2'} value={issue} onChange={e => setIssue(e.target.value)} required placeholder="Describe the bug…" /></Field>
+        <Field label="Screenshots (optional)">
+          <div className="space-y-2">
+            <label className="cursor-pointer inline-block">
+              <span className="pill pill-outline !h-8 !px-3 !text-[12px]">📸 Add images</span>
+              <input type="file" accept="image/*" multiple className="hidden" onChange={e => { if (e.target.files?.length) addFiles(e.target.files); e.target.value = ''; }} />
+            </label>
+            {previews.length > 0 && (
+              <div className="flex gap-2 flex-wrap">
+                {previews.map((src, i) => (
+                  <div key={i} className="relative group">
+                    <img src={src} alt={`screenshot ${i + 1}`} className="w-16 h-16 rounded-[8px] object-cover border border-line-light" />
+                    <button type="button" onClick={() => removeFile(i)}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-danger text-white text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow-sm">×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Assign to">
+            <select className={inputCls} value={assignedTo} onChange={e => setAssignedTo(e.target.value)}>
+              <option value="">Unassigned</option>
+              {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Deadline">
+            <input type="date" className={inputCls} value={deadline} onChange={e => setDeadline(e.target.value)} />
+          </Field>
+        </div>
+        <button disabled={busy} type="submit" className="w-full h-11 rounded-[10px] bg-danger text-white font-semibold disabled:opacity-60">{busy ? 'Reporting…' : 'Report Bug'}</button>
       </form>
     </Modal>
   );

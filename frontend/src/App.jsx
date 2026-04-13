@@ -15,6 +15,7 @@ import CommandPalette from './components/CommandPalette.jsx';
 import useAlarms from './hooks/useAlarms.js';
 import { HomeIcon, FolderIcon, CalendarIcon, UserIcon } from './components/Icons.jsx';
 import FAB from './components/FAB.jsx';
+import { Avatar } from './components/ui.jsx';
 
 const tabs = [
   { id: 'home',    label: 'Home',     Icon: HomeIcon,     component: Home },
@@ -63,7 +64,7 @@ export default function App() {
       {notifOpen ? (
         <Notifications onClose={closeNotifications} />
       ) : (
-        <Active me={me} unreadCount={unreadCount} onOpenNotifications={openNotifications} deepLink={deepLink} onSwitchTab={(t, payload) => { setTab(t); setNotifOpen(false); if (payload) setDeepLink({ kind: 'addEvent', title: payload.addEvent, ts: Date.now() }); }} />
+        <Active me={me} unreadCount={unreadCount} onOpenNotifications={openNotifications} deepLink={deepLink} onSwitchTab={(t, payload) => { setTab(t); setNotifOpen(false); if (payload?.addEvent) setDeepLink({ kind: 'addEvent', title: payload.addEvent, ts: Date.now() }); if (payload?.kind) setDeepLink({ ...payload, ts: Date.now() }); }} />
       )}
     </ErrorBoundary>
   );
@@ -98,15 +99,13 @@ export default function App() {
             })}
           </nav>
           {me && (
-            <div className="px-4 py-3.5 border-t border-line-light flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0" style={{ backgroundColor: me.avatar_color }}>
-                {me.initials}
-              </div>
+            <button onClick={() => setTab('profile')} className="w-full px-4 py-3.5 border-t border-line-light flex items-center gap-2.5 hover:bg-ink-100/60 transition text-left">
+              <Avatar user={me} size={32} />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-ink-900 truncate">{me.name}</p>
                 <p className="text-xs text-ink-400 truncate">{me.department}</p>
               </div>
-            </div>
+            </button>
           )}
         </aside>
         <main className="flex-1 overflow-y-auto">

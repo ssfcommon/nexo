@@ -486,15 +486,18 @@ CREATE POLICY projects_update ON nexo.projects FOR UPDATE TO authenticated USING
   owner_id = nexo.current_user_id() OR
   EXISTS (SELECT 1 FROM nexo.project_members WHERE project_id = id AND user_id = nexo.current_user_id())
 );
+CREATE POLICY projects_delete ON nexo.projects FOR DELETE TO authenticated USING (true);
 
 -- Notifications: own only
 CREATE POLICY notifications_select ON nexo.notifications FOR SELECT TO authenticated USING (user_id = nexo.current_user_id());
 CREATE POLICY notifications_update ON nexo.notifications FOR UPDATE TO authenticated USING (user_id = nexo.current_user_id());
+CREATE POLICY notifications_delete ON nexo.notifications FOR DELETE TO authenticated USING (user_id = nexo.current_user_id());
 
--- Tasks: own only for writes, read all for transparency
+-- Tasks: open for all authenticated users (allows assigning to others)
 CREATE POLICY tasks_select ON nexo.tasks FOR SELECT TO authenticated USING (true);
 CREATE POLICY tasks_insert ON nexo.tasks FOR INSERT TO authenticated WITH CHECK (true);
 CREATE POLICY tasks_update ON nexo.tasks FOR UPDATE TO authenticated USING (true);
+CREATE POLICY tasks_delete ON nexo.tasks FOR DELETE TO authenticated USING (true);
 
 -- Leaves: read all (team visibility), write own
 CREATE POLICY leaves_select ON nexo.leaves FOR SELECT TO authenticated USING (true);

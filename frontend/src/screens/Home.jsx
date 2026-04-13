@@ -57,10 +57,11 @@ function TaskCard({ task }) {
   );
 }
 
-export default function Home({ me, unreadCount, onOpenNotifications }) {
+export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab }) {
   const [tasks, setTasks] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [activity, setActivity] = useState([]);
+  const [myBugs, setMyBugs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAllActivity, setShowAllActivity] = useState(false);
   const [showAllUrgent, setShowAllUrgent] = useState(false);
@@ -78,6 +79,7 @@ export default function Home({ me, unreadCount, onOpenNotifications }) {
       api.urgentTasks().then(setTasks),
       api.leaves().then(setLeaves),
       api.activity(8).then(setActivity),
+      api.myBugs().then(setMyBugs).catch(() => setMyBugs([])),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -97,7 +99,7 @@ export default function Home({ me, unreadCount, onOpenNotifications }) {
             {liveDate()} · <span className="text-ink-700 font-medium">{tasks.length} tasks</span> need attention
           </p>
         </div>
-        <HeaderActions me={me} unreadCount={unreadCount} onOpenNotifications={onOpenNotifications} />
+        <HeaderActions me={me} unreadCount={unreadCount} onOpenNotifications={onOpenNotifications} onOpenProfile={() => onSwitchTab?.('profile')} />
       </div>
 
       {/* Urgent tasks */}
@@ -117,6 +119,39 @@ export default function Home({ me, unreadCount, onOpenNotifications }) {
         </div>
       </div>
 
+
+      {/* Assigned Bugs */}
+      {myBugs.length > 0 && (
+        <div>
+          <SectionHeader title="Bugs Assigned to You" />
+          <div className="space-y-2.5">
+            {myBugs.slice(0, 3).map(b => (
+              <button
+                key={b.id}
+                onClick={() => onSwitchTab?.('projects', { kind: 'bugs' })}
+                className="w-full text-left rounded-card p-3.5 flex items-center gap-3 transition-all"
+                style={{
+                  backgroundColor: b.status === 'open' ? 'rgba(239,68,68,0.06)' : 'rgba(245,158,11,0.06)',
+                  border: `1px solid ${b.status === 'open' ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)'}`,
+                }}
+              >
+                <span className="text-base">🐛</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-ink-900 truncate">{b.issue}</p>
+                  <p className="text-xs text-ink-500 mt-0.5">{b.app_name}{b.deadline ? ` · Due ${b.deadline}` : ''}</p>
+                </div>
+                <span className="tag" style={{
+                  color: b.status === 'open' ? '#EF4444' : '#F59E0B',
+                  backgroundColor: b.status === 'open' ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.1)',
+                }}>{b.status === 'open' ? 'Open' : 'In Progress'}</span>
+              </button>
+            ))}
+            {myBugs.length > 3 && (
+              <button onClick={() => onSwitchTab?.('projects', { kind: 'bugs' })} className="text-xs text-brand-blue w-full text-center pt-1 font-medium">View all {myBugs.length} bugs</button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Leave banner */}
       {upcomingLeave && (

@@ -104,6 +104,17 @@ export function AuthProvider({ children }) {
     setCurrentUserId(null);
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    if (!userId) return;
+    const { data } = await supabase
+      .from('users')
+      .select('id, name, email, initials, department, avatar_color, avatar_url, role, preferences')
+      .eq('id', userId)
+      .single();
+    if (data) setUser(data);
+    return data;
+  }, [userId]);
+
   const value = {
     user,
     userId,
@@ -111,6 +122,7 @@ export function AuthProvider({ children }) {
     isAuthLoading,
     signIn,
     signOut,
+    refreshUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

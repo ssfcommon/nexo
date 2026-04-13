@@ -52,7 +52,7 @@ function downloadPDF() {
   window.print();
 }
 
-export default function Reports({ me, unreadCount, onOpenNotifications }) {
+export default function Reports({ me, unreadCount, onOpenNotifications, onSwitchTab }) {
   const [r, setR] = useState(null);
   const [period, setPeriod] = useState('Weekly');
   const [scope, setScope] = useState('me');
@@ -76,7 +76,7 @@ export default function Reports({ me, unreadCount, onOpenNotifications }) {
           <button className="text-ink-900 text-xl">←</button>
           <h1 className="text-[22px] font-bold text-ink-900">Reports</h1>
         </div>
-        <HeaderActions me={me} unreadCount={unreadCount} onOpenNotifications={onOpenNotifications} />
+        <HeaderActions me={me} unreadCount={unreadCount} onOpenNotifications={onOpenNotifications} onOpenProfile={() => onSwitchTab?.('profile')} />
       </div>
 
       {/* Scope toggle */}

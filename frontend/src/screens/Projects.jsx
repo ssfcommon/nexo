@@ -10,41 +10,149 @@ import ConfirmModal from '../components/ConfirmModal.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { ASSET_ORIGIN } from '../api.js';
 import { Avatar, COMPLEXITIES } from '../components/ui.jsx';
+import { ReportBugModal } from '../components/QuickActions.jsx';
+
+// ── Bug Detail Modal ──
+function BugDetailModal({ open, onClose, bug, users, onUpdated }) {
+  const showToast = useToast();
+  const [status, setStatus] = useState('');
+  const [resolution, setResolution] = useState('');
+  const [assignedTo, setAssignedTo] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (open && bug) {
+      setStatus(bug.status);
+      setResolution(bug.metadata?.resolution || '');
+      setAssignedTo(bug.assigned_to || '');
+    }
+  }, [open, bug]);
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      const patch = { status };
+      if (resolution.trim()) patch.resolution = resolution.trim();
+      if (assignedTo !== (bug.assigned_to || '')) patch.assignedTo = assignedTo ? Number(assignedTo) : null;
+      await api.updateBug(bug.id, patch);
+      showToast(status === 'resolved' ? 'Bug resolved ✓' : 'Bug updated');
+      onUpdated?.();
+      onClose();
+    } catch (err) { showToast(err.message || 'Failed to update bug', 'error'); } finally { setBusy(false); }
+  };
+
+  if (!bug) return null;
+  const statusColor = bug.status === 'open' ? '#EF4444' : bug.status === 'in_progress' ? '#F59E0B' : '#22C55E';
+
+  return (
+    <Modal open={open} onClose={onClose} title="Bug Details">
+      <div className="space-y-4">
+        {/* Header info */}
+        <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: statusColor }} />
+          <span className="text-[12px] font-bold uppercase text-ink-400">{bug.app_name}</span>
+          <span className="ml-auto text-[11px] text-ink-300">Reported by {bug.reporter_name?.split(' ')[0] || '—'}</span>
+        </div>
+
+        {/* Issue */}
+        <p className="text-[15px] text-ink-900 leading-relaxed">{bug.issue}</p>
+
+        {/* Screenshots */}
+        {(() => {
+          const allUrls = [bug.screenshot_url, ...(bug.metadata?.extra_screenshots || [])].filter(Boolean);
+          if (!allUrls.length) return null;
+          return (
+            <div className="flex gap-2 flex-wrap">
+              {allUrls.map((url, i) => (
+                <a key={i} href={url.startsWith('http') ? url : ASSET_ORIGIN + url} target="_blank" rel="noreferrer">
+                  <img src={url.startsWith('http') ? url : ASSET_ORIGIN + url} alt={`screenshot ${i + 1}`}
+                    className={allUrls.length === 1 ? 'w-full max-h-48 rounded-[10px] object-cover border border-line-light' : 'w-24 h-24 rounded-[8px] object-cover border border-line-light'} />
+                </a>
+              ))}
+            </div>
+          );
+        })()}
+
+        {/* Meta row */}
+        <div className="flex items-center gap-4 text-[12px] text-ink-500">
+          {bug.deadline && <span>📅 Due {bug.deadline}</span>}
+          <span>🕒 {new Date(bug.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+        </div>
+
+        <hr className="border-line-light" />
+
+        {/* Status */}
+        <Field label="Status">
+          <div className="flex gap-2">
+            {[['open', 'Open', '#EF4444'], ['in_progress', 'In Progress', '#F59E0B'], ['resolved', 'Resolved', '#22C55E']].map(([val, label, color]) => (
+              <button key={val} type="button" onClick={() => setStatus(val)}
+                className="flex-1 h-10 rounded-[10px] text-[13px] font-semibold transition-all border-2"
+                style={{
+                  borderColor: status === val ? color : 'transparent',
+                  backgroundColor: status === val ? `${color}15` : 'rgba(0,0,0,0.03)',
+                  color: status === val ? color : '#6B7280',
+                }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        {/* Assign */}
+        <Field label="Assigned to">
+          <select className={inputCls} value={assignedTo} onChange={e => setAssignedTo(e.target.value)}>
+            <option value="">Unassigned</option>
+            {(users || []).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+        </Field>
+
+        {/* Resolution comment — show prominently when resolving */}
+        <Field label={status === 'resolved' ? 'Resolution (required)' : 'Notes (optional)'}>
+          <textarea
+            className={inputCls + ' !h-20 py-2'}
+            value={resolution}
+            onChange={e => setResolution(e.target.value)}
+            placeholder={status === 'resolved' ? 'How was this bug fixed?' : 'Add notes about progress…'}
+            required={status === 'resolved'}
+          />
+        </Field>
+
+        {/* Existing resolution display */}
+        {bug.metadata?.resolution && bug.status === 'resolved' && status === 'resolved' && (
+          <div className="rounded-[10px] p-3 text-[13px]" style={{ backgroundColor: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.12)' }}>
+            <p className="text-[11px] font-semibold text-ink-400 mb-1">PREVIOUS RESOLUTION</p>
+            <p className="text-ink-700">{bug.metadata.resolution}</p>
+          </div>
+        )}
+
+        <button
+          onClick={save}
+          disabled={busy || (status === 'resolved' && !resolution.trim())}
+          className="w-full h-11 rounded-[10px] text-white font-semibold disabled:opacity-60 transition-all"
+          style={{ background: status === 'resolved' ? '#22C55E' : '#4A6CF7' }}
+        >
+          {busy ? 'Saving…' : status === 'resolved' ? 'Resolve Bug' : 'Update Bug'}
+        </button>
+      </div>
+    </Modal>
+  );
+}
 
 // ── Bug Tracker ──
 function BugTracker({ me, users }) {
+  const showToast = useToast();
   const [bugs, setBugs] = useState([]);
   const [apps, setApps] = useState([]);
   const [filter, setFilter] = useState('');
   const [addOpen, setAddOpen] = useState(false);
   const [showResolved, setShowResolved] = useState(false);
-  const [appName, setAppName] = useState('');
-  const [issue, setIssue] = useState('');
-  const [screenshot, setScreenshot] = useState(null);
-  const [assignedTo, setAssignedTo] = useState('');
-  const [deadline, setDeadline] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [detailBug, setDetailBug] = useState(null);
 
   const load = () => {
     api.bugs(filter || undefined).then(setBugs);
     api.bugApps().then(setApps);
   };
   useEffect(() => { load(); }, [filter]);
-
-  const readFile = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
-
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!appName.trim() || !issue.trim()) return;
-    setBusy(true);
-    try {
-      let screenshotDataUrl = null;
-      if (screenshot) screenshotDataUrl = await readFile(screenshot);
-      await api.createBug({ appName: appName.trim(), issue: issue.trim(), screenshotDataUrl, assignedTo: assignedTo ? Number(assignedTo) : null, deadline: deadline || null });
-      setAddOpen(false); setAppName(''); setIssue(''); setScreenshot(null); setAssignedTo(''); setDeadline('');
-      load();
-    } finally { setBusy(false); }
-  };
 
   const statusColor = (s) => s === 'open' ? '#EF4444' : s === 'in_progress' ? '#F59E0B' : '#22C55E';
 
@@ -86,21 +194,22 @@ function BugTracker({ me, users }) {
               {displayBugs.map((b, i) => {
                 const isResolved = b.status === 'resolved';
                 return (
-                  <div key={b.id} className={'card !p-3 transition-opacity ' + (isResolved ? 'opacity-50' : '')}>
+                  <button key={b.id} onClick={() => setDetailBug(b)} className={'card !p-3 transition-all w-full text-left hover:shadow-md ' + (isResolved ? 'opacity-50' : '')}>
                     <div className="flex items-start gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: statusColor(b.status) }} />
                           <span className={'text-[11px] font-semibold uppercase ' + (isResolved ? 'text-ink-300 line-through' : 'text-ink-300')}>{b.app_name}</span>
                           <span className="text-[11px] text-ink-300">#{i + 1}</span>
-                          <select value={b.status} onChange={async (e) => { await api.updateBug(b.id, { status: e.target.value }); load(); }}
-                            className="inline-control ml-auto h-6 px-1 text-[10px] rounded border border-line-light bg-white">
-                            <option value="open">Open</option>
-                            <option value="in_progress">In Progress</option>
-                            <option value="resolved">Resolved</option>
-                          </select>
+                          <span className="ml-auto tag" style={{
+                            color: statusColor(b.status),
+                            backgroundColor: b.status === 'open' ? 'rgba(239,68,68,0.08)' : b.status === 'in_progress' ? 'rgba(245,158,11,0.08)' : 'rgba(34,197,94,0.08)',
+                          }}>{b.status === 'open' ? 'Open' : b.status === 'in_progress' ? 'In Progress' : 'Resolved'}</span>
                         </div>
                         <p className={'text-[13px] ' + (isResolved ? 'text-ink-400 line-through' : 'text-ink-900')}>{b.issue}</p>
+                        {b.metadata?.resolution && isResolved && (
+                          <p className="text-[11px] text-ink-400 mt-1 italic truncate">✓ {b.metadata.resolution}</p>
+                        )}
                         <div className="flex items-center gap-3 mt-2 text-[11px] text-ink-500">
                           {b.assigned_name && <span className="flex items-center gap-1">
                             <Avatar user={{ initials: b.assigned_initials, avatar_color: b.assigned_color, avatar_url: b.assigned_avatar }} size={16} />
@@ -110,13 +219,20 @@ function BugTracker({ me, users }) {
                           <span>by {b.reporter_name?.split(' ')[0]}</span>
                         </div>
                       </div>
-              {b.screenshot_url && (
-                <a href={ASSET_ORIGIN + b.screenshot_url} target="_blank" rel="noreferrer">
-                  <img src={ASSET_ORIGIN + b.screenshot_url} alt="screenshot" className="w-16 h-16 rounded-[6px] object-cover border border-line-light flex-shrink-0" />
-                </a>
-              )}
-            </div>
-          </div>
+                      {b.screenshot_url && (() => {
+                        const extraCount = (b.metadata?.extra_screenshots || []).length;
+                        const url = b.screenshot_url.startsWith('http') ? b.screenshot_url : ASSET_ORIGIN + b.screenshot_url;
+                        return (
+                          <div className="relative flex-shrink-0">
+                            <img src={url} alt="screenshot" className="w-16 h-16 rounded-[6px] object-cover border border-line-light" />
+                            {extraCount > 0 && (
+                              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-brand-blue text-white text-[9px] font-bold flex items-center justify-center shadow-sm">+{extraCount}</span>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </button>
                 );
               })}
             </div>
@@ -134,40 +250,11 @@ function BugTracker({ me, users }) {
         );
       })()}
 
-      {/* Add Bug Modal */}
-      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Report a Bug">
-        <form onSubmit={submit}>
-          <Field label="App Name">
-            <select className={inputCls} value={appName} onChange={e => setAppName(e.target.value)} required autoFocus>
-              <option value="">Select app…</option>
-              <option value="Farlo">Farlo</option>
-              <option value="XPNS">XPNS</option>
-              <option value="Nexo">Nexo</option>
-              <option value="Milaan">Milaan</option>
-              <option value="CEO Dashboard">CEO Dashboard</option>
-            </select>
-          </Field>
-          <Field label="Issue"><textarea className={inputCls + ' !h-20 py-2'} value={issue} onChange={e => setIssue(e.target.value)} required placeholder="Describe the bug…" /></Field>
-          <Field label="Screenshot (optional)">
-            <label className="cursor-pointer">
-              <span className="pill pill-outline !h-8 !px-3 !text-[12px]">{screenshot ? `📎 ${screenshot.name}` : '📸 Choose image'}</span>
-              <input type="file" accept="image/*" className="hidden" onChange={e => setScreenshot(e.target.files?.[0] || null)} />
-            </label>
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Assign to">
-              <select className={inputCls} value={assignedTo} onChange={e => setAssignedTo(e.target.value)}>
-                <option value="">Unassigned</option>
-                {(users || []).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-              </select>
-            </Field>
-            <Field label="Deadline">
-              <input type="date" className={inputCls} value={deadline} onChange={e => setDeadline(e.target.value)} />
-            </Field>
-          </div>
-          <button disabled={busy} type="submit" className="w-full h-11 rounded-[10px] bg-danger text-white font-semibold disabled:opacity-60">{busy ? 'Reporting…' : 'Report Bug'}</button>
-        </form>
-      </Modal>
+      {/* Add Bug Modal (shared) */}
+      <ReportBugModal open={addOpen} onClose={() => setAddOpen(false)} onCreated={load} />
+
+      {/* Bug Detail Modal */}
+      <BugDetailModal open={!!detailBug} onClose={() => setDetailBug(null)} bug={detailBug} users={users} onUpdated={load} />
     </div>
   );
 }
@@ -186,6 +273,7 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
 
   useEffect(() => {
     if (deepLink?.kind === 'project' && deepLink.id) setOpenId(deepLink.id);
+    if (deepLink?.kind === 'bugs') setSection('bugs');
   }, [deepLink]);
 
   const loadProjects = () => api.projects(scope).then(setProjects);
@@ -201,10 +289,12 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
   }
 
   const toggleTask = async (t) => {
-    const next = t.status === 'done' ? 'pending' : 'done';
-    await api.updateTask(t.id, { status: next });
-    if (next === 'done') fireConfetti();
-    setQuickTasks(ts => ts.map(x => x.id === t.id ? { ...x, status: next } : x));
+    try {
+      const next = t.status === 'done' ? 'pending' : 'done';
+      await api.updateTask(t.id, { status: next });
+      if (next === 'done') fireConfetti();
+      setQuickTasks(ts => ts.map(x => x.id === t.id ? { ...x, status: next } : x));
+    } catch (err) { showToast(err.message || 'Failed to update task', 'error'); }
   };
 
   return (
@@ -212,7 +302,7 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
       {/* Header */}
       <div className="flex items-center justify-between pt-2">
         <h1 className="text-2xl font-bold text-ink-900 tracking-tight">{section === 'bugs' ? 'Bug Tracker' : 'My Active Projects'}</h1>
-        <HeaderActions me={me} unreadCount={unreadCount} onOpenNotifications={onOpenNotifications} />
+        <HeaderActions me={me} unreadCount={unreadCount} onOpenNotifications={onOpenNotifications} onOpenProfile={() => onSwitchTab?.('profile')} />
       </div>
 
       {/* Section toggle */}
@@ -307,10 +397,12 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
         title="Delete Task"
         message="Are you sure you want to delete this task?"
         onConfirm={async () => {
-          await api.deleteTask(deleteTaskId);
-          setQuickTasks(ts => ts.filter(t => t.id !== deleteTaskId));
-          setDeleteTaskId(null);
-          showToast('Task deleted');
+          try {
+            await api.deleteTask(deleteTaskId);
+            setQuickTasks(ts => ts.filter(t => t.id !== deleteTaskId));
+            setDeleteTaskId(null);
+            showToast('Task deleted');
+          } catch (err) { showToast(err.message || 'Failed to delete task', 'error'); setDeleteTaskId(null); }
         }}
       />
     </div>

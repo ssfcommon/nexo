@@ -224,6 +224,7 @@ function readFileAsDataURL(file) {
 }
 
 function EditProjectModal({ open, onClose, project, onUpdated }) {
+  const showToast = useToast();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [deadline, setDeadline] = useState('');
@@ -251,7 +252,7 @@ function EditProjectModal({ open, onClose, project, onUpdated }) {
         department,
       });
       onUpdated?.();
-    } finally { setBusy(false); }
+    } catch (err) { showToast(err.message || 'Failed to update project', 'error'); } finally { setBusy(false); }
   };
 
   return (
@@ -317,47 +318,56 @@ export default function ProjectDetail({ projectId, me, onBack }) {
   if (!p) return <div className="p-4 text-ink-300">Loading…</div>;
 
   const toggleSubtask = async (s) => {
-    const next = s.status === 'done' ? 'pending' : 'done';
-    await api.updateSubtask(s.id, { status: next });
-    if (next === 'done') { fireConfetti(); showToast('Subtask completed'); }
-    load();
+    try {
+      const next = s.status === 'done' ? 'pending' : 'done';
+      await api.updateSubtask(s.id, { status: next });
+      if (next === 'done') { fireConfetti(); showToast('Subtask completed'); }
+      load();
+    } catch (err) { showToast(err.message || 'Failed to update subtask', 'error'); }
   };
   const addSubtask = async (title, ownerId, deadline, parentId, complexity) => {
-    await api.createSubtask(projectId, { title, ownerId, deadline, parentId, complexity });
-    showToast('Subtask added');
-    load();
+    try {
+      await api.createSubtask(projectId, { title, ownerId, deadline, parentId, complexity });
+      showToast('Subtask added');
+      load();
+    } catch (err) { showToast(err.message || 'Failed to add subtask', 'error'); }
   };
   const editSubtask = async (id, patch) => {
-    await api.updateSubtask(id, patch);
-    load();
+    try {
+      await api.updateSubtask(id, patch);
+      load();
+    } catch (err) { showToast(err.message || 'Failed to edit subtask', 'error'); }
   };
   const deleteSubtask = (id) => {
     const s = p.subtasks.find(st => st.id === id);
     setConfirmDelete({ type: 'subtask', id, title: s?.title || 'this subtask' });
   };
   const reorderSubtask = async (draggedId, targetId) => {
-    const dragIdx = p.subtasks.findIndex(s => s.id === draggedId);
-    const targetIdx = p.subtasks.findIndex(s => s.id === targetId);
-    if (dragIdx < 0 || targetIdx < 0) return;
-    const targetOrder = p.subtasks[targetIdx].sort_order;
-    await api.updateSubtask(draggedId, { sort_order: targetOrder });
-    // Shift others
-    const dir = dragIdx < targetIdx ? 1 : -1;
-    const start = Math.min(dragIdx, targetIdx);
-    const end = Math.max(dragIdx, targetIdx);
-    for (let i = start; i <= end; i++) {
-      if (p.subtasks[i].id !== draggedId) {
-        await api.updateSubtask(p.subtasks[i].id, { sort_order: p.subtasks[i].sort_order - dir });
+    try {
+      const dragIdx = p.subtasks.findIndex(s => s.id === draggedId);
+      const targetIdx = p.subtasks.findIndex(s => s.id === targetId);
+      if (dragIdx < 0 || targetIdx < 0) return;
+      const targetOrder = p.subtasks[targetIdx].sort_order;
+      await api.updateSubtask(draggedId, { sort_order: targetOrder });
+      const dir = dragIdx < targetIdx ? 1 : -1;
+      const start = Math.min(dragIdx, targetIdx);
+      const end = Math.max(dragIdx, targetIdx);
+      for (let i = start; i <= end; i++) {
+        if (p.subtasks[i].id !== draggedId) {
+          await api.updateSubtask(p.subtasks[i].id, { sort_order: p.subtasks[i].sort_order - dir });
+        }
       }
-    }
-    load();
-    showToast('Subtasks reordered');
+      load();
+      showToast('Subtasks reordered');
+    } catch (err) { showToast(err.message || 'Failed to reorder subtasks', 'error'); }
   };
 
   const moveSubtask = async (subtask, newStatus) => {
-    await api.updateSubtask(subtask.id, { status: newStatus });
-    if (newStatus === 'done') { fireConfetti(); showToast('Subtask completed'); }
-    load();
+    try {
+      await api.updateSubtask(subtask.id, { status: newStatus });
+      if (newStatus === 'done') { fireConfetti(); showToast('Subtask completed'); }
+      load();
+    } catch (err) { showToast(err.message || 'Failed to move subtask', 'error'); }
   };
 
   const deleteComment = (id) => {
@@ -366,14 +376,16 @@ export default function ProjectDetail({ projectId, me, onBack }) {
   const submitComment = async (e) => {
     e.preventDefault();
     if (!newComment.trim() && pendingFiles.length === 0) return;
-    const attachments = await Promise.all(
-      pendingFiles.map(async f => ({ filename: f.name, dataUrl: await readFileAsDataURL(f) }))
-    );
-    await api.createComment(projectId, newComment.trim() || '(attachment)', attachments);
-    setNewComment('');
-    setPendingFiles([]);
-    showToast('Comment posted');
-    load();
+    try {
+      const attachments = await Promise.all(
+        pendingFiles.map(async f => ({ filename: f.name, dataUrl: await readFileAsDataURL(f) }))
+      );
+      await api.createComment(projectId, newComment.trim() || '(attachment)', attachments);
+      setNewComment('');
+      setPendingFiles([]);
+      showToast('Comment posted');
+      load();
+    } catch (err) { showToast(err.message || 'Failed to post comment', 'error'); }
   };
 
   const doneCount = p.subtasks.filter(s => s.status === 'done').length;

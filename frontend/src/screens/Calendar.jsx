@@ -33,13 +33,16 @@ function accentFor(ev) {
 
 // ── Modals ──
 function AddEventModal({ open, onClose, onCreated, date, prefillTitle = '' }) {
+  const showToast = useToast();
   const [title, setTitle] = useState('');
+  const [eventDate, setEventDate] = useState(date);
   const [time, setTime] = useState('09:00');
   const [duration, setDuration] = useState(60);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (open) {
       setTitle(prefillTitle || '');
+      setEventDate(date);
       const now = new Date();
       const nextHour = new Date(now);
       nextHour.setMinutes(0, 0, 0);
@@ -47,16 +50,18 @@ function AddEventModal({ open, onClose, onCreated, date, prefillTitle = '' }) {
       setTime(`${String(nextHour.getHours()).padStart(2, '0')}:00`);
       setDuration(60);
     }
-  }, [open, prefillTitle]);
+  }, [open, prefillTitle, date]);
   const submit = async (e) => {
     e.preventDefault(); if (!title.trim()) return; setBusy(true);
-    try { await api.createEvent({ title: title.trim(), startTime: new Date(`${date}T${time}:00`).toISOString(), durationMin: Number(duration), eventType: 'work' }); onCreated?.(); onClose(); }
+    try { await api.createEvent({ title: title.trim(), startTime: new Date(`${eventDate}T${time}:00`).toISOString(), durationMin: Number(duration), eventType: 'work' }); onCreated?.(); onClose(); }
+    catch (err) { showToast(err.message || 'Failed to create event', 'error'); }
     finally { setBusy(false); }
   };
   return (
     <Modal open={open} onClose={onClose} title="Add to Calendar">
       <form onSubmit={submit}>
         <Field label="Title"><input className={inputCls} value={title} onChange={e => setTitle(e.target.value)} autoFocus required /></Field>
+        <Field label="Date"><input type="date" className={inputCls} value={eventDate} onChange={e => setEventDate(e.target.value)} required /></Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Time"><input type="time" className={inputCls} value={time} onChange={e => setTime(e.target.value)} required /></Field>
           <Field label="Duration (min)"><input type="number" min="15" step="15" className={inputCls} value={duration} onChange={e => setDuration(e.target.value)} /></Field>
@@ -68,6 +73,7 @@ function AddEventModal({ open, onClose, onCreated, date, prefillTitle = '' }) {
 }
 
 function AddLeaveModal({ open, onClose, onCreated, date }) {
+  const showToast = useToast();
   const [userId, setUserId] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -78,6 +84,7 @@ function AddLeaveModal({ open, onClose, onCreated, date }) {
   const submit = async (e) => {
     e.preventDefault(); if (!startDate || !endDate) return; setBusy(true);
     try { await api.addLeave({ userId: userId ? Number(userId) : undefined, startDate, endDate, type }); onCreated?.(); onClose(); }
+    catch (err) { showToast(err.message || 'Failed to add leave', 'error'); }
     finally { setBusy(false); }
   };
   return (
@@ -103,6 +110,7 @@ function AddLeaveModal({ open, onClose, onCreated, date }) {
 
 // ── Edit Event Modal ──
 function EditEventModal({ open, onClose, event, onUpdated, onDeleted }) {
+  const showToast = useToast();
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('09:00');
@@ -126,12 +134,13 @@ function EditEventModal({ open, onClose, event, onUpdated, onDeleted }) {
     try {
       await api.updateEvent(event.id, { title: title.trim(), startTime: new Date(`${date}T${time}:00`).toISOString(), durationMin: Number(duration) });
       onUpdated?.(); onClose();
-    } finally { setBusy(false); }
+    } catch (err) { showToast(err.message || 'Failed to update event', 'error'); } finally { setBusy(false); }
   };
 
   const doDelete = async () => {
     setBusy(true);
     try { await api.deleteEvent(event.id); onDeleted?.(); onClose(); }
+    catch (err) { showToast(err.message || 'Failed to delete event', 'error'); }
     finally { setBusy(false); }
   };
 
@@ -412,7 +421,7 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, deepLin
           </div>
           <p className="text-[12px] text-ink-500 mt-0.5">{events.length} events{view === 'Day' ? ' today' : ''}</p>
         </div>
-        <HeaderActions me={me} unreadCount={unreadCount} onOpenNotifications={onOpenNotifications} />
+        <HeaderActions me={me} unreadCount={unreadCount} onOpenNotifications={onOpenNotifications} onOpenProfile={() => onSwitchTab?.('profile')} />
       </div>
 
       {/* View toggle + actions */}
@@ -457,10 +466,12 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, deepLin
         title="Remove Leave"
         message="Are you sure you want to remove this leave entry?"
         onConfirm={async () => {
-          await api.deleteLeave(deleteLeaveId);
-          setDeleteLeaveId(null);
-          loadLeaves();
-          showToast('Leave removed');
+          try {
+            await api.deleteLeave(deleteLeaveId);
+            setDeleteLeaveId(null);
+            loadLeaves();
+            showToast('Leave removed');
+          } catch (err) { showToast(err.message || 'Failed to remove leave', 'error'); setDeleteLeaveId(null); }
         }}
       />
       <EditEventModal open={!!editEvent} onClose={() => setEditEvent(null)} event={editEvent}

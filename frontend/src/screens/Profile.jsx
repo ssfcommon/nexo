@@ -5,6 +5,8 @@ import HeaderActions from '../components/HeaderActions.jsx';
 import Modal, { Field, inputCls } from '../components/Modal.jsx';
 import { PrivacyModal, HelpModal } from '../components/InfoModals.jsx';
 import { resetOnboarding } from '../components/OnboardingTour.jsx';
+import { useToast } from '../context/ToastContext.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 
 // ── Shared helpers ──
 
@@ -64,34 +66,143 @@ function readAsDataURL(file) {
   });
 }
 
-function EditProfileModal({ open, onClose, user, onSaved }) {
+function EditProfileModal({ open, onClose, user, onSaved, refreshUser }) {
+  const showToast = useToast();
   const [name, setName] = useState(user?.name || '');
   const [department, setDepartment] = useState(user?.department || 'Operations');
   const [photoPreview, setPhotoPreview] = useState(null);
   const [photoFile, setPhotoFile] = useState(null);
+  const [cropSrc, setCropSrc] = useState(null); // raw image for cropping
+  const [cropPos, setCropPos] = useState({ x: 0, y: 0, size: 0 }); // crop square
+  const [imgDims, setImgDims] = useState({ w: 0, h: 0 }); // natural dims
   const [busy, setBusy] = useState(false);
-  useEffect(() => { if (open) { setName(user?.name || ''); setDepartment(user?.department || 'Operations'); setPhotoPreview(null); setPhotoFile(null); } }, [open, user]);
+  const cropRef = React.useRef(null);
+  const dragging = React.useRef(false);
+  const dragStart = React.useRef({ x: 0, y: 0, ox: 0, oy: 0 });
 
-  const handlePhoto = async (e) => {
+  useEffect(() => { if (open) { setName(user?.name || ''); setDepartment(user?.department || 'Operations'); setPhotoPreview(null); setPhotoFile(null); setCropSrc(null); } }, [open, user]);
+
+  const handlePhoto = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setPhotoFile(file);
-    setPhotoPreview(URL.createObjectURL(file));
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      setImgDims({ w: img.naturalWidth, h: img.naturalHeight });
+      const minDim = Math.min(img.naturalWidth, img.naturalHeight);
+      setCropPos({ x: (img.naturalWidth - minDim) / 2, y: (img.naturalHeight - minDim) / 2, size: minDim });
+      setCropSrc(url);
+    };
+    img.src = url;
   };
+
+  const applyCrop = () => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256; canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, cropPos.x, cropPos.y, cropPos.size, cropPos.size, 0, 0, 256, 256);
+      canvas.toBlob(blob => {
+        setPhotoFile(blob);
+        setPhotoPreview(URL.createObjectURL(blob));
+        setCropSrc(null);
+      }, 'image/jpeg', 0.9);
+    };
+    img.src = cropSrc;
+  };
+
+  // Drag to reposition crop area
+  const onPointerDown = (e) => {
+    dragging.current = true;
+    const rect = cropRef.current.getBoundingClientRect();
+    dragStart.current = { x: e.clientX, y: e.clientY, ox: cropPos.x, oy: cropPos.y, rw: rect.width, rh: rect.height };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = (e) => {
+    if (!dragging.current) return;
+    const { x: sx, y: sy, ox, oy, rw, rh } = dragStart.current;
+    const scaleX = imgDims.w / rw;
+    const scaleY = imgDims.h / rh;
+    let nx = ox - (e.clientX - sx) * scaleX;
+    let ny = oy - (e.clientY - sy) * scaleY;
+    nx = Math.max(0, Math.min(imgDims.w - cropPos.size, nx));
+    ny = Math.max(0, Math.min(imgDims.h - cropPos.size, ny));
+    setCropPos(p => ({ ...p, x: nx, y: ny }));
+  };
+  const onPointerUp = () => { dragging.current = false; };
 
   const submit = async (e) => {
     e.preventDefault(); setBusy(true);
     try {
       let u = await api.updateMe({ name: name.trim(), department });
       if (photoFile) {
-        const dataUrl = await readAsDataURL(photoFile);
+        const dataUrl = await readAsDataURL(photoFile instanceof Blob ? new File([photoFile], 'avatar.jpg') : photoFile);
         u = await api.uploadAvatar(dataUrl);
       }
-      onSaved?.(u); onClose();
-    } finally { setBusy(false); }
+      onSaved?.(u);
+      refreshUser?.();
+      onClose();
+    } catch (err) { showToast(err.message || 'Failed to update profile', 'error'); } finally { setBusy(false); }
   };
 
-  const currentPhoto = photoPreview || (user?.avatar_url ? (ASSET_ORIGIN + user.avatar_url) : null);
+  const currentPhoto = photoPreview || (user?.avatar_url ? (user.avatar_url.startsWith('http') ? user.avatar_url : ASSET_ORIGIN + user.avatar_url) : null);
+
+  // Crop UI
+  if (cropSrc) {
+    const previewSize = 280;
+    const scale = previewSize / Math.max(imgDims.w, imgDims.h);
+    const dispW = imgDims.w * scale;
+    const dispH = imgDims.h * scale;
+    const cropDispSize = cropPos.size * scale;
+    const cropDispX = cropPos.x * scale;
+    const cropDispY = cropPos.y * scale;
+
+    return (
+      <Modal open={open} onClose={() => setCropSrc(null)} title="Crop Photo">
+        <div className="flex flex-col items-center gap-4">
+          <p className="text-[12px] text-ink-500">Drag to reposition. Use slider to resize.</p>
+          <div ref={cropRef} className="relative overflow-hidden rounded-[12px] cursor-move select-none" style={{ width: dispW, height: dispH }}
+            onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
+          >
+            <img src={cropSrc} alt="crop" className="block" style={{ width: dispW, height: dispH }} draggable={false} />
+            {/* Dim overlay outside crop */}
+            <div className="absolute inset-0 pointer-events-none" style={{
+              background: `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5))`,
+              clipPath: `polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, ${cropDispX}px ${cropDispY}px, ${cropDispX}px ${cropDispY + cropDispSize}px, ${cropDispX + cropDispSize}px ${cropDispY + cropDispSize}px, ${cropDispX + cropDispSize}px ${cropDispY}px, ${cropDispX}px ${cropDispY}px)`,
+            }} />
+            {/* Crop circle border */}
+            <div className="absolute border-2 border-white rounded-full pointer-events-none shadow-lg" style={{
+              left: cropDispX, top: cropDispY, width: cropDispSize, height: cropDispSize,
+            }} />
+          </div>
+          {/* Size slider */}
+          <div className="w-full flex items-center gap-3 px-2">
+            <span className="text-[11px] text-ink-400">Zoom</span>
+            <input type="range" className="flex-1 accent-brand-blue" min={Math.min(imgDims.w, imgDims.h) * 0.3} max={Math.min(imgDims.w, imgDims.h)} step={1} value={cropPos.size}
+              onChange={e => {
+                const newSize = Number(e.target.value);
+                setCropPos(p => ({
+                  size: newSize,
+                  x: Math.max(0, Math.min(imgDims.w - newSize, p.x + (p.size - newSize) / 2)),
+                  y: Math.max(0, Math.min(imgDims.h - newSize, p.y + (p.size - newSize) / 2)),
+                }));
+              }}
+            />
+          </div>
+          {/* Preview */}
+          <div className="flex items-center gap-3">
+            <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-line-light" style={{ backgroundImage: `url(${cropSrc})`, backgroundSize: `${imgDims.w * (64 / cropPos.size)}px ${imgDims.h * (64 / cropPos.size)}px`, backgroundPosition: `-${cropPos.x * (64 / cropPos.size)}px -${cropPos.y * (64 / cropPos.size)}px` }} />
+            <span className="text-[11px] text-ink-400">Preview</span>
+          </div>
+          <div className="flex gap-2 w-full">
+            <button type="button" onClick={() => setCropSrc(null)} className="flex-1 h-11 rounded-[10px] border border-line-light text-ink-700 font-semibold">Cancel</button>
+            <button type="button" onClick={applyCrop} className="flex-1 h-11 rounded-[10px] bg-brand-blue text-white font-semibold">Use This Crop</button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal open={open} onClose={onClose} title="Edit Profile">
@@ -233,6 +344,8 @@ function ReportsSection() {
 // ── Main Profile ──
 
 export default function Profile({ me, unreadCount, onOpenNotifications }) {
+  const showToast = useToast();
+  const { refreshUser } = useAuth();
   const [streaks, setStreaks] = useState([]);
   const [summary, setSummary] = useState(null);
   const [prefs, setPrefs] = useState(null);
@@ -262,6 +375,7 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
   const update = async (patch) => {
     setPrefs(p => ({ ...p, ...patch })); setSaving(true);
     try { const next = await api.updatePreferences(patch); setPrefs(next); }
+    catch (err) { showToast(err.message || 'Failed to save preferences', 'error'); }
     finally { setSaving(false); }
   };
 
@@ -279,7 +393,7 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
     <div className="space-y-5">
       <div className="flex items-center justify-between pt-2">
         <h1 className="text-[26px] font-bold text-ink-900">Profile</h1>
-        <HeaderActions me={localUser} unreadCount={unreadCount} onOpenNotifications={onOpenNotifications} />
+        <HeaderActions me={localUser} unreadCount={unreadCount} onOpenNotifications={onOpenNotifications} onOpenProfile={() => setEditOpen(true)} />
       </div>
 
       {/* Identity card */}
@@ -385,7 +499,7 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
 
       <PrivacyModal open={privacyOpen} onClose={() => setPrivacyOpen(false)} />
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
-      <EditProfileModal open={editOpen} onClose={() => setEditOpen(false)} user={localUser} onSaved={(u) => setLocalUser(u)} />
+      <EditProfileModal open={editOpen} onClose={() => setEditOpen(false)} user={localUser} onSaved={(u) => setLocalUser(u)} refreshUser={refreshUser} />
     </div>
   );
 }

@@ -2,7 +2,7 @@ import React from 'react';
 import { Avatar } from './ui.jsx';
 import { BellIcon } from './Icons.jsx';
 
-export default function HeaderActions({ me, unreadCount = 0, onOpenNotifications }) {
+export default function HeaderActions({ me, unreadCount = 0, onOpenNotifications, onOpenProfile }) {
   return (
     <div className="flex items-center gap-2">
       <button
@@ -17,7 +17,11 @@ export default function HeaderActions({ me, unreadCount = 0, onOpenNotifications
           </span>
         )}
       </button>
-      {me && <Avatar user={me} size={40} />}
+      {me && (
+        <button onClick={onOpenProfile} className="rounded-full transition hover:ring-2 hover:ring-brand-blue/30" aria-label="Profile">
+          <Avatar user={me} size={40} />
+        </button>
+      )}
     </div>
   );
 }
