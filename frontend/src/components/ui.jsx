@@ -80,12 +80,12 @@ export function PriorityTag({ priority }) {
 }
 
 // ─── Progress Bar ───
-export function ProgressBar({ percent, color = '#4A6CF7' }) {
+export function ProgressBar({ percent, color }) {
   return (
-    <div className="h-1.5 w-full bg-ink-100 rounded-full overflow-hidden">
+    <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
       <div
         className="h-full rounded-full"
-        style={{ width: `${percent}%`, backgroundColor: color, transition: 'width 0.5s cubic-bezier(0.4, 0, 0.2, 1)' }}
+        style={{ width: `${percent}%`, background: color || 'linear-gradient(90deg, #5B8CFF, #22D3EE)', boxShadow: '0 0 8px rgba(91,140,255,0.4)', transition: 'width 0.5s cubic-bezier(0.4, 0, 0.2, 1)' }}
       />
     </div>
   );
@@ -110,12 +110,7 @@ export function Pill({ children, active, onClick }) {
   return (
     <button
       onClick={onClick}
-      className={
-        'pill ' +
-        (active
-          ? 'bg-brand-blue text-white shadow-xs'
-          : 'bg-white text-ink-500 border border-line-medium hover:bg-ink-50 hover:text-ink-700')
-      }
+      className={'pill ' + (active ? 'pill-primary' : 'pill-outline')}
     >
       {children}
     </button>

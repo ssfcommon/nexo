@@ -89,8 +89,9 @@ export default function App() {
                 <button
                   key={t.id}
                   onClick={() => { setTab(t.id); setNotifOpen(false); setDeepLink(null); }}
-                  className={'w-full flex items-center gap-3 px-3 h-10 rounded-input text-left text-sm font-medium transition-all duration-150 ' +
-                    (active ? 'bg-brand-blue/10 text-brand-blue' : 'text-ink-500 hover:bg-ink-100/60 hover:text-ink-700')}
+                  className={'w-full flex items-center gap-3 px-3 h-10 rounded-input text-left text-sm font-medium transition-all duration-200 ' +
+                    (active ? 'text-brand-blue' : 'text-ink-500 hover:text-ink-700')}
+                  style={active ? { background: 'rgba(91,140,255,0.12)', boxShadow: '0 0 12px rgba(91,140,255,0.15)' } : { background: 'transparent' }}
                 >
                   <t.Icon />
                   <span>{t.label}</span>
@@ -128,14 +129,16 @@ export default function App() {
           <main className="flex-1 px-5 pt-4 pb-28 overflow-y-auto">
             {content}
           </main>
-          <nav className="fixed bottom-0 w-full max-w-[420px] bg-white/90 backdrop-blur-lg border-t border-line-light h-[60px] pb-[env(safe-area-inset-bottom)] flex">
+          <nav className="fixed bottom-0 w-full max-w-[420px] backdrop-blur-xl border-t border-line-light h-[70px] pb-[env(safe-area-inset-bottom)] flex"
+            style={{ background: 'rgba(11,15,26,0.92)', borderColor: 'rgba(255,255,255,0.06)' }}>
             {tabs.map(t => {
               const active = tab === t.id && !notifOpen;
               return (
                 <button
                   key={t.id}
                   onClick={() => { setTab(t.id); setNotifOpen(false); setDeepLink(null); }}
-                  className={'flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ' + (active ? 'text-brand-blue' : 'text-ink-400')}
+                  className={'flex-1 flex flex-col items-center justify-center gap-0.5 transition-all duration-200 ' + (active ? 'text-brand-blue' : 'text-ink-400')}
+                  style={active ? { filter: 'drop-shadow(0 0 6px rgba(91,140,255,0.4))' } : {}}
                 >
                   <t.Icon />
                   <span className="text-[10px] font-medium">{t.label}</span>

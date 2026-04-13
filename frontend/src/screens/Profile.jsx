@@ -455,7 +455,7 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
           <div>
             <p className="section-label mb-2">Preferences {saving && <span className="text-ink-300 normal-case font-normal">· saving…</span>}</p>
             <div className="card !p-0 overflow-hidden divide-y divide-line-light">
-              <Row icon="moon" label="Dark mode" right={<Toggle on={prefs?.theme === 'dark'} onChange={v => update({ theme: v ? 'dark' : 'light' })} />} />
+              <Row icon="moon" label="Dark mode" right={<Toggle on={true} onChange={() => {}} />} />
               <Row icon="bell" label="Notifications" right={<Toggle on={!!prefs?.notifications} onChange={v => update({ notifications: v })} />} />
               <Row icon="calendar" label="Calendar sync"
                 right={<select value={prefs?.calendarSync || 'Google'} onChange={e => update({ calendarSync: e.target.value })} className="inline-control text-[13px] text-ink-500 outline-none"><option>Google</option><option>Outlook</option><option>None</option></select>} />
