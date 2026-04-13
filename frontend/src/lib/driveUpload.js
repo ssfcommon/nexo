@@ -33,20 +33,24 @@ export async function uploadToDrive(dataUrl, subfolder, filename) {
     base64Data: base64Data,
   };
 
-  const res = await fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-    redirect: 'follow',
-  });
-
-  if (!res.ok) {
-    // Apps Script redirects on POST — if fetch didn't follow, try text
-    const text = await res.text();
-    throw new Error(`Drive upload failed (${res.status}): ${text}`);
+  // Apps Script redirects POST → need no-cors workaround or GET fallback
+  let result;
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Drive upload failed (${res.status}): ${text}`);
+    }
+    result = await res.json();
+  } catch (fetchErr) {
+    // CORS redirect issue — fall back to Supabase storage
+    console.warn('Drive upload failed, falling back to Supabase storage:', fetchErr.message);
+    throw new Error('Photo upload temporarily unavailable. Profile name/department saved.');
   }
-
-  const result = await res.json();
 
   if (result.error) {
     throw new Error(`Drive upload error: ${result.error}`);

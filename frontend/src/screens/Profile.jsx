@@ -137,11 +137,16 @@ function EditProfileModal({ open, onClose, user, onSaved, refreshUser }) {
     try {
       let u = await api.updateMe({ name: name.trim(), department });
       if (photoFile) {
-        const dataUrl = await readAsDataURL(photoFile instanceof Blob ? new File([photoFile], 'avatar.jpg', { type: photoFile.type || 'image/jpeg' }) : photoFile);
-        u = await api.uploadAvatar(dataUrl);
+        try {
+          const dataUrl = await readAsDataURL(photoFile instanceof Blob ? new File([photoFile], 'avatar.jpg', { type: photoFile.type || 'image/jpeg' }) : photoFile);
+          u = await api.uploadAvatar(dataUrl);
+        } catch (photoErr) {
+          showToast('Profile saved, but photo upload failed. Try again later.', 'error');
+        }
       }
       onSaved?.(u);
       refreshUser?.();
+      showToast('Profile updated ✓');
       onClose();
     } catch (err) { showToast(err.message || 'Failed to update profile', 'error'); } finally { setBusy(false); }
   };
