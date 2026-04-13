@@ -1,5 +1,35 @@
 import { supabase } from './supabase.js';
-import { uploadToDrive } from './driveUpload.js';
+
+// ── Supabase Storage Upload ─────────────────────────────
+// Uploads a base64 data URL or File to Supabase Storage and returns a public URL.
+
+async function uploadToStorage(bucket, path, input) {
+  let file, contentType;
+  if (typeof input === 'string' && input.startsWith('data:')) {
+    // base64 data URL → Blob
+    const match = /^data:([^;]+);base64,(.+)$/.exec(input);
+    if (!match) throw new Error('Invalid data URL');
+    contentType = match[1];
+    const binary = atob(match[2]);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    file = new Blob([bytes], { type: contentType });
+  } else if (input instanceof File || input instanceof Blob) {
+    file = input;
+    contentType = input.type || 'application/octet-stream';
+  } else {
+    throw new Error('uploadToStorage: unsupported input type');
+  }
+
+  const { error } = await supabase.storage.from(bucket).upload(path, file, {
+    contentType,
+    upsert: true,
+  });
+  if (error) throw new Error(`Storage upload failed: ${error.message}`);
+
+  const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
+  return urlData.publicUrl;
+}
 
 // ── Helpers ─────────────────────────────────────────────
 
@@ -77,8 +107,9 @@ async function updateMe(patch) {
 }
 
 async function uploadAvatar(dataUrl) {
-  const filename = `avatar-${uid()}-${Date.now()}`;
-  const publicUrl = await uploadToDrive(dataUrl, 'Nexo/Avatars', filename);
+  const ext = dataUrl.startsWith('data:image/png') ? 'png' : 'jpg';
+  const path = `${uid()}/avatar-${Date.now()}.${ext}`;
+  const publicUrl = await uploadToStorage('avatars', path, dataUrl);
   return unwrap(await supabase.from('users').update({ avatar_url: publicUrl }).eq('id', uid()).select(USER_SELECT).single());
 }
 
@@ -604,16 +635,18 @@ async function createComment(projectId, body, attachments = []) {
     if (!att.dataUrl && !att.file) continue;
     let dataUrl, filename, mimeType, sizeBytes;
     if (att.file) {
-      // Convert File to base64 data URL for Drive upload
-      dataUrl = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(att.file);
-      });
       filename = att.filename || att.file.name;
       mimeType = att.file.type;
       sizeBytes = att.file.size;
+      // Upload File directly to Supabase Storage
+      const storagePath = `${projectId}/${c.id}/${filename}`.replace(/[^a-zA-Z0-9._/-]/g, '_');
+      const storageUrl = await uploadToStorage('attachments', storagePath, att.file);
+      const { data: inserted } = await supabase.from('attachments').insert({
+        comment_id: c.id, project_id: projectId,
+        filename, storage_path: storageUrl,
+        mime_type: mimeType, size_bytes: sizeBytes,
+      }).select().single();
+      if (inserted) savedAttachments.push({ id: inserted.id, filename, url: storageUrl, mime: mimeType, size: sizeBytes });
     } else {
       dataUrl = att.dataUrl;
       const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
@@ -621,15 +654,15 @@ async function createComment(projectId, body, attachments = []) {
       filename = att.filename || `file-${Date.now()}`;
       mimeType = match[1];
       sizeBytes = Math.round(match[2].length * 0.75);
+      const storagePath = `${projectId}/${c.id}/${filename}`.replace(/[^a-zA-Z0-9._/-]/g, '_');
+      const storageUrl = await uploadToStorage('attachments', storagePath, dataUrl);
+      const { data: inserted } = await supabase.from('attachments').insert({
+        comment_id: c.id, project_id: projectId,
+        filename, storage_path: storageUrl,
+        mime_type: mimeType, size_bytes: sizeBytes,
+      }).select().single();
+      if (inserted) savedAttachments.push({ id: inserted.id, filename, url: storageUrl, mime: mimeType, size: sizeBytes });
     }
-    const driveName = `${projectId}-${c.id}-${filename}`.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const driveUrl = await uploadToDrive(dataUrl, 'Nexo/Attachments', driveName);
-    const { data: inserted } = await supabase.from('attachments').insert({
-      comment_id: c.id, project_id: projectId,
-      filename, storage_path: driveUrl,
-      mime_type: mimeType, size_bytes: sizeBytes,
-    }).select().single();
-    if (inserted) savedAttachments.push({ id: inserted.id, filename, url: driveUrl, mime: mimeType, size: sizeBytes });
   }
 
   return {
@@ -815,8 +848,9 @@ async function createBug(data) {
   const uploadedUrls = [];
   for (let i = 0; i < allScreenshots.length; i++) {
     if (/^data:/.test(allScreenshots[i])) {
-      const filename = `bug-${Date.now()}-${i}`;
-      const publicUrl = await uploadToDrive(allScreenshots[i], 'Nexo/Bug-Screenshots', filename);
+      const ext = allScreenshots[i].startsWith('data:image/png') ? 'png' : 'jpg';
+      const path = `${uid()}/bug-${Date.now()}-${i}.${ext}`;
+      const publicUrl = await uploadToStorage('screenshots', path, allScreenshots[i]);
       uploadedUrls.push(publicUrl);
     }
   }
