@@ -140,31 +140,35 @@ export default function App() {
           <main className="flex-1 px-5 pt-4 pb-28 overflow-y-auto">
             {content}
           </main>
-          <nav className="fixed bottom-0 w-full max-w-[420px] border-t pb-[env(safe-area-inset-bottom)] flex"
-            style={{ background: '#0A0E1C', borderColor: 'rgba(255,255,255,0.08)', boxShadow: '0 -4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)', minHeight: '72px' }}>
-            {tabs.map(t => {
-              const active = tab === t.id && !notifOpen;
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => { setTab(t.id); setNotifOpen(false); setDeepLink(null); }}
-                  className="flex-1 flex flex-col items-center justify-center gap-1 transition-all duration-300 relative"
-                >
-                  {/* Active glow backdrop */}
-                  {active && (
-                    <div className="absolute inset-x-3 top-1.5 bottom-1.5 rounded-2xl transition-all duration-300"
-                      style={{ background: 'linear-gradient(135deg, rgba(91,140,255,0.12) 0%, rgba(91,140,255,0.04) 100%)', border: '1px solid rgba(91,140,255,0.15)', boxShadow: '0 0 20px rgba(91,140,255,0.12), inset 0 1px 0 rgba(255,255,255,0.08)' }} />
-                  )}
-                  {/* Icon with gradient SVG */}
-                  <div className="relative z-10" style={active ? { filter: 'drop-shadow(0 0 8px rgba(91,140,255,0.5))' } : {}}>
-                    <t.Icon style={active ? { stroke: 'url(#nav-icon-grad)', strokeWidth: 2 } : { stroke: '#4B5563', strokeWidth: 1.5 }} />
-                  </div>
-                  <span className="relative z-10 text-[10px] font-semibold transition-colors duration-300" style={{ color: active ? '#7EB0FF' : '#4B5563' }}>{t.label}</span>
-                  {/* Active indicator dot */}
-                  {active && <div className="absolute bottom-0.5 w-1 h-1 rounded-full z-10" style={{ background: '#5B8CFF', boxShadow: '0 0 6px rgba(91,140,255,0.8)' }} />}
-                </button>
-              );
-            })}
+          <nav className="fixed bottom-0 w-full max-w-[420px] border-t"
+            style={{ background: '#0A0E1C', borderColor: 'rgba(255,255,255,0.08)', boxShadow: '0 -4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)' }}>
+            <div className="flex h-16">
+              {tabs.map(t => {
+                const active = tab === t.id && !notifOpen;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => { setTab(t.id); setNotifOpen(false); setDeepLink(null); }}
+                    className="flex-1 flex flex-col items-center justify-center gap-1.5 transition-all duration-300 relative"
+                  >
+                    {/* Active glow backdrop */}
+                    {active && (
+                      <div className="absolute inset-x-2 top-1.5 bottom-1.5 rounded-2xl transition-all duration-300"
+                        style={{ background: 'linear-gradient(135deg, rgba(91,140,255,0.12) 0%, rgba(91,140,255,0.04) 100%)', border: '1px solid rgba(91,140,255,0.15)', boxShadow: '0 0 20px rgba(91,140,255,0.12), inset 0 1px 0 rgba(255,255,255,0.08)' }} />
+                    )}
+                    {/* Icon */}
+                    <div className="relative z-10" style={active ? { filter: 'drop-shadow(0 0 8px rgba(91,140,255,0.5))' } : {}}>
+                      <t.Icon style={active ? { stroke: 'url(#nav-icon-grad)', strokeWidth: 2 } : { stroke: '#4B5563', strokeWidth: 1.5 }} />
+                    </div>
+                    <span className="relative z-10 text-[10px] font-semibold transition-colors duration-300" style={{ color: active ? '#7EB0FF' : '#4B5563' }}>{t.label}</span>
+                    {/* Active indicator dot */}
+                    {active && <div className="absolute bottom-1 w-1 h-1 rounded-full z-10" style={{ background: '#5B8CFF', boxShadow: '0 0 6px rgba(91,140,255,0.8)' }} />}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Safe area spacer */}
+            <div style={{ height: 'env(safe-area-inset-bottom)', background: '#0A0E1C' }} />
             {/* SVG gradient def for active icons */}
             <svg width="0" height="0" style={{ position: 'absolute' }}>
               <defs>
