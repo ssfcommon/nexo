@@ -795,6 +795,8 @@ async function bugs(appFilter) {
   const { data } = await q;
   return (data || []).map(b => ({
     ...b,
+    // Derive virtual 'confirmed' status from metadata
+    status: (b.status === 'resolved' && b.metadata?.confirmed) ? 'confirmed' : b.status,
     assigned_name: b.assigned?.name, assigned_initials: b.assigned?.initials,
     assigned_color: b.assigned?.avatar_color, assigned_avatar: b.assigned?.avatar_url,
     reporter_name: b.reporter?.name,
@@ -849,10 +851,16 @@ async function updateBug(id, data) {
   const meta = { ...(existing.metadata || {}) };
 
   if (data.status) {
-    updates.status = data.status;
-    if (data.status === 'resolved') updates.resolved_at = new Date().toISOString();
-    else if (data.status === 'confirmed') meta.confirmed_at = new Date().toISOString();
-    else { updates.resolved_at = null; meta.confirmed_at = null; }
+    if (data.status === 'confirmed') {
+      // DB enum doesn't have 'confirmed' — keep as 'resolved', track in metadata
+      updates.status = 'resolved';
+      meta.confirmed = true;
+      meta.confirmed_at = new Date().toISOString();
+    } else {
+      updates.status = data.status;
+      if (data.status === 'resolved') updates.resolved_at = new Date().toISOString();
+      else { updates.resolved_at = null; meta.confirmed = null; meta.confirmed_at = null; }
+    }
   }
   if (data.assignedTo !== undefined) updates.assigned_to = data.assignedTo;
   if (data.deadline !== undefined) updates.deadline = data.deadline;
@@ -891,10 +899,12 @@ async function myBugs() {
     '*, reporter:users!reported_by(name, initials, avatar_color, avatar_url)'
   ).eq('assigned_to', uid()).in('status', ['open', 'in_progress']).order('created_at', { ascending: false });
 
-  // Bugs I reported that are resolved but not confirmed (need my confirmation)
-  const { data: awaitingConfirm } = await supabase.from('bugs').select(
+  // Bugs I reported that are resolved but not yet confirmed (need my confirmation)
+  const { data: rawAwaiting } = await supabase.from('bugs').select(
     '*, reporter:users!reported_by(name, initials, avatar_color, avatar_url), assigned:users!assigned_to(name)'
   ).eq('reported_by', uid()).eq('status', 'resolved').order('resolved_at', { ascending: false });
+  // Filter out already-confirmed bugs (metadata.confirmed = true)
+  const awaitingConfirm = (rawAwaiting || []).filter(b => !b.metadata?.confirmed);
 
   const flatten = (b) => ({
     ...b,
