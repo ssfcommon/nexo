@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js';
+import { uploadToDrive } from './driveUpload.js';
 
 // ── Helpers ─────────────────────────────────────────────
 
@@ -76,15 +77,8 @@ async function updateMe(patch) {
 }
 
 async function uploadAvatar(dataUrl) {
-  const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
-  if (!match) throw new Error('invalid data URL');
-  const mime = match[1];
-  const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
-  const bytes = Uint8Array.from(atob(match[2]), c => c.charCodeAt(0));
-  const path = `${uid()}-${Date.now()}.${ext}`;
-  const { error } = await supabase.storage.from('avatars').upload(path, bytes, { contentType: mime, upsert: true });
-  if (error) throw error;
-  const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
+  const filename = `avatar-${uid()}-${Date.now()}`;
+  const publicUrl = await uploadToDrive(dataUrl, 'Nexo/Avatars', filename);
   return unwrap(await supabase.from('users').update({ avatar_url: publicUrl }).eq('id', uid()).select(USER_SELECT).single());
 }
 
@@ -608,25 +602,34 @@ async function createComment(projectId, body, attachments = []) {
   const savedAttachments = [];
   for (const att of attachments) {
     if (!att.dataUrl && !att.file) continue;
-    let blob, filename;
+    let dataUrl, filename, mimeType, sizeBytes;
     if (att.file) {
-      blob = att.file;
+      // Convert File to base64 data URL for Drive upload
+      dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(att.file);
+      });
       filename = att.filename || att.file.name;
+      mimeType = att.file.type;
+      sizeBytes = att.file.size;
     } else {
-      const match = /^data:([^;]+);base64,(.+)$/.exec(att.dataUrl);
+      dataUrl = att.dataUrl;
+      const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
       if (!match) continue;
-      const bytes = Uint8Array.from(atob(match[2]), ch => ch.charCodeAt(0));
-      blob = new Blob([bytes], { type: match[1] });
       filename = att.filename || `file-${Date.now()}`;
+      mimeType = match[1];
+      sizeBytes = Math.round(match[2].length * 0.75);
     }
-    const storagePath = `${projectId}/${c.id}/${filename}`;
-    await supabase.storage.from('attachments').upload(storagePath, blob);
+    const driveName = `${projectId}-${c.id}-${filename}`.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const driveUrl = await uploadToDrive(dataUrl, 'Nexo/Attachments', driveName);
     const { data: inserted } = await supabase.from('attachments').insert({
       comment_id: c.id, project_id: projectId,
-      filename, storage_path: storagePath,
-      mime_type: blob.type, size_bytes: blob.size,
+      filename, storage_path: driveUrl,
+      mime_type: mimeType, size_bytes: sizeBytes,
     }).select().single();
-    if (inserted) savedAttachments.push({ id: inserted.id, filename, url: storagePath, mime: blob.type, size: blob.size });
+    if (inserted) savedAttachments.push({ id: inserted.id, filename, url: driveUrl, mime: mimeType, size: sizeBytes });
   }
 
   return {
@@ -811,13 +814,9 @@ async function createBug(data) {
 
   const uploadedUrls = [];
   for (let i = 0; i < allScreenshots.length; i++) {
-    const match = /^data:([^;]+);base64,(.+)$/.exec(allScreenshots[i]);
-    if (match) {
-      const bytes = Uint8Array.from(atob(match[2]), c => c.charCodeAt(0));
-      const ext = match[1] === 'image/png' ? 'png' : 'jpg';
-      const path = `bug-${Date.now()}-${i}.${ext}`;
-      await supabase.storage.from('screenshots').upload(path, bytes, { contentType: match[1] });
-      const { data: { publicUrl } } = supabase.storage.from('screenshots').getPublicUrl(path);
+    if (/^data:/.test(allScreenshots[i])) {
+      const filename = `bug-${Date.now()}-${i}`;
+      const publicUrl = await uploadToDrive(allScreenshots[i], 'Nexo/Bug-Screenshots', filename);
       uploadedUrls.push(publicUrl);
     }
   }
