@@ -396,10 +396,15 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
         <HeaderActions me={localUser} unreadCount={unreadCount} onOpenNotifications={onOpenNotifications} onOpenProfile={() => setEditOpen(true)} />
       </div>
 
-      {/* Identity card */}
+      {/* Identity card — tap to edit */}
       {localUser && (
-        <div className="card flex items-center gap-4">
-          <Avatar user={localUser} size={64} />
+        <button onClick={() => setEditOpen(true)} className="card card-hover flex items-center gap-4 w-full text-left">
+          <div className="relative group">
+            <Avatar user={localUser} size={64} />
+            <div className="absolute inset-0 rounded-full flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition">
+              <span className="text-white text-sm">📷</span>
+            </div>
+          </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <p className="text-[18px] font-bold text-ink-900">{localUser.name}</p>
@@ -408,7 +413,8 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
             <p className="text-[13px] text-ink-500">{localUser.department}</p>
             <p className="text-[12px] text-ink-300">{localUser.email}</p>
           </div>
-        </div>
+          <span className="text-ink-300 text-lg">›</span>
+        </button>
       )}
 
       {/* Stats row */}
@@ -462,7 +468,6 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
           <div>
             <p className="section-label mb-2">Account</p>
             <div className="card !p-0 overflow-hidden divide-y divide-line-light">
-              <Row icon="user" label="Edit profile" onClick={() => setEditOpen(true)} right={<span className="text-ink-300">›</span>} />
               <Row icon="lock" label="Privacy" onClick={() => setPrivacyOpen(true)} right={<span className="text-ink-300">›</span>} />
               <Row icon="help" label="Help & feedback" onClick={() => setHelpOpen(true)} right={<span className="text-ink-300">›</span>} />
               <Row icon="play" label="Replay welcome tour" onClick={() => { resetOnboarding(); location.reload(); }} right={<span className="text-ink-300">›</span>} />
