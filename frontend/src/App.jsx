@@ -91,7 +91,7 @@ export default function App() {
                   onClick={() => { setTab(t.id); setNotifOpen(false); setDeepLink(null); }}
                   className={'w-full flex items-center gap-3 px-3 h-10 rounded-xl text-left text-sm font-medium transition-all duration-300 ' +
                     (active ? '' : 'text-ink-500 hover:text-ink-700')}
-                  style={active ? { background: 'linear-gradient(135deg, rgba(91,140,255,0.15) 0%, rgba(91,140,255,0.06) 100%)', border: '1px solid rgba(91,140,255,0.18)', boxShadow: '0 0 16px rgba(91,140,255,0.15), inset 0 1px 0 rgba(255,255,255,0.08)', color: '#7EB0FF' } : { background: 'transparent' }}
+                  style={active ? { background: 'linear-gradient(135deg, rgba(91,140,255,0.15) 0%, rgba(91,140,255,0.06) 100%)', border: '1px solid rgba(91,140,255,0.18)', boxShadow: '0 0 16px rgba(91,140,255,0.15), inset 0 1px 0 rgba(255,255,255,0.08)', color: '#7EB0FF' } : { background: 'transparent', border: '1px solid transparent' }}
                 >
                   <div style={active ? { filter: 'drop-shadow(0 0 6px rgba(91,140,255,0.5))' } : {}}>
                     <t.Icon style={active ? { stroke: '#7EB0FF', strokeWidth: 2 } : {}} />
