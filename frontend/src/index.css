@@ -10,6 +10,10 @@
 /* ─── Base ─── */
 html, body, #root { height: 100%; }
 
+html {
+  background: #0B0F1A;
+}
+
 body {
   font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   background: #0B0F1A;

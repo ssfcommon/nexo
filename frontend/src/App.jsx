@@ -140,8 +140,8 @@ export default function App() {
           <main className="flex-1 px-5 pt-4 pb-28 overflow-y-auto">
             {content}
           </main>
-          <nav className="fixed bottom-0 w-full max-w-[420px] backdrop-blur-xl border-t h-[72px] pb-[env(safe-area-inset-bottom)] flex"
-            style={{ background: 'linear-gradient(180deg, rgba(14,19,34,0.95) 0%, rgba(8,13,24,0.98) 100%)', borderColor: 'rgba(255,255,255,0.08)', boxShadow: '0 -4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)' }}>
+          <nav className="fixed bottom-0 w-full max-w-[420px] border-t pb-[env(safe-area-inset-bottom)] flex"
+            style={{ background: '#0A0E1C', borderColor: 'rgba(255,255,255,0.08)', boxShadow: '0 -4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)', minHeight: '72px' }}>
             {tabs.map(t => {
               const active = tab === t.id && !notifOpen;
               return (
