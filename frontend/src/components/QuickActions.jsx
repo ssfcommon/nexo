@@ -552,7 +552,7 @@ export function ReportBugModal({ open, onClose, onCreated }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!appName.trim() || !issue.trim()) return;
+    if (!appName.trim() || !issue.trim() || !assignedTo) return;
     setBusy(true);
     try {
       const screenshotDataUrls = await Promise.all(screenshots.map(readFile));
@@ -596,9 +596,9 @@ export function ReportBugModal({ open, onClose, onCreated }) {
           </div>
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Assign to">
-            <select className={inputCls} value={assignedTo} onChange={e => setAssignedTo(e.target.value)}>
-              <option value="">Unassigned</option>
+          <Field label="Assign to *">
+            <select className={inputCls} value={assignedTo} onChange={e => setAssignedTo(e.target.value)} required>
+              <option value="">Select assignee…</option>
               {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
           </Field>

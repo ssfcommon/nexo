@@ -69,6 +69,7 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
   const [leaves, setLeaves] = useState([]);
   const [activity, setActivity] = useState([]);
   const [myBugs, setMyBugs] = useState([]);
+  const [bugsToConfirm, setBugsToConfirm] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAllActivity, setShowAllActivity] = useState(false);
   const [showAllUrgent, setShowAllUrgent] = useState(false);
@@ -86,7 +87,7 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
       api.urgentTasks().then(setTasks),
       api.leaves().then(setLeaves),
       api.activity(8).then(setActivity),
-      api.myBugs().then(setMyBugs).catch(() => setMyBugs([])),
+      api.myBugs().then(result => { setMyBugs(result.assigned || []); setBugsToConfirm(result.awaitingConfirm || []); }).catch(() => { setMyBugs([]); setBugsToConfirm([]); }),
     ]).finally(() => setLoading(false));
   }, []);
 
@@ -160,6 +161,39 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
             ))}
             {myBugs.length > 3 && (
               <button onClick={() => onSwitchTab?.('projects', { kind: 'bugs' })} className="text-xs text-brand-blue w-full text-center pt-1 font-medium">View all {myBugs.length} bugs</button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Bugs Awaiting Confirmation */}
+      {bugsToConfirm.length > 0 && (
+        <div>
+          <SectionHeader title="Bugs Awaiting Your Confirmation" />
+          <div className="space-y-2.5">
+            {bugsToConfirm.slice(0, 3).map(b => (
+              <button
+                key={b.id}
+                onClick={() => onSwitchTab?.('projects', { kind: 'bugs' })}
+                className="w-full text-left rounded-[14px] p-3.5 flex items-center gap-3 transition-all"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(34,197,94,0.14) 0%, rgba(34,197,94,0.05) 100%)',
+                  border: '1px solid rgba(34,197,94,0.20)',
+                  borderTopColor: 'rgba(34,197,94,0.30)',
+                  backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.3), 0 0 12px rgba(34,197,94,0.12), inset 0 1px 0 rgba(255,255,255,0.08)',
+                }}
+              >
+                <span className="text-base">✅</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-ink-900 truncate">{b.issue}</p>
+                  <p className="text-xs text-ink-500 mt-0.5">{b.app_name}{b.assigned_name ? ` · Fixed by ${b.assigned_name.split(' ')[0]}` : ''}</p>
+                </div>
+                <span className="tag" style={{ color: '#22C55E', backgroundColor: 'rgba(34,197,94,0.1)' }}>Confirm?</span>
+              </button>
+            ))}
+            {bugsToConfirm.length > 3 && (
+              <button onClick={() => onSwitchTab?.('projects', { kind: 'bugs' })} className="text-xs text-brand-blue w-full text-center pt-1 font-medium">View all {bugsToConfirm.length} bugs</button>
             )}
           </div>
         </div>

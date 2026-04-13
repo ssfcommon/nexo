@@ -843,30 +843,73 @@ async function createBug(data) {
 }
 
 async function updateBug(id, data) {
+  // First fetch existing bug to preserve metadata
+  const existing = unwrap(await supabase.from('bugs').select('metadata, reported_by, assigned_to, issue, app_name').eq('id', id).single());
   const updates = {};
+  const meta = { ...(existing.metadata || {}) };
+
   if (data.status) {
     updates.status = data.status;
     if (data.status === 'resolved') updates.resolved_at = new Date().toISOString();
-    else updates.resolved_at = null;
+    else if (data.status === 'confirmed') updates.confirmed_at = new Date().toISOString();
+    else { updates.resolved_at = null; updates.confirmed_at = null; }
   }
   if (data.assignedTo !== undefined) updates.assigned_to = data.assignedTo;
   if (data.deadline !== undefined) updates.deadline = data.deadline;
-  if (data.resolution !== undefined) updates.metadata = { resolution: data.resolution };
-  return unwrap(await supabase.from('bugs').update(updates).eq('id', id).select().single());
+  if (data.resolution !== undefined) meta.resolution = data.resolution;
+  if (data.reopenComment) {
+    meta.reopen_comments = [...(meta.reopen_comments || []), { text: data.reopenComment, by: uid(), at: new Date().toISOString() }];
+  }
+  updates.metadata = meta;
+
+  const result = unwrap(await supabase.from('bugs').update(updates).eq('id', id).select().single());
+
+  // Send notifications on status changes
+  if (data.status === 'resolved' && existing.reported_by && existing.reported_by !== uid()) {
+    const resolver = unwrap(await supabase.from('users').select('name').eq('id', uid()).single());
+    await supabase.from('notifications').insert({
+      user_id: existing.reported_by, type: 'bug_resolved',
+      title: `Bug resolved: ${existing.issue?.slice(0, 50)}`,
+      body: `${resolver.name} resolved a ${existing.app_name} bug — please confirm the fix`,
+    }).catch(() => {});
+  }
+  if (data.status === 'in_progress' && data.reopenComment && existing.assigned_to) {
+    const reporter = unwrap(await supabase.from('users').select('name').eq('id', uid()).single());
+    await supabase.from('notifications').insert({
+      user_id: existing.assigned_to, type: 'bug_reopened',
+      title: `Bug reopened: ${existing.issue?.slice(0, 50)}`,
+      body: `${reporter.name} reopened the bug: ${data.reopenComment.slice(0, 80)}`,
+    }).catch(() => {});
+  }
+
+  return result;
 }
 
 async function myBugs() {
-  const { data } = await supabase.from('bugs').select(
+  // Bugs assigned to me (open/in_progress)
+  const { data: assigned } = await supabase.from('bugs').select(
     '*, reporter:users!reported_by(name, initials, avatar_color, avatar_url)'
   ).eq('assigned_to', uid()).in('status', ['open', 'in_progress']).order('created_at', { ascending: false });
-  return (data || []).map(b => ({
+
+  // Bugs I reported that are resolved but not confirmed (need my confirmation)
+  const { data: awaitingConfirm } = await supabase.from('bugs').select(
+    '*, reporter:users!reported_by(name, initials, avatar_color, avatar_url), assigned:users!assigned_to(name)'
+  ).eq('reported_by', uid()).eq('status', 'resolved').order('resolved_at', { ascending: false });
+
+  const flatten = (b) => ({
     ...b,
     reporter_name: b.reporter?.name,
     reporter_initials: b.reporter?.initials,
     reporter_color: b.reporter?.avatar_color,
     reporter_avatar: b.reporter?.avatar_url,
-    reporter: undefined,
-  }));
+    assigned_name: b.assigned?.name,
+    reporter: undefined, assigned: undefined,
+  });
+
+  return {
+    assigned: (assigned || []).map(flatten),
+    awaitingConfirm: (awaitingConfirm || []).map(flatten),
+  };
 }
 
 // ── Chat ─────────────────────────────────────────────────

@@ -13,20 +13,46 @@ import { Avatar, COMPLEXITIES } from '../components/ui.jsx';
 import { ReportBugModal } from '../components/QuickActions.jsx';
 
 // ── Bug Detail Modal ──
-function BugDetailModal({ open, onClose, bug, users, onUpdated }) {
+const BUG_STAGES = [
+  { id: 'open', label: 'Open', color: '#EF4444' },
+  { id: 'in_progress', label: 'In Progress', color: '#F59E0B' },
+  { id: 'resolved', label: 'Resolved', color: '#22C55E' },
+  { id: 'confirmed', label: 'Confirmed', color: '#3B82F6' },
+];
+
+function BugDetailModal({ open, onClose, bug, users, onUpdated, meId }) {
   const showToast = useToast();
   const [status, setStatus] = useState('');
   const [resolution, setResolution] = useState('');
+  const [reopenComment, setReopenComment] = useState('');
   const [assignedTo, setAssignedTo] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showReopen, setShowReopen] = useState(false);
 
   useEffect(() => {
     if (open && bug) {
       setStatus(bug.status);
       setResolution(bug.metadata?.resolution || '');
       setAssignedTo(bug.assigned_to || '');
+      setReopenComment('');
+      setShowReopen(false);
     }
   }, [open, bug]);
+
+  if (!bug) return null;
+
+  const isReporter = bug.reported_by === meId;
+  const isAssignee = bug.assigned_to === meId;
+  const currentStage = BUG_STAGES.find(s => s.id === bug.status) || BUG_STAGES[0];
+
+  // Allowed status transitions based on role
+  const allowedStatuses = (() => {
+    if (bug.status === 'confirmed') return []; // final state
+    if (bug.status === 'resolved' && isReporter) return []; // reporter uses confirm/reopen buttons instead
+    // Assignee/admin can move through open → in_progress → resolved
+    const stages = ['open', 'in_progress', 'resolved'];
+    return stages;
+  })();
 
   const save = async () => {
     setBusy(true);
@@ -35,23 +61,57 @@ function BugDetailModal({ open, onClose, bug, users, onUpdated }) {
       if (resolution.trim()) patch.resolution = resolution.trim();
       if (assignedTo !== (bug.assigned_to || '')) patch.assignedTo = assignedTo ? Number(assignedTo) : null;
       await api.updateBug(bug.id, patch);
-      showToast(status === 'resolved' ? 'Bug resolved ✓' : 'Bug updated');
+      showToast(status === 'resolved' ? 'Bug resolved — awaiting reporter confirmation' : 'Bug updated');
       onUpdated?.();
       onClose();
     } catch (err) { showToast(err.message || 'Failed to update bug', 'error'); } finally { setBusy(false); }
   };
 
-  if (!bug) return null;
-  const statusColor = bug.status === 'open' ? '#EF4444' : bug.status === 'in_progress' ? '#F59E0B' : '#22C55E';
+  const confirmBug = async () => {
+    setBusy(true);
+    try {
+      await api.updateBug(bug.id, { status: 'confirmed' });
+      showToast('Bug confirmed as fixed ✓');
+      onUpdated?.();
+      onClose();
+    } catch (err) { showToast(err.message || 'Failed to confirm', 'error'); } finally { setBusy(false); }
+  };
+
+  const reopenBug = async () => {
+    if (!reopenComment.trim()) return;
+    setBusy(true);
+    try {
+      await api.updateBug(bug.id, { status: 'in_progress', reopenComment: reopenComment.trim() });
+      showToast('Bug reopened → back to assignee');
+      onUpdated?.();
+      onClose();
+    } catch (err) { showToast(err.message || 'Failed to reopen', 'error'); } finally { setBusy(false); }
+  };
 
   return (
     <Modal open={open} onClose={onClose} title="Bug Details">
       <div className="space-y-4">
         {/* Header info */}
         <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: statusColor }} />
+          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: currentStage.color }} />
           <span className="text-[12px] font-bold uppercase text-ink-400">{bug.app_name}</span>
           <span className="ml-auto text-[11px] text-ink-300">Reported by {bug.reporter_name?.split(' ')[0] || '—'}</span>
+        </div>
+
+        {/* Stage progress bar */}
+        <div className="flex items-center gap-1">
+          {BUG_STAGES.map((stage, i) => {
+            const stageIdx = BUG_STAGES.findIndex(s => s.id === bug.status);
+            const isPast = i <= stageIdx;
+            return (
+              <React.Fragment key={stage.id}>
+                <div className="flex flex-col items-center gap-1 flex-1">
+                  <div className="w-full h-1.5 rounded-full transition-all" style={{ background: isPast ? stage.color : 'rgba(255,255,255,0.08)' }} />
+                  <span className="text-[9px] font-semibold" style={{ color: isPast ? stage.color : '#4B5563' }}>{stage.label}</span>
+                </div>
+              </React.Fragment>
+            );
+          })}
         </div>
 
         {/* Issue */}
@@ -79,60 +139,132 @@ function BugDetailModal({ open, onClose, bug, users, onUpdated }) {
           <span>🕒 {new Date(bug.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
         </div>
 
-        <hr className="border-line-light" />
-
-        {/* Status */}
-        <Field label="Status">
-          <div className="flex gap-2">
-            {[['open', 'Open', '#EF4444'], ['in_progress', 'In Progress', '#F59E0B'], ['resolved', 'Resolved', '#22C55E']].map(([val, label, color]) => (
-              <button key={val} type="button" onClick={() => setStatus(val)}
-                className="flex-1 h-10 rounded-[10px] text-[13px] font-semibold transition-all border-2"
-                style={{
-                  borderColor: status === val ? color : 'transparent',
-                  backgroundColor: status === val ? `${color}15` : 'rgba(0,0,0,0.03)',
-                  color: status === val ? color : '#6B7280',
-                }}>
-                {label}
-              </button>
-            ))}
-          </div>
-        </Field>
-
-        {/* Assign */}
-        <Field label="Assigned to">
-          <select className={inputCls} value={assignedTo} onChange={e => setAssignedTo(e.target.value)}>
-            <option value="">Unassigned</option>
-            {(users || []).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
-        </Field>
-
-        {/* Resolution comment — show prominently when resolving */}
-        <Field label={status === 'resolved' ? 'Resolution (required)' : 'Notes (optional)'}>
-          <textarea
-            className={inputCls + ' !h-20 py-2'}
-            value={resolution}
-            onChange={e => setResolution(e.target.value)}
-            placeholder={status === 'resolved' ? 'How was this bug fixed?' : 'Add notes about progress…'}
-            required={status === 'resolved'}
-          />
-        </Field>
-
-        {/* Existing resolution display */}
-        {bug.metadata?.resolution && bug.status === 'resolved' && status === 'resolved' && (
+        {/* Resolution display */}
+        {bug.metadata?.resolution && (
           <div className="rounded-[10px] p-3 text-[13px]" style={{ backgroundColor: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.12)' }}>
-            <p className="text-[11px] font-semibold text-ink-400 mb-1">PREVIOUS RESOLUTION</p>
-            <p className="text-ink-700">{bug.metadata.resolution}</p>
+            <p className="text-[11px] font-semibold uppercase mb-1" style={{ color: '#6B7280' }}>Resolution</p>
+            <p style={{ color: '#D1D5DB' }}>{bug.metadata.resolution}</p>
           </div>
         )}
 
-        <button
-          onClick={save}
-          disabled={busy || (status === 'resolved' && !resolution.trim())}
-          className="w-full h-11 rounded-[10px] text-white font-semibold disabled:opacity-60 transition-all"
-          style={{ background: status === 'resolved' ? '#22C55E' : '#4A6CF7' }}
-        >
-          {busy ? 'Saving…' : status === 'resolved' ? 'Resolve Bug' : 'Update Bug'}
-        </button>
+        {/* Reopen history */}
+        {bug.metadata?.reopen_comments?.length > 0 && (
+          <div className="space-y-2">
+            {bug.metadata.reopen_comments.map((c, i) => (
+              <div key={i} className="rounded-[10px] p-3 text-[13px]" style={{ backgroundColor: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.12)' }}>
+                <p className="text-[11px] font-semibold uppercase mb-1" style={{ color: '#6B7280' }}>Reopened</p>
+                <p style={{ color: '#D1D5DB' }}>{c.text}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <hr style={{ borderColor: 'rgba(255,255,255,0.08)' }} />
+
+        {/* ── Reporter confirmation mode (when bug is "resolved") ── */}
+        {bug.status === 'resolved' && isReporter && (
+          <div className="space-y-3">
+            <p className="text-[13px] font-medium" style={{ color: '#D1D5DB' }}>
+              The assignee marked this as resolved. Is the fix working?
+            </p>
+            {!showReopen ? (
+              <div className="flex gap-2">
+                <button onClick={confirmBug} disabled={busy}
+                  className="flex-1 h-11 rounded-[10px] text-white font-semibold disabled:opacity-60 transition-all flex items-center justify-center gap-2"
+                  style={{ background: '#22C55E' }}>
+                  {busy ? 'Confirming…' : '✓ Yes, Confirmed'}
+                </button>
+                <button onClick={() => setShowReopen(true)}
+                  className="flex-1 h-11 rounded-[10px] font-semibold transition-all flex items-center justify-center gap-2"
+                  style={{ background: 'rgba(239,68,68,0.12)', color: '#F87171', border: '1px solid rgba(239,68,68,0.25)' }}>
+                  ↩ Not Fixed
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <textarea
+                  className={inputCls + ' !h-20 py-2'}
+                  value={reopenComment}
+                  onChange={e => setReopenComment(e.target.value)}
+                  placeholder="What's still wrong or missing?"
+                  autoFocus
+                />
+                <div className="flex gap-2">
+                  <button onClick={reopenBug} disabled={busy || !reopenComment.trim()}
+                    className="flex-1 h-10 rounded-[10px] font-semibold text-[13px] disabled:opacity-60 transition-all"
+                    style={{ background: 'rgba(239,68,68,0.15)', color: '#F87171' }}>
+                    {busy ? 'Reopening…' : 'Reopen Bug'}
+                  </button>
+                  <button onClick={() => setShowReopen(false)}
+                    className="h-10 px-4 rounded-[10px] text-[13px]" style={{ color: '#6B7280' }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Normal edit mode (non-reporter, or open/in_progress bugs) ── */}
+        {!(bug.status === 'resolved' && isReporter) && bug.status !== 'confirmed' && (
+          <>
+            {/* Status selector */}
+            {allowedStatuses.length > 0 && (
+              <Field label="Status">
+                <div className="flex gap-2">
+                  {allowedStatuses.map(val => {
+                    const stage = BUG_STAGES.find(s => s.id === val);
+                    return (
+                      <button key={val} type="button" onClick={() => setStatus(val)}
+                        className="flex-1 h-10 rounded-[10px] text-[13px] font-semibold transition-all border-2"
+                        style={{
+                          borderColor: status === val ? stage.color : 'transparent',
+                          backgroundColor: status === val ? `${stage.color}15` : 'rgba(255,255,255,0.04)',
+                          color: status === val ? stage.color : '#6B7280',
+                        }}>
+                        {stage.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Field>
+            )}
+
+            {/* Assign */}
+            <Field label="Assigned to">
+              <select className={inputCls} value={assignedTo} onChange={e => setAssignedTo(e.target.value)}>
+                <option value="">Unassigned</option>
+                {(users || []).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </Field>
+
+            {/* Resolution / Notes */}
+            <Field label={status === 'resolved' ? 'Resolution (required)' : 'Notes (optional)'}>
+              <textarea
+                className={inputCls + ' !h-20 py-2'}
+                value={resolution}
+                onChange={e => setResolution(e.target.value)}
+                placeholder={status === 'resolved' ? 'How was this bug fixed?' : 'Add notes about progress…'}
+              />
+            </Field>
+
+            <button
+              onClick={save}
+              disabled={busy || (status === 'resolved' && !resolution.trim())}
+              className="w-full h-11 rounded-[10px] text-white font-semibold disabled:opacity-60 transition-all"
+              style={{ background: status === 'resolved' ? '#22C55E' : '#4A6CF7' }}
+            >
+              {busy ? 'Saving…' : status === 'resolved' ? 'Mark as Resolved' : 'Update Bug'}
+            </button>
+          </>
+        )}
+
+        {/* Confirmed final state */}
+        {bug.status === 'confirmed' && (
+          <div className="text-center py-2">
+            <span className="text-[14px] font-semibold" style={{ color: '#3B82F6' }}>✓ Bug confirmed as fixed</span>
+          </div>
+        )}
       </div>
     </Modal>
   );
@@ -154,7 +286,8 @@ function BugTracker({ me, users }) {
   };
   useEffect(() => { load(); }, [filter]);
 
-  const statusColor = (s) => s === 'open' ? '#EF4444' : s === 'in_progress' ? '#F59E0B' : '#22C55E';
+  const statusColor = (s) => s === 'open' ? '#EF4444' : s === 'in_progress' ? '#F59E0B' : s === 'resolved' ? '#22C55E' : '#3B82F6';
+  const statusLabel = (s) => s === 'open' ? 'Open' : s === 'in_progress' ? 'In Progress' : s === 'resolved' ? 'Resolved' : 'Confirmed';
 
   return (
     <div className="space-y-4">
@@ -178,23 +311,23 @@ function BugTracker({ me, users }) {
 
       {/* Bug list */}
       {(() => {
-        const activeBugs = bugs.filter(b => b.status !== 'resolved');
-        const resolvedBugs = bugs.filter(b => b.status === 'resolved');
+        const activeBugs = bugs.filter(b => b.status !== 'confirmed');
+        const confirmedBugs = bugs.filter(b => b.status === 'confirmed');
         const displayBugs = showResolved ? bugs : activeBugs;
 
         return (
           <>
-            {displayBugs.length === 0 && !resolvedBugs.length && (
+            {displayBugs.length === 0 && !confirmedBugs.length && (
               <div className="text-center py-8 text-ink-300 text-[13px]">No bugs reported{filter ? ` for ${filter}` : ''}.</div>
             )}
-            {displayBugs.length === 0 && resolvedBugs.length > 0 && !showResolved && (
-              <div className="text-center py-8 text-ink-300 text-[13px]">All bugs resolved! 🎉</div>
+            {displayBugs.length === 0 && confirmedBugs.length > 0 && !showResolved && (
+              <div className="text-center py-8 text-ink-300 text-[13px]">All bugs confirmed fixed! 🎉</div>
             )}
             <div className="space-y-2">
               {displayBugs.map((b, i) => {
                 const isResolved = b.status === 'resolved';
                 return (
-                  <button key={b.id} onClick={() => setDetailBug(b)} className={'card !p-3 transition-all w-full text-left hover:shadow-md ' + (isResolved ? 'opacity-50' : '')}>
+                  <button key={b.id} onClick={() => setDetailBug(b)} className={'card !p-3 transition-all w-full text-left hover:shadow-md ' + (b.status === 'confirmed' ? 'opacity-40' : '')}>
                     <div className="flex items-start gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
@@ -203,8 +336,8 @@ function BugTracker({ me, users }) {
                           <span className="text-[11px] text-ink-300">#{i + 1}</span>
                           <span className="ml-auto tag" style={{
                             color: statusColor(b.status),
-                            backgroundColor: b.status === 'open' ? 'rgba(239,68,68,0.08)' : b.status === 'in_progress' ? 'rgba(245,158,11,0.08)' : 'rgba(34,197,94,0.08)',
-                          }}>{b.status === 'open' ? 'Open' : b.status === 'in_progress' ? 'In Progress' : 'Resolved'}</span>
+                            backgroundColor: `${statusColor(b.status)}15`,
+                          }}>{statusLabel(b.status)}</span>
                         </div>
                         <p className={'text-[13px] ' + (isResolved ? 'text-ink-400 line-through' : 'text-ink-900')}>{b.issue}</p>
                         {b.metadata?.resolution && isResolved && (
@@ -238,12 +371,12 @@ function BugTracker({ me, users }) {
             </div>
 
             {/* Resolved toggle */}
-            {resolvedBugs.length > 0 && (
+            {confirmedBugs.length > 0 && (
               <button
                 onClick={() => setShowResolved(v => !v)}
                 className="w-full text-center text-[12px] font-medium text-ink-400 hover:text-ink-700 py-2 transition"
               >
-                {showResolved ? 'Hide' : 'Show'} {resolvedBugs.length} resolved bug{resolvedBugs.length !== 1 ? 's' : ''}
+                {showResolved ? 'Hide' : 'Show'} {confirmedBugs.length} confirmed bug{confirmedBugs.length !== 1 ? 's' : ''}
               </button>
             )}
           </>
@@ -254,7 +387,7 @@ function BugTracker({ me, users }) {
       <ReportBugModal open={addOpen} onClose={() => setAddOpen(false)} onCreated={load} />
 
       {/* Bug Detail Modal */}
-      <BugDetailModal open={!!detailBug} onClose={() => setDetailBug(null)} bug={detailBug} users={users} onUpdated={load} />
+      <BugDetailModal open={!!detailBug} onClose={() => setDetailBug(null)} bug={detailBug} users={users} onUpdated={load} meId={me?.id} />
     </div>
   );
 }
