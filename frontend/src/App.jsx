@@ -134,13 +134,13 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen bg-page">
-      <div className="flex justify-center">
-        <div className="w-full max-w-[420px] bg-page min-h-screen flex flex-col relative">
-          <main className="flex-1 px-5 pt-4 pb-28 overflow-y-auto">
+    <div className="h-screen bg-page overflow-hidden">
+      <div className="flex justify-center h-full">
+        <div className="w-full max-w-[420px] bg-page h-full flex flex-col relative">
+          <main className="flex-1 px-5 pt-4 pb-4 overflow-y-auto">
             {content}
           </main>
-          <nav className="fixed bottom-0 w-full max-w-[420px] border-t"
+          <nav className="flex-shrink-0 w-full border-t"
             style={{ background: '#0A0E1C', borderColor: 'rgba(255,255,255,0.08)', boxShadow: '0 -4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)' }}>
             <div className="flex h-16">
               {tabs.map(t => {

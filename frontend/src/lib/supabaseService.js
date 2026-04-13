@@ -851,8 +851,8 @@ async function updateBug(id, data) {
   if (data.status) {
     updates.status = data.status;
     if (data.status === 'resolved') updates.resolved_at = new Date().toISOString();
-    else if (data.status === 'confirmed') updates.confirmed_at = new Date().toISOString();
-    else { updates.resolved_at = null; updates.confirmed_at = null; }
+    else if (data.status === 'confirmed') meta.confirmed_at = new Date().toISOString();
+    else { updates.resolved_at = null; meta.confirmed_at = null; }
   }
   if (data.assignedTo !== undefined) updates.assigned_to = data.assignedTo;
   if (data.deadline !== undefined) updates.deadline = data.deadline;
