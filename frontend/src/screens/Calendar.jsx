@@ -24,8 +24,12 @@ function parseHour(iso) { return new Date(iso).getHours(); }
 function eventLocalDate(ev) { return isoDate(new Date(ev.start_time)); }
 function leavesOnDate(leaves, iso) { return leaves.filter(l => l.start_date <= iso && l.end_date >= iso); }
 
+// Distinct palette for team member events (avoids confusion with own event colors)
+const TEAM_COLORS = ['#F97316', '#8B5CF6', '#EC4899', '#14B8A6', '#EAB308', '#6366F1'];
+function teamColor(userId) { return TEAM_COLORS[(userId || 0) % TEAM_COLORS.length]; }
+
 function accentFor(ev) {
-  if (ev._isTeam) return ev._teamColor || '#D1D5DB';
+  if (ev._isTeam) return teamColor(ev.owner_id);
   if (ev.event_type === 'personal') return '#9CA3AF';
   if (ev.priority === 'High') return '#F59E0B';
   if (ev.department === 'Operations') return '#22C55E';
@@ -405,22 +409,41 @@ function EditEventModal({ open, onClose, event, onUpdated, onDeleted }) {
   );
 }
 
-// ── Team member picker for viewing calendars ──
-function TeamPicker({ users, selected, onToggle }) {
+// ── Compact team calendar toggle ──
+function TeamToggle({ users, selected, onToggle }) {
+  const [open, setOpen] = useState(false);
   if (!users || users.length === 0) return null;
+  const activeCount = selected.length;
   return (
-    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-      {users.map(u => {
-        const active = selected.includes(u.id);
-        return (
-          <button key={u.id} onClick={() => onToggle(u.id)}
-            className={'flex items-center gap-1.5 h-8 pl-1 pr-2.5 rounded-full text-[12px] font-medium whitespace-nowrap transition border ' +
-              (active ? 'bg-brand-blue/10 border-brand-blue/30 text-brand-blue' : 'bg-white border-line-light text-ink-500 hover:bg-ink-50')}>
-            <Avatar user={u} size={22} />
-            <span>{u.name?.split(' ')[0]}</span>
-          </button>
-        );
-      })}
+    <div className="relative">
+      <button onClick={() => setOpen(o => !o)}
+        className={'flex items-center gap-1.5 h-9 px-3 rounded-full text-[12px] font-medium transition border ' +
+          (activeCount > 0 ? 'bg-brand-blue/10 border-brand-blue/30 text-brand-blue' : 'bg-white border-line-light text-ink-500 hover:bg-ink-50')}>
+        <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Team{activeCount > 0 ? ` (${activeCount})` : ''}</span>
+        <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className={'transition ' + (open ? 'rotate-180' : '')}><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div className="absolute top-11 left-0 z-30 bg-white rounded-xl border border-line-light shadow-lg py-1.5 min-w-[200px]">
+            <p className="px-3 py-1.5 text-[10px] text-ink-300 uppercase tracking-wide font-semibold">View teammate's calendar</p>
+            {users.map(u => {
+              const active = selected.includes(u.id);
+              return (
+                <button key={u.id} onClick={() => onToggle(u.id)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-ink-50 transition text-left">
+                  <Avatar user={u} size={24} />
+                  <span className="flex-1 text-[13px] text-ink-900">{u.name}</span>
+                  <div className={'w-4 h-4 rounded border-2 flex items-center justify-center transition ' + (active ? 'bg-brand-blue border-brand-blue' : 'border-ink-200')}>
+                    {active && <svg width="10" height="10" fill="none" stroke="white" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -670,7 +693,7 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
 
   useEffect(() => {
     loadDay(date); loadAll(); loadLeaves();
-    api.users().then(u => setTeamUsers(u.filter(x => x.id !== me?.id)));
+    api.users().then(u => setTeamUsers(u.filter(x => x.id !== me?.id && (x.role === 'admin' || x.role === 'manager'))));
   }, []);
   useEffect(() => { loadDay(date); }, [date]);
 
@@ -729,7 +752,17 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
   };
   const switchToDay = (d) => { setPrevView(view); setDate(d); setView('Day'); };
 
-  const isViewingToday = isoDate(date) === isoDate(new Date());
+  // View-aware "today" check — for week view, check if today falls within displayed week
+  const todayIso = isoDate(new Date());
+  const isViewingToday = (() => {
+    if (view === 'Day') return isoDate(date) === todayIso;
+    if (view === 'Week') {
+      const ws = startOfWeek(date);
+      return todayIso >= isoDate(ws) && todayIso <= isoDate(addDays(ws, 6));
+    }
+    if (view === 'Month') return date.getFullYear() === new Date().getFullYear() && date.getMonth() === new Date().getMonth();
+    return isoDate(date) === todayIso; // Schedule
+  })();
 
   const headerLabel = view === 'Month' ? date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
     : view === 'Week' ? `Week of ${addDays(startOfWeek(date), 0).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}`
@@ -768,17 +801,10 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
         {!isViewingToday && (
           <button onClick={() => setDate(new Date())} className="pill pill-outline !h-9 !px-3 !text-[12px] !text-brand-blue !border-brand-blue/30 hover:!bg-brand-blueLight transition">Today</button>
         )}
+        {teamUsers.length > 0 && <TeamToggle users={teamUsers} selected={selectedTeam} onToggle={toggleTeamMember} />}
         <button onClick={() => setLeaveOpen(true)} className="pill pill-outline !h-9 !px-3 !text-[12px]">🏖️ Leave</button>
         <button onClick={() => setAddOpen(true)} className="pill pill-primary !h-9 !px-3 !text-[12px]">+ Event</button>
       </div>
-
-      {/* Team member picker */}
-      {teamUsers.length > 0 && (
-        <div>
-          <p className="text-[11px] text-ink-400 font-medium uppercase tracking-wide mb-1.5">Team calendars</p>
-          <TeamPicker users={teamUsers} selected={selectedTeam} onToggle={toggleTeamMember} />
-        </div>
-      )}
 
       {/* View body */}
       {view === 'Day' && <DayView events={[...events, ...allEvents.filter(e => e._isTeam && eventLocalDate(e) === isoDate(date))].sort((a,b) => a.start_time.localeCompare(b.start_time))} leaves={leaves} date={date} onEventClick={setEditEvent} onDeleteLeave={setDeleteLeaveId} />}
