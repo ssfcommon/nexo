@@ -311,9 +311,11 @@ function BugTracker({ me, users }) {
 
       {/* Bug list */}
       {(() => {
-        const activeBugs = bugs.filter(b => b.status !== 'confirmed');
+        const openBugs = bugs.filter(b => b.status === 'open' || b.status === 'in_progress');
+        const resolvedBugs = bugs.filter(b => b.status === 'resolved');
         const confirmedBugs = bugs.filter(b => b.status === 'confirmed');
-        const displayBugs = showResolved ? bugs : activeBugs;
+        // Show: open/in_progress first, then resolved, then optionally confirmed
+        const displayBugs = [...openBugs, ...resolvedBugs, ...(showResolved ? confirmedBugs : [])];
 
         return (
           <>
@@ -323,54 +325,67 @@ function BugTracker({ me, users }) {
             {displayBugs.length === 0 && confirmedBugs.length > 0 && !showResolved && (
               <div className="text-center py-8 text-ink-300 text-[13px]">All bugs confirmed fixed! 🎉</div>
             )}
-            <div className="space-y-2">
-              {displayBugs.map((b, i) => {
-                const isResolved = b.status === 'resolved';
-                return (
-                  <button key={b.id} onClick={() => setDetailBug(b)} className={'card !p-3 transition-all w-full text-left hover:shadow-md ' + (b.status === 'confirmed' ? 'opacity-40' : '')}>
-                    <div className="flex items-start gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: statusColor(b.status) }} />
-                          <span className={'text-[11px] font-semibold uppercase ' + (isResolved ? 'text-ink-300 line-through' : 'text-ink-300')}>{b.app_name}</span>
-                          <span className="text-[11px] text-ink-300">#{i + 1}</span>
-                          <span className="ml-auto tag" style={{
-                            color: statusColor(b.status),
-                            backgroundColor: `${statusColor(b.status)}15`,
-                          }}>{statusLabel(b.status)}</span>
-                        </div>
-                        <p className={'text-[13px] ' + (isResolved ? 'text-ink-400 line-through' : 'text-ink-900')}>{b.issue}</p>
-                        {b.metadata?.resolution && isResolved && (
-                          <p className="text-[11px] text-ink-400 mt-1 italic truncate">✓ {b.metadata.resolution}</p>
-                        )}
-                        <div className="flex items-center gap-3 mt-2 text-[11px] text-ink-500">
-                          {b.assigned_name && <span className="flex items-center gap-1">
-                            <Avatar user={{ initials: b.assigned_initials, avatar_color: b.assigned_color, avatar_url: b.assigned_avatar }} size={16} />
-                            {b.assigned_name.split(' ')[0]}
-                          </span>}
-                          {b.deadline && <span>Due {b.deadline}</span>}
-                          <span>by {b.reporter_name?.split(' ')[0]}</span>
-                        </div>
-                      </div>
-                      {b.screenshot_url && (() => {
-                        const extraCount = (b.metadata?.extra_screenshots || []).length;
-                        const url = b.screenshot_url.startsWith('http') ? b.screenshot_url : ASSET_ORIGIN + b.screenshot_url;
-                        return (
-                          <div className="relative flex-shrink-0">
-                            <img src={url} alt="screenshot" className="w-16 h-16 rounded-[6px] object-cover border border-line-light" />
-                            {extraCount > 0 && (
-                              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-brand-blue text-white text-[9px] font-bold flex items-center justify-center shadow-sm">+{extraCount}</span>
-                            )}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
 
-            {/* Resolved toggle */}
+            {/* Bug card renderer */}
+            {[
+              { label: null, items: openBugs },
+              ...(resolvedBugs.length > 0 ? [{ label: `AWAITING CONFIRMATION (${resolvedBugs.length})`, items: resolvedBugs }] : []),
+              ...(showResolved && confirmedBugs.length > 0 ? [{ label: `CONFIRMED (${confirmedBugs.length})`, items: confirmedBugs }] : []),
+            ].map((group, gi) => (
+              <React.Fragment key={gi}>
+                {group.label && group.items.length > 0 && (
+                  <p className="text-[11px] font-bold uppercase tracking-wide pt-3 pb-1" style={{ color: '#6B7280' }}>{group.label}</p>
+                )}
+                <div className="space-y-2">
+                  {group.items.map((b) => {
+                    const isResolved = b.status === 'resolved';
+                    const isConfirmed = b.status === 'confirmed';
+                    return (
+                      <button key={b.id} onClick={() => setDetailBug(b)} className={'card !p-3 transition-all w-full text-left hover:shadow-md ' + (isConfirmed ? 'opacity-40' : '')}>
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: statusColor(b.status) }} />
+                              <span className={'text-[11px] font-semibold uppercase text-ink-300'}>{b.app_name}</span>
+                              <span className="ml-auto tag" style={{
+                                color: statusColor(b.status),
+                                backgroundColor: `${statusColor(b.status)}15`,
+                              }}>{statusLabel(b.status)}</span>
+                            </div>
+                            <p className={'text-[13px] ' + (isResolved || isConfirmed ? 'text-ink-400 line-through' : 'text-ink-900')}>{b.issue}</p>
+                            {b.metadata?.resolution && (isResolved || isConfirmed) && (
+                              <p className="text-[11px] text-ink-400 mt-1 italic truncate">✓ {b.metadata.resolution}</p>
+                            )}
+                            <div className="flex items-center gap-3 mt-2 text-[11px] text-ink-500">
+                              {b.assigned_name && <span className="flex items-center gap-1">
+                                <Avatar user={{ initials: b.assigned_initials, avatar_color: b.assigned_color, avatar_url: b.assigned_avatar }} size={16} />
+                                {b.assigned_name.split(' ')[0]}
+                              </span>}
+                              {b.deadline && <span>Due {b.deadline}</span>}
+                              <span>by {b.reporter_name?.split(' ')[0]}</span>
+                            </div>
+                          </div>
+                          {b.screenshot_url && (() => {
+                            const extraCount = (b.metadata?.extra_screenshots || []).length;
+                            const url = b.screenshot_url.startsWith('http') ? b.screenshot_url : ASSET_ORIGIN + b.screenshot_url;
+                            return (
+                              <div className="relative flex-shrink-0">
+                                <img src={url} alt="screenshot" className="w-16 h-16 rounded-[6px] object-cover border border-line-light" />
+                                {extraCount > 0 && (
+                                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-brand-blue text-white text-[9px] font-bold flex items-center justify-center shadow-sm">+{extraCount}</span>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </React.Fragment>
+            ))}
+
+            {/* Confirmed toggle */}
             {confirmedBugs.length > 0 && (
               <button
                 onClick={() => setShowResolved(v => !v)}
