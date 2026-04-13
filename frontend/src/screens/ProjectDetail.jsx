@@ -85,7 +85,7 @@ function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke
               </form>
             ) : (
               <p className={'text-[14px] flex items-center gap-2 ' + (s.status === 'done' ? 'line-through text-ink-300' : 'text-ink-900')}>
-                <span className="truncate">{s.title}</span>
+                <span className="break-words whitespace-normal">{s.title}</span>
                 {s.complexity && (
                   <span className="tag" style={{ color: s.complexity === 'High Complex' ? '#EF4444' : '#22C55E', backgroundColor: s.complexity === 'High Complex' ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)' }}>{s.complexity === 'High Complex' ? 'HC' : 'LC'}</span>
                 )}
@@ -119,13 +119,20 @@ function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke
             <button onClick={() => onPoke(s)} className="text-base" title="Poke" aria-label="Poke">👆</button>
           )}
           {(s.depth || 0) < 2 && s.status !== 'done' && (
-            <button onClick={() => setAddingSubFor(addingSubFor === s.id ? null : s.id)} className="text-[14px] text-ink-300 hover:text-brand-blue" title="Add substep">+</button>
+            <button onClick={() => setAddingSubFor(addingSubFor === s.id ? null : s.id)}
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium transition-all opacity-0 group-hover:opacity-100 flex-shrink-0"
+              style={{ color: '#7EB0FF', background: 'rgba(91,140,255,0.1)', border: '1px solid rgba(91,140,255,0.2)' }}
+              title="Add substep">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Sub
+            </button>
           )}
         </div>
         {addingSubFor === s.id && (
           <form
             onSubmit={(e) => { e.preventDefault(); if (subTitle.trim()) { onAdd(subTitle.trim(), null, null, s.id); setSubTitle(''); setAddingSubFor(null); } }}
-            className="flex items-center gap-2 px-4 py-2 bg-[#FAFBFC]"
+            className="flex items-center gap-2 px-4 py-2"
+            style={{ background: 'rgba(91,140,255,0.05)' }}
             style={{ paddingLeft: `${(s.depth || 0) * 24 + 48}px` }}
           >
             <input
