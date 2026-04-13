@@ -436,13 +436,15 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
       )}
 
       {/* Section toggle: Profile / Reports */}
-      <div className="flex gap-1 bg-ink-100 rounded-full p-0.5">
+      <div className="flex gap-1 rounded-full p-0.5" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%)' }}>
         <button onClick={() => setSection('profile')}
-          className={'flex-1 h-9 rounded-full text-sm font-semibold transition ' + (section === 'profile' ? 'card text-ink-900 shadow-sm !p-0 !border-0' : 'text-ink-500')}>
+          className={'flex-1 h-9 rounded-full text-sm font-semibold transition flex items-center justify-center ' + (section === 'profile' ? 'text-ink-900' : 'text-ink-500')}
+          style={section === 'profile' ? { background: 'linear-gradient(135deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.06) 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12)' } : {}}>
           Settings
         </button>
         <button onClick={() => setSection('reports')}
-          className={'flex-1 h-9 rounded-full text-sm font-semibold transition ' + (section === 'reports' ? 'card text-ink-900 shadow-sm !p-0 !border-0' : 'text-ink-500')}>
+          className={'flex-1 h-9 rounded-full text-sm font-semibold transition flex items-center justify-center ' + (section === 'reports' ? 'text-ink-900' : 'text-ink-500')}
+          style={section === 'reports' ? { background: 'linear-gradient(135deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.06) 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12)' } : {}}>
           Reports & Stats
         </button>
       </div>
