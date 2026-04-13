@@ -306,9 +306,11 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
       </div>
 
       {/* Section toggle */}
-      <div className="flex gap-1 bg-ink-100 rounded-full p-0.5 mb-1">
-        <button onClick={() => setSection('projects')} className={'flex-1 h-9 rounded-full text-sm font-semibold transition ' + (section === 'projects' ? 'card text-ink-900 shadow-sm !p-0 !border-0' : 'text-ink-500')}>Projects</button>
-        <button onClick={() => setSection('bugs')} className={'flex-1 h-9 rounded-full text-sm font-semibold transition ' + (section === 'bugs' ? 'card text-ink-900 shadow-sm !p-0 !border-0' : 'text-ink-500')}>Bug Tracker</button>
+      <div className="flex gap-1 rounded-full p-0.5 mb-1" style={{ background: 'rgba(255,255,255,0.06)' }}>
+        <button onClick={() => setSection('projects')} className={'flex-1 h-9 rounded-full text-sm font-semibold transition flex items-center justify-center ' + (section === 'projects' ? 'text-ink-900' : 'text-ink-500')}
+          style={section === 'projects' ? { background: 'rgba(255,255,255,0.10)', boxShadow: '0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' } : {}}>Projects</button>
+        <button onClick={() => setSection('bugs')} className={'flex-1 h-9 rounded-full text-sm font-semibold transition flex items-center justify-center ' + (section === 'bugs' ? 'text-ink-900' : 'text-ink-500')}
+          style={section === 'bugs' ? { background: 'rgba(255,255,255,0.10)', boxShadow: '0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' } : {}}>Bug Tracker</button>
       </div>
 
       {section === 'bugs' ? (
