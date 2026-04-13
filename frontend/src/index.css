@@ -29,7 +29,11 @@ body {
 
 /* ─── Override light Tailwind utilities to dark ─── */
 .bg-page { background: #0B0F1A !important; }
-.bg-white { background: rgba(255,255,255,0.04) !important; }
+.bg-white {
+  background: rgba(255,255,255,0.05) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
 .bg-white\/90 { background: rgba(11,15,26,0.92) !important; }
 
 /* Text color overrides — prevent pure white or dark grays */
@@ -40,9 +44,9 @@ body {
 .text-ink-300 { color: #4B5563 !important; }
 
 /* Border colors */
-.border-line-light { border-color: rgba(255,255,255,0.08) !important; }
-.border-line-medium { border-color: rgba(255,255,255,0.12) !important; }
-.border-\[\#F3F4F6\] { border-color: rgba(255,255,255,0.06) !important; }
+.border-line-light { border-color: rgba(255,255,255,0.1) !important; }
+.border-line-medium { border-color: rgba(255,255,255,0.15) !important; }
+.border-\[\#F3F4F6\] { border-color: rgba(255,255,255,0.08) !important; }
 
 /* Dividers */
 [class*="divide-line-light"] > * + *,
@@ -57,11 +61,16 @@ body {
 .bg-\[\#FAFBFC\] { background: #0B0F1A !important; }
 .bg-brand-blueLight { background: rgba(91,140,255,0.12) !important; }
 
+/* Shadow overrides — replace light shadows with dark glass shadows */
+.shadow-xs, .shadow-sm { box-shadow: 0 2px 12px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06) !important; }
+.shadow-md { box-shadow: 0 4px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.08) !important; }
+.shadow-lg { box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08) !important; }
+
 /* Hover state overrides */
 .hover\:bg-\[\#F7F8FA\]:hover,
-.hover\:bg-ink-50:hover { background: rgba(255,255,255,0.06) !important; }
-.hover\:bg-ink-100\/60:hover { background: rgba(255,255,255,0.06) !important; }
-.hover\:shadow-md:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06) !important; }
+.hover\:bg-ink-50:hover { background: rgba(255,255,255,0.08) !important; }
+.hover\:bg-ink-100\/60:hover { background: rgba(255,255,255,0.08) !important; }
+.hover\:shadow-md:hover { box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 20px rgba(91,140,255,0.08), 0 0 0 1px rgba(255,255,255,0.1) !important; }
 
 /* Leave/error bg overrides */
 [style*="#FEE2E2"] { background-color: rgba(239,68,68,0.12) !important; }
@@ -95,15 +104,17 @@ body {
 
 /* ─── Nav + Sidebar ─── */
 nav {
-  background: rgba(11,15,26,0.95) !important;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-color: rgba(255,255,255,0.06) !important;
+  background: rgba(11,15,26,0.92) !important;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-color: rgba(255,255,255,0.08) !important;
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.4);
 }
 
 aside {
-  background: #080D18 !important;
-  border-color: rgba(255,255,255,0.06) !important;
+  background: rgba(8,13,24,0.95) !important;
+  border-color: rgba(255,255,255,0.08) !important;
+  box-shadow: 4px 0 24px rgba(0,0,0,0.3);
 }
 
 /* ─── Modal Backdrop ─── */
@@ -115,91 +126,129 @@ aside {
 /* Avatar ring */
 .ring-white { --tw-ring-color: #0B0F1A !important; }
 
-/* ─── Component Layer ─── */
-@layer components {
+/* ─── Glass Card (outside @layer for highest specificity) ─── */
+.card {
+  padding: 16px !important;
+  border-radius: 16px !important;
+  background: rgba(255,255,255,0.07) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.1) !important;
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease !important;
+}
+.card:hover, .card-hover:hover {
+  border-color: rgba(255,255,255,0.2) !important;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 30px rgba(91,140,255,0.12), inset 0 1px 0 rgba(255,255,255,0.12) !important;
+  transform: translateY(-2px) !important;
+}
 
-  /* ── Glass Card ── */
-  .card {
-    @apply rounded-card p-4;
-    background: rgba(255,255,255,0.05);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255,255,255,0.08);
-    box-shadow: 0 2px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
-    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
-  }
-  .card-hover:hover {
-    border-color: rgba(255,255,255,0.14);
-    box-shadow: 0 8px 30px rgba(0,0,0,0.5), 0 0 20px rgba(91,140,255,0.06), inset 0 1px 0 rgba(255,255,255,0.06);
-    transform: translateY(-1px);
-  }
+/* ─── Rounded-card glass (Home task cards, etc.) ─── */
+.rounded-card {
+  border-radius: 14px !important;
+  background: rgba(255,255,255,0.06) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06) !important;
+}
 
-  /* ── Pill ── */
-  .pill {
-    @apply inline-flex items-center justify-center gap-1.5 px-4 h-9 rounded-pill text-sm font-semibold;
-    transition: all 0.2s ease;
-  }
-  .pill:active { transform: scale(0.97); }
-  .pill-primary {
-    background: #5B8CFF;
-    color: white;
-    box-shadow: 0 0 16px rgba(91,140,255,0.35);
-  }
-  .pill-primary:hover {
-    background: #4A7AEE;
-    box-shadow: 0 0 24px rgba(91,140,255,0.45);
-  }
-  .pill-outline {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
-    color: #9CA3AF;
-  }
-  .pill-outline:hover {
-    background: rgba(255,255,255,0.08);
-    border-color: rgba(255,255,255,0.16);
-    color: #E5E7EB;
-  }
+/* ─── Pills ─── */
+.pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  padding: 0 16px !important;
+  height: 36px !important;
+  border-radius: 100px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease !important;
+}
+.pill:active { transform: scale(0.97) !important; }
+.pill-primary {
+  background: #5B8CFF !important;
+  color: white !important;
+  border: none !important;
+  box-shadow: 0 0 20px rgba(91,140,255,0.4), 0 4px 12px rgba(91,140,255,0.2) !important;
+}
+.pill-primary:hover {
+  background: #4A7AEE !important;
+  box-shadow: 0 0 28px rgba(91,140,255,0.5), 0 4px 16px rgba(91,140,255,0.3) !important;
+}
+.pill-outline {
+  background: rgba(255,255,255,0.07) !important;
+  border: 1px solid rgba(255,255,255,0.14) !important;
+  color: #9CA3AF !important;
+  backdrop-filter: blur(12px);
+}
+.pill-outline:hover {
+  background: rgba(255,255,255,0.12) !important;
+  border-color: rgba(255,255,255,0.22) !important;
+  color: #E5E7EB !important;
+}
 
-  /* ── Tag ── */
-  .tag {
-    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
-  }
+/* ─── Tag ─── */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 500;
+}
 
-  /* ── Section Label ── */
-  .section-label {
-    @apply text-xs font-semibold tracking-wider uppercase;
-    color: #4B5563;
-  }
+/* ─── Section Label ─── */
+.section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #6B7280;
+}
 
-  /* ── Input (recessed glass feel) ── */
-  .input-base {
-    @apply w-full h-11 px-3.5 outline-none;
-    border-radius: 12px;
-    background: rgba(0,0,0,0.3);
-    border: 1px solid rgba(255,255,255,0.08);
-    color: #E5E7EB;
-    font-size: 14px;
-    box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  }
-  .input-base::placeholder { color: #4B5563; }
-  .input-base:focus {
-    border-color: rgba(91,140,255,0.5);
-    box-shadow: inset 0 2px 4px rgba(0,0,0,0.3), 0 0 0 3px rgba(91,140,255,0.15);
-  }
+/* ─── Input (recessed glass) ─── */
+.input-base {
+  width: 100% !important;
+  height: 44px !important;
+  padding: 0 14px !important;
+  outline: none !important;
+  border-radius: 12px !important;
+  background: rgba(0,0,0,0.35) !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  color: #E5E7EB !important;
+  font-size: 14px !important;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.4) !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+.input-base::placeholder { color: #4B5563 !important; }
+.input-base:focus {
+  border-color: rgba(91,140,255,0.5) !important;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.4), 0 0 0 3px rgba(91,140,255,0.15) !important;
+}
 
-  /* ── Toggle ── */
-  .toggle-track {
-    @apply relative w-11 h-6 rounded-full cursor-pointer;
-    transition: background-color 0.2s ease;
-  }
-  .toggle-knob {
-    @apply absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-xs;
-    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  .toggle-track[data-on="true"] .toggle-knob {
-    transform: translateX(20px);
-  }
+/* ─── Toggle ─── */
+.toggle-track {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 100px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+.toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 100px;
+  background: white;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.toggle-track[data-on="true"] .toggle-knob {
+  transform: translateX(20px);
 }
 
 /* ─── Inline controls (inside dark cards — no recessed) ─── */
@@ -310,6 +359,26 @@ input[type="radio"], input[type="checkbox"] {
   border-radius: 9999px;
   animation: fab-breathe 3s ease-in-out infinite;
   pointer-events: none;
+}
+
+/* ─── Calendar event cards glass ─── */
+[style*="borderLeftWidth"] {
+  background: rgba(255,255,255,0.06) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06) !important;
+}
+
+/* ─── Section headings glow ─── */
+h2.text-lg { text-shadow: 0 0 20px rgba(229,231,235,0.1); }
+
+/* ─── Stat cards (Profile stats, etc.) ─── */
+[class*="rounded-card"][class*="text-center"],
+[class*="rounded-xl"][class*="text-center"] {
+  background: rgba(255,255,255,0.06) !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3) !important;
 }
 
 /* ─── Micro Interactions ─── */

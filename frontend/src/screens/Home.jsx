@@ -36,17 +36,23 @@ function TaskCard({ task }) {
   const dueToday = task.deadline === today;
   const state = overdue ? 'overdue' : dueToday ? 'due' : 'upcoming';
   const styles = {
-    overdue:  { dot: '#EF4444', bg: 'rgba(239,68,68,0.06)', border: 'rgba(239,68,68,0.15)', text: '#EF4444', label: 'Overdue' },
-    due:      { dot: '#F59E0B', bg: 'rgba(245,158,11,0.06)', border: 'rgba(245,158,11,0.15)', text: '#D97706', label: 'Due Today' },
-    upcoming: { dot: '#4A6CF7', bg: 'rgba(74,108,247,0.04)', border: 'rgba(74,108,247,0.12)', text: '#4A6CF7', label: 'Upcoming' },
+    overdue:  { dot: '#EF4444', bg: 'rgba(239,68,68,0.10)', border: 'rgba(239,68,68,0.20)', glow: 'rgba(239,68,68,0.15)', text: '#EF4444', label: 'Overdue' },
+    due:      { dot: '#F59E0B', bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.20)', glow: 'rgba(245,158,11,0.12)', text: '#D97706', label: 'Due Today' },
+    upcoming: { dot: '#5B8CFF', bg: 'rgba(91,140,255,0.08)', border: 'rgba(91,140,255,0.18)', glow: 'rgba(91,140,255,0.10)', text: '#5B8CFF', label: 'Upcoming' },
   }[state];
 
   return (
     <div
-      className={'rounded-card p-3.5 flex items-center gap-3 transition-all ' + (overdue ? 'overdue-pulse' : '')}
-      style={{ backgroundColor: styles.bg, border: `1px solid ${styles.border}` }}
+      className={'rounded-[14px] p-3.5 flex items-center gap-3 transition-all ' + (overdue ? 'overdue-pulse' : '')}
+      style={{
+        background: styles.bg,
+        border: `1px solid ${styles.border}`,
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        boxShadow: `0 4px 20px rgba(0,0,0,0.3), 0 0 16px ${styles.glow}, inset 0 1px 0 rgba(255,255,255,0.06)`,
+      }}
     >
-      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: styles.dot }} />
+      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: styles.dot, boxShadow: `0 0 8px ${styles.dot}60` }} />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold truncate" style={{ color: styles.text }}>
           {styles.label}: {task.title}
@@ -129,10 +135,12 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
               <button
                 key={b.id}
                 onClick={() => onSwitchTab?.('projects', { kind: 'bugs' })}
-                className="w-full text-left rounded-card p-3.5 flex items-center gap-3 transition-all"
+                className="w-full text-left rounded-[14px] p-3.5 flex items-center gap-3 transition-all"
                 style={{
-                  backgroundColor: b.status === 'open' ? 'rgba(239,68,68,0.06)' : 'rgba(245,158,11,0.06)',
-                  border: `1px solid ${b.status === 'open' ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)'}`,
+                  background: b.status === 'open' ? 'rgba(239,68,68,0.10)' : 'rgba(245,158,11,0.10)',
+                  border: `1px solid ${b.status === 'open' ? 'rgba(239,68,68,0.20)' : 'rgba(245,158,11,0.20)'}`,
+                  backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+                  boxShadow: `0 4px 20px rgba(0,0,0,0.3), 0 0 12px ${b.status === 'open' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)'}, inset 0 1px 0 rgba(255,255,255,0.06)`,
                 }}
               >
                 <span className="text-base">🐛</span>
@@ -155,7 +163,7 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
 
       {/* Leave banner */}
       {upcomingLeave && (
-        <div className="rounded-card px-4 py-3 flex items-center gap-2.5 text-sm" style={{ backgroundColor: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.12)' }}>
+        <div className="rounded-[14px] px-4 py-3 flex items-center gap-2.5 text-sm" style={{ background: 'rgba(16,185,129,0.10)', border: '1px solid rgba(16,185,129,0.20)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: '0 4px 20px rgba(0,0,0,0.3), 0 0 12px rgba(16,185,129,0.10), inset 0 1px 0 rgba(255,255,255,0.06)' }}>
           <span className="text-base">🏖️</span>
           <span className="text-ink-700">
             <span className="font-medium text-ink-900">{upcomingLeave.name?.split(' ')[0]}</span> is on leave {fmtRange(upcomingLeave.start_date, upcomingLeave.end_date)}
@@ -172,18 +180,22 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
             <><SkeletonCard lines={1} /><SkeletonCard lines={1} /></>
           ) : activity.length === 0 ? (
             <EmptyState icon="📭" title="No activity yet" subtitle="Team updates will show up here." />
-          ) : (showAllActivity ? activity : activity.slice(0, 3)).map(a => (
-            <div key={a.id} className="flex items-start gap-3">
-              <Avatar user={{ initials: a.initials, avatar_color: a.color, avatar_url: a.avatar_url, name: a.actor }} size={30} />
-              <div className="flex-1 min-w-0 pt-0.5">
-                <p className="text-sm text-ink-700 leading-relaxed">
-                  <span className="font-semibold text-ink-900">{a.actor?.split(' ')[0] || 'System'}</span>{' '}
-                  {a.text}
-                </p>
-                {a.context && <p className="text-xs text-ink-400 truncate mt-0.5">{a.context}</p>}
-              </div>
+          ) : (
+            <div className="rounded-[14px] divide-y divide-white/[0.06]" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(16px)', boxShadow: '0 2px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06)' }}>
+              {(showAllActivity ? activity : activity.slice(0, 3)).map(a => (
+                <div key={a.id} className="flex items-start gap-3 px-4 py-3">
+                  <Avatar user={{ initials: a.initials, avatar_color: a.color, avatar_url: a.avatar_url, name: a.actor }} size={30} />
+                  <div className="flex-1 min-w-0 pt-0.5">
+                    <p className="text-sm text-ink-700 leading-relaxed">
+                      <span className="font-semibold text-ink-900">{a.actor?.split(' ')[0] || 'System'}</span>{' '}
+                      {a.text}
+                    </p>
+                    {a.context && <p className="text-xs text-ink-400 truncate mt-0.5">{a.context}</p>}
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
           {showAllActivity && activity.length > 3 && (
             <button onClick={() => setShowAllActivity(false)} className="text-xs text-brand-blue w-full text-center pt-1 font-medium">Show less</button>
           )}

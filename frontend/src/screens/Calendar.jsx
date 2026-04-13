@@ -675,9 +675,14 @@ function DayView({ events, leaves, date, onEventClick, onDeleteLeave }) {
       {events.map(ev => (
         <div key={ev.id} className={'flex gap-3 ' + (ev._isTeam ? '' : 'cursor-pointer')} onClick={() => !ev._isTeam && onEventClick?.(ev)}>
           <div className="w-14 pt-3 text-[12px] text-ink-400 flex-shrink-0 text-right">{fmtTime(ev.start_time)}</div>
-          <div className={'flex-1 rounded-[12px] p-3.5 transition ' +
-            (ev._isTeam ? 'bg-ink-50 border border-dashed border-ink-200' : 'bg-white border border-line-light hover:shadow-md')}
-            style={{ borderLeftWidth: 4, borderLeftStyle: 'solid', borderLeftColor: accentFor(ev) }}>
+          <div className={'flex-1 rounded-[12px] p-3.5 transition'}
+            style={{
+              background: ev._isTeam ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.06)',
+              border: ev._isTeam ? '1px dashed rgba(255,255,255,0.12)' : '1px solid rgba(255,255,255,0.12)',
+              borderLeftWidth: 4, borderLeftStyle: 'solid', borderLeftColor: accentFor(ev),
+              backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+              boxShadow: '0 2px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06)',
+            }}>
             <div className="flex items-center gap-2">
               <p className="font-semibold text-[14px] text-ink-900 flex-1">
                 {ev.event_type === 'personal' ? '🔒 ' : ''}
@@ -784,7 +789,8 @@ function MonthView({ date, allEvents, leaves, onDayClick }) {
           const isToday = iso === today;
           return (
             <button key={iso} onClick={() => onDayClick(d)}
-              className={'bg-white min-h-[80px] p-1.5 text-left align-top transition hover:bg-[#F7F8FA] ' + (isToday ? 'ring-2 ring-inset ring-brand-blue' : '') + (dayLeaves.length ? ' bg-[#FEF2F2]' : '')}>
+              className={'min-h-[80px] p-1.5 text-left align-top transition ' + (isToday ? 'ring-2 ring-inset ring-brand-blue' : '') + (dayLeaves.length ? '' : '')}
+              style={{ background: dayLeaves.length ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
               <p className={'text-[12px] font-medium mb-0.5 ' + (isToday ? 'text-brand-blue font-bold' : 'text-ink-900')}>{d.getDate()}</p>
               {dayLeaves.map(l => (
                 <div key={l.id} className="text-[9px] text-danger bg-[#FEE2E2] rounded px-1 py-px mb-0.5 truncate">{l.initials} {l.type}</div>
@@ -843,7 +849,8 @@ function ScheduleView({ allEvents, leaves, date, onEventClick }) {
               ))}
               {dayEvents.map(ev => (
                 <div key={ev.id} onClick={() => !ev._isTeam && onEventClick?.(ev)}
-                  className={'flex items-center gap-3 rounded-[10px] bg-white border border-line-light px-3 py-2.5 transition ' + (ev._isTeam ? 'opacity-80' : 'cursor-pointer hover:shadow-md')}>
+                  className={'flex items-center gap-3 rounded-[10px] px-3 py-2.5 transition ' + (ev._isTeam ? 'opacity-80' : 'cursor-pointer')}
+                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)', backdropFilter: 'blur(16px)', boxShadow: '0 2px 12px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.06)' }}>
                   <span className="w-1 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: accentFor(ev) }} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">

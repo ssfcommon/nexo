@@ -350,7 +350,7 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
       {/* Quick tasks */}
       <div>
         <p className="section-label mb-2">Quick Tasks</p>
-        <div className="bg-white rounded-card border border-line-light">
+        <div className="rounded-[14px]" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: '0 4px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)' }}>
           {quickTasks.map((t, i) => (
             <div
               key={t.id}
