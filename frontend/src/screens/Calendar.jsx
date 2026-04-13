@@ -100,7 +100,7 @@ function DateJumpPicker({ date, onJump, onClose }) {
   return (
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
-      <div className="absolute top-full left-0 mt-2 z-40 bg-white rounded-xl border border-line-light shadow-xl p-3 w-[280px]">
+      <div className="absolute top-full left-0 mt-2 z-40 rounded-xl p-3 w-[280px]" style={{ background: 'rgba(17,24,39,0.92)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 12px 48px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
         <div className="flex items-center justify-between mb-2">
           <button onClick={() => setViewMonth(d => { const r = new Date(d); r.setMonth(r.getMonth() - 1); return r; })} className="w-7 h-7 rounded-full hover:bg-ink-100 flex items-center justify-center text-ink-500"><ChevronLeft /></button>
           <span className="text-[13px] font-semibold text-ink-900">{viewMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</span>
@@ -780,7 +780,7 @@ function MonthView({ date, allEvents, leaves, onDayClick }) {
           <div key={d} className="text-center text-[10px] text-ink-400 py-1.5 font-semibold uppercase tracking-wide">{d}</div>
         ))}
       </div>
-      <div className="grid grid-cols-7 gap-px bg-line-light rounded-xl overflow-hidden">
+      <div className="grid grid-cols-7 gap-px rounded-xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
         {cells.map((d, i) => {
           if (!d) return <div key={`blank-${i}`} className="bg-page min-h-[80px]" />;
           const iso = isoDate(d);
@@ -789,8 +789,8 @@ function MonthView({ date, allEvents, leaves, onDayClick }) {
           const isToday = iso === today;
           return (
             <button key={iso} onClick={() => onDayClick(d)}
-              className={'min-h-[80px] p-1.5 text-left align-top transition ' + (isToday ? 'ring-2 ring-inset ring-brand-blue' : '') + (dayLeaves.length ? '' : '')}
-              style={{ background: dayLeaves.length ? 'rgba(239,68,68,0.08)' : 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              className={'min-h-[80px] p-1.5 text-left align-top transition ' + (isToday ? 'ring-2 ring-inset ring-brand-blue' : '')}
+              style={{ background: dayLeaves.length ? 'rgba(239,68,68,0.12)' : '#0E1322' }}>
               <p className={'text-[12px] font-medium mb-0.5 ' + (isToday ? 'text-brand-blue font-bold' : 'text-ink-900')}>{d.getDate()}</p>
               {dayLeaves.map(l => (
                 <div key={l.id} className="text-[9px] text-danger bg-[#FEE2E2] rounded px-1 py-px mb-0.5 truncate">{l.initials} {l.type}</div>

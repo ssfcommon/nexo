@@ -43,9 +43,10 @@ body {
 .text-ink-400 { color: #6B7280 !important; }
 .text-ink-300 { color: #4B5563 !important; }
 
-/* Border colors */
+/* Border & bg line colors */
 .border-line-light { border-color: rgba(255,255,255,0.1) !important; }
 .border-line-medium { border-color: rgba(255,255,255,0.15) !important; }
+.bg-line-light { background-color: rgba(255,255,255,0.08) !important; }
 .border-\[\#F3F4F6\] { border-color: rgba(255,255,255,0.08) !important; }
 
 /* Dividers */
