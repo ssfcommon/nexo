@@ -59,7 +59,7 @@ function BugDetailModal({ open, onClose, bug, users, onUpdated, meId }) {
     try {
       const patch = { status };
       if (resolution.trim()) patch.resolution = resolution.trim();
-      if (assignedTo !== (bug.assigned_to || '')) patch.assignedTo = assignedTo ? Number(assignedTo) : null;
+      if (assignedTo !== (bug.assigned_to || '')) patch.assignedTo = assignedTo || null;
       await api.updateBug(bug.id, patch);
       showToast(status === 'resolved' ? 'Bug resolved — awaiting reporter confirmation' : 'Bug updated');
       onUpdated?.();

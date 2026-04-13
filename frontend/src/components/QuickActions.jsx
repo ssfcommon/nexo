@@ -556,7 +556,7 @@ export function ReportBugModal({ open, onClose, onCreated }) {
     setBusy(true);
     try {
       const screenshotDataUrls = await Promise.all(screenshots.map(readFile));
-      await api.createBug({ appName: appName.trim(), issue: issue.trim(), screenshots: screenshotDataUrls, assignedTo: assignedTo ? Number(assignedTo) : null, deadline: deadline || null });
+      await api.createBug({ appName: appName.trim(), issue: issue.trim(), screenshots: screenshotDataUrls, assignedTo: assignedTo || null, deadline: deadline || null });
       onCreated?.();
       onClose();
     } catch (err) { showToast(err.message || 'Failed to report bug', 'error'); } finally { setBusy(false); }
