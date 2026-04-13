@@ -10,6 +10,57 @@ import ConfirmModal from '../components/ConfirmModal.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import useLiveUpdates from '../hooks/useLiveUpdates.js';
 
+function SubtaskMenu({ s, meId, depth, onEdit, onDelete, onPoke, onAddSub }) {
+  const [open, setOpen] = useState(false);
+  const ref = React.useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, [open]);
+
+  const items = [];
+  if (s.status !== 'done') {
+    items.push({ label: 'Edit', icon: 'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z', action: () => { onEdit(); setOpen(false); } });
+  }
+  if (s.owner_id && s.owner_id !== meId && s.status !== 'done') {
+    items.push({ label: 'Poke', emoji: '👆', action: () => { onPoke(); setOpen(false); } });
+  }
+  if ((depth || 0) < 2 && s.status !== 'done') {
+    items.push({ label: 'Add substep', icon: 'M12 5v14M5 12h14', action: () => { onAddSub(); setOpen(false); } });
+  }
+  items.push({ label: 'Delete', icon: 'M3 6h18M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6', danger: true, action: () => { onDelete(); setOpen(false); } });
+
+  return (
+    <div ref={ref} className="relative flex-shrink-0">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+        style={{ color: '#6B7280', background: open ? 'rgba(255,255,255,0.08)' : 'transparent' }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-9 z-50 min-w-[160px] py-1.5 rounded-xl animate-fade-in"
+          style={{ background: 'linear-gradient(160deg, rgba(22,30,50,0.95) 0%, rgba(12,18,32,0.98) 100%)', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 12px 40px rgba(0,0,0,0.6)' }}>
+          {items.map((item, idx) => (
+            <button key={idx} onClick={item.action}
+              className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] font-medium text-left transition-colors hover:bg-white/[0.06]"
+              style={{ color: item.danger ? '#F87171' : '#D1D5DB' }}>
+              {item.icon ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d={item.icon}/></svg>
+              ) : <span className="w-[14px] text-center text-[13px]">{item.emoji || ''}</span>}
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke, onEdit, onDelete, onReorder }) {
   const [newTitle, setNewTitle] = useState('');
   const [ownerId, setOwnerId] = useState('');
@@ -55,95 +106,110 @@ function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke
           onDragEnd={() => { setDragId(null); setHoverId(null); }}
           onDragOver={(e) => { e.preventDefault(); if (s.depth === 0 && s.id !== dragId) setHoverId(s.id); }}
           onDrop={() => { if (dragId && s.id !== dragId && s.depth === 0) { onReorder?.(dragId, s.id); } setDragId(null); setHoverId(null); }}
-          className={'flex items-center gap-3 py-3 group transition ' +
-            (i < subtasks.length - 1 ? 'border-b border-[#F3F4F6] ' : '') +
+          className={'flex items-center gap-3 py-3.5 transition ' +
+            (i < subtasks.length - 1 ? 'border-b ' : '') +
             (dragId === s.id ? 'opacity-40 ' : '') +
             (hoverId === s.id ? 'bg-brand-blueLight ' : '') +
             (s.depth === 0 ? 'cursor-grab active:cursor-grabbing ' : '')}
-          style={{ paddingLeft: `${(s.depth || 0) * 24 + 16}px`, paddingRight: '16px' }}
+          style={{ paddingLeft: `${(s.depth || 0) * 20 + 16}px`, paddingRight: '12px', borderColor: 'rgba(255,255,255,0.06)' }}
         >
+          {/* Checkbox */}
           <button
             onClick={() => onToggle(s)}
-            className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+            className="w-[22px] h-[22px] rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all"
             style={{
-              borderColor: s.status === 'done' ? '#22C55E' : '#D1D5DB',
+              borderColor: s.status === 'done' ? '#22C55E' : 'rgba(255,255,255,0.2)',
               backgroundColor: s.status === 'done' ? '#22C55E' : 'transparent',
+              boxShadow: s.status === 'done' ? '0 0 8px rgba(34,197,94,0.3)' : 'none',
             }}
           >
-            {s.status === 'done' && <span className="text-white text-xs">✓</span>}
+            {s.status === 'done' && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
           </button>
+
+          {/* Title + meta */}
           <div className="flex-1 min-w-0">
             {editingId === s.id ? (
-              <form onSubmit={(e) => { e.preventDefault(); if (editTitle.trim()) { onEdit(s.id, { title: editTitle.trim(), complexity: editComplexity || undefined }); setEditingId(null); } }} className="flex items-center gap-1 flex-wrap">
-                <input value={editTitle} onChange={e => setEditTitle(e.target.value)} className="flex-1 h-7 px-2 text-[13px] rounded border border-brand-blue bg-white outline-none min-w-[100px]" autoFocus />
-                <select value={editComplexity} onChange={e => setEditComplexity(e.target.value)} className="h-7 px-1 text-[10px] rounded border border-line-light bg-white">
-                  <option value="">Complexity</option>
-                  {COMPLEXITIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <button type="submit" className="text-[11px] text-brand-blue font-semibold">Save</button>
-                <button type="button" onClick={() => setEditingId(null)} className="text-[11px] text-ink-300">Cancel</button>
+              <form onSubmit={(e) => { e.preventDefault(); if (editTitle.trim()) { onEdit(s.id, { title: editTitle.trim(), complexity: editComplexity || undefined }); setEditingId(null); } }} className="space-y-2">
+                <input value={editTitle} onChange={e => setEditTitle(e.target.value)} className="w-full h-9 px-3 text-[14px] rounded-lg input-base" autoFocus />
+                <div className="flex items-center gap-2">
+                  <select value={editComplexity} onChange={e => setEditComplexity(e.target.value)} className="h-8 px-2 text-[12px] rounded-lg input-base">
+                    <option value="">Complexity</option>
+                    {COMPLEXITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <button type="submit" className="h-8 px-3 text-[12px] font-semibold rounded-lg" style={{ background: 'rgba(91,140,255,0.15)', color: '#7EB0FF' }}>Save</button>
+                  <button type="button" onClick={() => setEditingId(null)} className="h-8 px-3 text-[12px] rounded-lg" style={{ color: '#6B7280' }}>Cancel</button>
+                </div>
               </form>
             ) : (
-              <p className={'text-[14px] flex items-center gap-2 ' + (s.status === 'done' ? 'line-through text-ink-300' : 'text-ink-900')}>
-                <span className="break-words whitespace-normal">{s.title}</span>
-                {s.complexity && (
-                  <span className="tag" style={{ color: s.complexity === 'High Complex' ? '#EF4444' : '#22C55E', backgroundColor: s.complexity === 'High Complex' ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)' }}>{s.complexity === 'High Complex' ? 'HC' : 'LC'}</span>
-                )}
-                {s.assignment_status === 'pending' && (
-                  <span className="tag" style={{ color: '#F59E0B', backgroundColor: 'rgba(245,158,11,0.12)' }}>Pending</span>
-                )}
-                {s.assignment_status === 'declined' && (
-                  <span className="tag" style={{ color: '#EF4444', backgroundColor: 'rgba(239,68,68,0.1)' }}>Declined</span>
-                )}
-                <button onClick={() => { setEditingId(s.id); setEditTitle(s.title); setEditComplexity(s.complexity || ''); }} className="text-ink-300 hover:text-brand-blue flex-shrink-0 opacity-0 group-hover:opacity-100 transition" title="Edit">
-                  <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                </button>
-                <button onClick={() => onDelete?.(s.id)} className="text-ink-300 hover:text-danger flex-shrink-0 opacity-0 group-hover:opacity-100 transition" title="Delete">
-                  <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-                </button>
-              </p>
-            )}
-            {s.deadline && editingId !== s.id && (
-              <p className="text-[11px] text-ink-500 mt-0.5">
-                Due {new Date(s.deadline).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
-              </p>
+              <>
+                <p className={'text-[14px] leading-snug ' + (s.status === 'done' ? 'line-through' : '')} style={{ color: s.status === 'done' ? '#6B7280' : '#E5E7EB' }}>
+                  {s.title}
+                </p>
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                  {s.complexity && (
+                    <span className="inline-flex items-center h-5 px-1.5 rounded text-[10px] font-semibold"
+                      style={{ color: s.complexity === 'High Complex' ? '#F87171' : '#4ADE80', backgroundColor: s.complexity === 'High Complex' ? 'rgba(248,113,113,0.12)' : 'rgba(74,222,128,0.12)' }}>
+                      {s.complexity === 'High Complex' ? 'HC' : 'LC'}
+                    </span>
+                  )}
+                  {s.assignment_status === 'pending' && (
+                    <span className="inline-flex items-center h-5 px-1.5 rounded text-[10px] font-semibold" style={{ color: '#FBBF24', backgroundColor: 'rgba(251,191,36,0.12)' }}>Pending</span>
+                  )}
+                  {s.assignment_status === 'declined' && (
+                    <span className="inline-flex items-center h-5 px-1.5 rounded text-[10px] font-semibold" style={{ color: '#F87171', backgroundColor: 'rgba(248,113,113,0.12)' }}>Declined</span>
+                  )}
+                  {s.deadline && (
+                    <span className="text-[11px]" style={{ color: '#6B7280' }}>
+                      Due {new Date(s.deadline).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                    </span>
+                  )}
+                </div>
+              </>
             )}
           </div>
-          {s.owner_initials && (
+
+          {/* Avatar */}
+          {editingId !== s.id && s.owner_initials && (
             <Avatar
               user={{ initials: s.owner_initials, avatar_color: s.owner_color, avatar_url: s.owner_avatar, name: s.owner_name }}
-              size={26}
+              size={28}
             />
           )}
-          {s.owner_id && s.owner_id !== meId && s.status !== 'done' && (
-            <button onClick={() => onPoke(s)} className="text-base" title="Poke" aria-label="Poke">👆</button>
-          )}
-          {(s.depth || 0) < 2 && s.status !== 'done' && (
-            <button onClick={() => setAddingSubFor(addingSubFor === s.id ? null : s.id)}
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium transition-all opacity-0 group-hover:opacity-100 flex-shrink-0"
-              style={{ color: '#7EB0FF', background: 'rgba(91,140,255,0.1)', border: '1px solid rgba(91,140,255,0.2)' }}
-              title="Add substep">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Sub
-            </button>
+
+          {/* Overflow menu */}
+          {editingId !== s.id && (
+            <SubtaskMenu
+              s={s}
+              meId={meId}
+              depth={s.depth}
+              onEdit={() => { setEditingId(s.id); setEditTitle(s.title); setEditComplexity(s.complexity || ''); }}
+              onDelete={() => onDelete?.(s.id)}
+              onPoke={() => onPoke(s)}
+              onAddSub={() => setAddingSubFor(addingSubFor === s.id ? null : s.id)}
+            />
           )}
         </div>
+
+        {/* Inline substep form */}
         {addingSubFor === s.id && (
           <form
             onSubmit={(e) => { e.preventDefault(); if (subTitle.trim()) { onAdd(subTitle.trim(), null, null, s.id); setSubTitle(''); setAddingSubFor(null); } }}
-            className="flex items-center gap-2 px-4 py-2"
-            style={{ background: 'rgba(91,140,255,0.05)' }}
-            style={{ paddingLeft: `${(s.depth || 0) * 24 + 48}px` }}
+            className="flex items-center gap-2 py-2.5"
+            style={{ paddingLeft: `${(s.depth || 0) * 20 + 48}px`, paddingRight: '16px', background: 'rgba(91,140,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
           >
+            <div className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(91,140,255,0.15)' }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#7EB0FF" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </div>
             <input
               value={subTitle}
               onChange={e => setSubTitle(e.target.value)}
               placeholder="Add a substep…"
-              className="flex-1 bg-transparent text-[13px] outline-none placeholder:text-ink-300"
+              className="flex-1 bg-transparent text-[13px] outline-none"
+              style={{ color: '#E5E7EB' }}
               autoFocus
             />
-            <button type="submit" className="text-[12px] text-brand-blue font-semibold">Add</button>
-            <button type="button" onClick={() => setAddingSubFor(null)} className="text-[12px] text-ink-300">Cancel</button>
+            <button type="submit" className="h-7 px-2.5 text-[12px] font-semibold rounded-lg" style={{ background: 'rgba(91,140,255,0.15)', color: '#7EB0FF' }}>Add</button>
+            <button type="button" onClick={() => setAddingSubFor(null)} className="h-7 px-2 text-[12px] rounded-lg" style={{ color: '#6B7280' }}>Cancel</button>
           </form>
         )}
       </React.Fragment>
