@@ -137,7 +137,7 @@ function EditProfileModal({ open, onClose, user, onSaved, refreshUser }) {
     try {
       let u = await api.updateMe({ name: name.trim(), department });
       if (photoFile) {
-        const dataUrl = await readAsDataURL(photoFile instanceof Blob ? new File([photoFile], 'avatar.jpg') : photoFile);
+        const dataUrl = await readAsDataURL(photoFile instanceof Blob ? new File([photoFile], 'avatar.jpg', { type: photoFile.type || 'image/jpeg' }) : photoFile);
         u = await api.uploadAvatar(dataUrl);
       }
       onSaved?.(u);
