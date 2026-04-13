@@ -82,22 +82,33 @@ export default function App() {
               </div>
             </div>
           </div>
-          <nav className="flex-1 px-3 space-y-0.5">
+          <nav className="flex-1 px-3 space-y-1">
             {tabs.map(t => {
               const active = tab === t.id && !notifOpen;
               return (
                 <button
                   key={t.id}
                   onClick={() => { setTab(t.id); setNotifOpen(false); setDeepLink(null); }}
-                  className={'w-full flex items-center gap-3 px-3 h-10 rounded-input text-left text-sm font-medium transition-all duration-200 ' +
-                    (active ? 'text-brand-blue' : 'text-ink-500 hover:text-ink-700')}
-                  style={active ? { background: 'rgba(91,140,255,0.12)', boxShadow: '0 0 12px rgba(91,140,255,0.15)' } : { background: 'transparent' }}
+                  className={'w-full flex items-center gap-3 px-3 h-10 rounded-xl text-left text-sm font-medium transition-all duration-300 ' +
+                    (active ? '' : 'text-ink-500 hover:text-ink-700')}
+                  style={active ? { background: 'linear-gradient(135deg, rgba(91,140,255,0.15) 0%, rgba(91,140,255,0.06) 100%)', border: '1px solid rgba(91,140,255,0.18)', boxShadow: '0 0 16px rgba(91,140,255,0.15), inset 0 1px 0 rgba(255,255,255,0.08)', color: '#7EB0FF' } : { background: 'transparent' }}
                 >
-                  <t.Icon />
+                  <div style={active ? { filter: 'drop-shadow(0 0 6px rgba(91,140,255,0.5))' } : {}}>
+                    <t.Icon style={active ? { stroke: '#7EB0FF', strokeWidth: 2 } : {}} />
+                  </div>
                   <span>{t.label}</span>
                 </button>
               );
             })}
+            {/* SVG gradient for sidebar icons */}
+            <svg width="0" height="0" style={{ position: 'absolute' }}>
+              <defs>
+                <linearGradient id="sidebar-icon-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#7EB0FF" />
+                  <stop offset="100%" stopColor="#5B8CFF" />
+                </linearGradient>
+              </defs>
+            </svg>
           </nav>
           {me && (
             <button onClick={() => setTab('profile')} className="w-full px-4 py-3.5 border-t border-line-light flex items-center gap-2.5 hover:bg-ink-100/60 transition text-left">
@@ -129,22 +140,40 @@ export default function App() {
           <main className="flex-1 px-5 pt-4 pb-28 overflow-y-auto">
             {content}
           </main>
-          <nav className="fixed bottom-0 w-full max-w-[420px] backdrop-blur-xl border-t border-line-light h-[70px] pb-[env(safe-area-inset-bottom)] flex"
-            style={{ background: 'rgba(11,15,26,0.92)', borderColor: 'rgba(255,255,255,0.06)' }}>
+          <nav className="fixed bottom-0 w-full max-w-[420px] backdrop-blur-xl border-t h-[72px] pb-[env(safe-area-inset-bottom)] flex"
+            style={{ background: 'linear-gradient(180deg, rgba(14,19,34,0.95) 0%, rgba(8,13,24,0.98) 100%)', borderColor: 'rgba(255,255,255,0.08)', boxShadow: '0 -4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)' }}>
             {tabs.map(t => {
               const active = tab === t.id && !notifOpen;
               return (
                 <button
                   key={t.id}
                   onClick={() => { setTab(t.id); setNotifOpen(false); setDeepLink(null); }}
-                  className={'flex-1 flex flex-col items-center justify-center gap-0.5 transition-all duration-200 ' + (active ? 'text-brand-blue' : 'text-ink-400')}
-                  style={active ? { filter: 'drop-shadow(0 0 6px rgba(91,140,255,0.4))' } : {}}
+                  className="flex-1 flex flex-col items-center justify-center gap-1 transition-all duration-300 relative"
                 >
-                  <t.Icon />
-                  <span className="text-[10px] font-medium">{t.label}</span>
+                  {/* Active glow backdrop */}
+                  {active && (
+                    <div className="absolute inset-x-3 top-1.5 bottom-1.5 rounded-2xl transition-all duration-300"
+                      style={{ background: 'linear-gradient(135deg, rgba(91,140,255,0.12) 0%, rgba(91,140,255,0.04) 100%)', border: '1px solid rgba(91,140,255,0.15)', boxShadow: '0 0 20px rgba(91,140,255,0.12), inset 0 1px 0 rgba(255,255,255,0.08)' }} />
+                  )}
+                  {/* Icon with gradient SVG */}
+                  <div className="relative z-10" style={active ? { filter: 'drop-shadow(0 0 8px rgba(91,140,255,0.5))' } : {}}>
+                    <t.Icon style={active ? { stroke: 'url(#nav-icon-grad)', strokeWidth: 2 } : { stroke: '#4B5563', strokeWidth: 1.5 }} />
+                  </div>
+                  <span className="relative z-10 text-[10px] font-semibold transition-colors duration-300" style={{ color: active ? '#7EB0FF' : '#4B5563' }}>{t.label}</span>
+                  {/* Active indicator dot */}
+                  {active && <div className="absolute bottom-0.5 w-1 h-1 rounded-full z-10" style={{ background: '#5B8CFF', boxShadow: '0 0 6px rgba(91,140,255,0.8)' }} />}
                 </button>
               );
             })}
+            {/* SVG gradient def for active icons */}
+            <svg width="0" height="0" style={{ position: 'absolute' }}>
+              <defs>
+                <linearGradient id="nav-icon-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#7EB0FF" />
+                  <stop offset="100%" stopColor="#5B8CFF" />
+                </linearGradient>
+              </defs>
+            </svg>
           </nav>
         </div>
       </div>
