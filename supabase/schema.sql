@@ -35,7 +35,7 @@ CREATE TYPE nexo.complexity_level AS ENUM ('high_complex', 'low_complex');
 CREATE TYPE nexo.event_type AS ENUM ('work', 'personal');
 CREATE TYPE nexo.recurrence_type AS ENUM ('daily', 'weekly', 'monthly');
 CREATE TYPE nexo.leave_type AS ENUM ('PL', 'SL', 'CL', 'FL');
-CREATE TYPE nexo.bug_status AS ENUM ('open', 'in_progress', 'resolved', 'closed');
+CREATE TYPE nexo.bug_status AS ENUM ('open', 'in_progress', 'resolved', 'confirmed', 'closed');
 CREATE TYPE nexo.notification_type AS ENUM (
   'assignment', 'completed', 'declined', 'modified', 'accepted',
   'poke', 'reminder', 'overdue', 'optimization', 'mention'
