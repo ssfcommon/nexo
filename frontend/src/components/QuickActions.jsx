@@ -20,9 +20,12 @@ export function QuickTaskModal({ open, onClose, onCreated }) {
   const [files, setFiles] = useState([]);
   const [links, setLinks] = useState([]);
   const [newLink, setNewLink] = useState('');
+  const [addToCalendar, setAddToCalendar] = useState(false);
+  const [calTime, setCalTime] = useState('09:00');
+  const [calDuration, setCalDuration] = useState(30);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { if (open) { setTitle(''); setDeadline(today()); setComplexity(COMPLEXITIES[1]); setRecurrence(''); setDescription(''); setAssignedTo(''); setFiles([]); setLinks([]); setNewLink(''); api.users().then(setUsers); } }, [open]);
+  useEffect(() => { if (open) { setTitle(''); setDeadline(today()); setComplexity(COMPLEXITIES[1]); setRecurrence(''); setDescription(''); setAssignedTo(''); setFiles([]); setLinks([]); setNewLink(''); setAddToCalendar(false); setCalTime('09:00'); setCalDuration(30); api.users().then(setUsers); } }, [open]);
 
   const readFiles = async (fileList) => {
     const result = [];
@@ -40,6 +43,11 @@ export function QuickTaskModal({ open, onClose, onCreated }) {
     try {
       const attachments = await readFiles(files);
       await api.createTask({ title: title.trim(), deadline, complexity, isQuick: true, recurrence: recurrence || null, description: description || null, assignedTo: assignedTo || null, attachments, links });
+      if (addToCalendar) {
+        try {
+          await api.createEvent({ title: title.trim(), startTime: new Date(`${deadline}T${calTime}:00`).toISOString(), durationMin: Number(calDuration), eventType: 'work' });
+        } catch {} // silently fail calendar event — task was already created
+      }
       onCreated?.();
       onClose();
     } catch (err) { showToast(err.message || 'Failed to create task', 'error'); } finally { setBusy(false); }
@@ -97,6 +105,35 @@ export function QuickTaskModal({ open, onClose, onCreated }) {
             <option value="monthly">Monthly</option>
           </select>
         </Field>
+        {/* Add to Calendar toggle */}
+        <div className="mb-3">
+          <button type="button" onClick={() => setAddToCalendar(v => !v)}
+            className={'w-full flex items-center gap-3 px-3 py-2.5 rounded-[10px] border transition text-left ' +
+              (addToCalendar ? 'bg-brand-blueLight border-brand-blue/30' : 'border-line-light hover:bg-ink-50')}>
+            <span className="text-[16px]">📅</span>
+            <span className={'flex-1 text-[13px] font-medium ' + (addToCalendar ? 'text-brand-blue' : 'text-ink-500')}>Add to Calendar</span>
+            <div className={'w-9 h-5 rounded-full relative transition ' + (addToCalendar ? 'bg-brand-blue' : 'bg-ink-200')}>
+              <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all" style={{ left: addToCalendar ? '18px' : '2px' }} />
+            </div>
+          </button>
+          {addToCalendar && (
+            <div className="grid grid-cols-2 gap-3 mt-2 ml-7">
+              <div>
+                <label className="text-[10px] text-ink-400 uppercase tracking-wide font-semibold">Time</label>
+                <input type="time" className={inputCls + ' !h-9 !text-[13px]'} value={calTime} onChange={e => setCalTime(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-[10px] text-ink-400 uppercase tracking-wide font-semibold">Duration</label>
+                <select className={inputCls + ' !h-9 !text-[13px]'} value={calDuration} onChange={e => setCalDuration(e.target.value)}>
+                  <option value="15">15 min</option>
+                  <option value="30">30 min</option>
+                  <option value="60">1 hour</option>
+                  <option value="120">2 hours</option>
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
         <button disabled={busy} type="submit" className="w-full h-11 rounded-[10px] bg-brand-blue text-white font-semibold disabled:opacity-60">
           {busy ? 'Creating…' : 'Create Task'}
         </button>

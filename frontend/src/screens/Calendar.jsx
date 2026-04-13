@@ -48,16 +48,86 @@ const RECURRENCE_OPTIONS = [
   { value: 'custom', label: 'Custom…' },
 ];
 
+const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const DAY_LABELS = ['S','M','T','W','T','F','S'];
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function nthWeekdayLabel(date) {
+  const d = new Date(date);
+  const dayOfMonth = d.getDate();
+  const weekday = DAY_NAMES[d.getDay()];
+  const nth = Math.ceil(dayOfMonth / 7);
+  const ordinal = ['first','second','third','fourth','fifth'][nth - 1] || `${nth}th`;
+  return { nth, weekday, label: `On the ${ordinal} ${weekday}` };
+}
+
 function recurrenceLabel(rec) {
   if (!rec) return null;
   const freq = rec.freq || rec;
-  if (freq === 'daily') return 'Daily';
-  if (freq === 'weekly') return rec.days ? `Weekly on ${rec.days.join(', ')}` : 'Weekly';
-  if (freq === 'monthly') return 'Monthly';
-  if (freq === 'yearly') return 'Yearly';
-  if (freq === 'weekdays') return 'Weekdays';
+  if (freq === 'daily') return rec.interval > 1 ? `Every ${rec.interval} days` : 'Daily';
+  if (freq === 'weekly') {
+    const prefix = rec.interval > 1 ? `Every ${rec.interval} weeks` : 'Weekly';
+    return rec.days?.length ? `${prefix} on ${rec.days.join(', ')}` : prefix;
+  }
+  if (freq === 'monthly') {
+    const prefix = rec.interval > 1 ? `Every ${rec.interval} months` : 'Monthly';
+    if (rec.monthMode === 'nthWeekday') return `${prefix}, ${rec.nthWeekdayLabel || 'on nth weekday'}`;
+    if (rec.monthDay) return `${prefix} on day ${rec.monthDay}`;
+    return prefix;
+  }
+  if (freq === 'yearly') {
+    const prefix = rec.interval > 1 ? `Every ${rec.interval} years` : 'Yearly';
+    if (rec.yearMonth != null && rec.yearDay) return `${prefix} on ${MONTH_NAMES[rec.yearMonth]} ${rec.yearDay}`;
+    return prefix;
+  }
+  if (freq === 'weekdays') return 'Every weekday (Mon–Fri)';
   if (rec.interval && rec.interval > 1) return `Every ${rec.interval} ${rec.freq}s`;
   return null;
+}
+
+// ── Date Jump Picker (click header to jump to any date) ──
+function DateJumpPicker({ date, onJump, onClose }) {
+  const [viewMonth, setViewMonth] = useState(new Date(date.getFullYear(), date.getMonth(), 1));
+  const total = daysInMonth(viewMonth);
+  const rawDay = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1).getDay();
+  const leadingBlanks = rawDay === 0 ? 6 : rawDay - 1;
+  const cells = [];
+  for (let i = 0; i < leadingBlanks; i++) cells.push(null);
+  for (let d = 1; d <= total; d++) cells.push(d);
+  const today = isoDate(new Date());
+  const selectedIso = isoDate(date);
+
+  return (
+    <>
+      <div className="fixed inset-0 z-30" onClick={onClose} />
+      <div className="absolute top-full left-0 mt-2 z-40 bg-white rounded-xl border border-line-light shadow-xl p-3 w-[280px]">
+        <div className="flex items-center justify-between mb-2">
+          <button onClick={() => setViewMonth(d => { const r = new Date(d); r.setMonth(r.getMonth() - 1); return r; })} className="w-7 h-7 rounded-full hover:bg-ink-100 flex items-center justify-center text-ink-500"><ChevronLeft /></button>
+          <span className="text-[13px] font-semibold text-ink-900">{viewMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</span>
+          <button onClick={() => setViewMonth(d => { const r = new Date(d); r.setMonth(r.getMonth() + 1); return r; })} className="w-7 h-7 rounded-full hover:bg-ink-100 flex items-center justify-center text-ink-500"><ChevronRight /></button>
+        </div>
+        <div className="grid grid-cols-7 mb-1">
+          {['M','T','W','T','F','S','S'].map((d, i) => <div key={i} className="text-center text-[10px] text-ink-300 font-semibold py-1">{d}</div>)}
+        </div>
+        <div className="grid grid-cols-7 gap-0.5">
+          {cells.map((d, i) => {
+            if (!d) return <div key={`b${i}`} />;
+            const iso = isoDate(new Date(viewMonth.getFullYear(), viewMonth.getMonth(), d));
+            const isToday = iso === today;
+            const isSelected = iso === selectedIso;
+            return (
+              <button key={d} onClick={() => { onJump(new Date(viewMonth.getFullYear(), viewMonth.getMonth(), d)); onClose(); }}
+                className={'h-8 rounded-lg text-[12px] font-medium transition ' +
+                  (isSelected ? 'bg-brand-blue text-white' : isToday ? 'bg-brand-blueLight text-brand-blue font-bold' : 'text-ink-700 hover:bg-ink-100')}>
+                {d}
+              </button>
+            );
+          })}
+        </div>
+        <button onClick={() => { onJump(new Date()); onClose(); }} className="w-full mt-2 h-8 rounded-lg text-[12px] text-brand-blue font-semibold hover:bg-brand-blueLight transition">Go to today</button>
+      </div>
+    </>
+  );
 }
 
 /** Expand a single event's recurrence into occurrences within a date range */
@@ -123,18 +193,41 @@ function expandRecurrence(event, rangeStart, rangeEnd) {
       count++;
     }
   } else if (freq === 'monthly') {
-    const d = new Date(baseDate);
-    while (count < maxOccurrences) {
-      addOccurrence(d);
-      d.setMonth(d.getMonth() + interval);
-      if (isoDate(d) > rangeEnd) break;
-      if (until && d > until) break;
-      count++;
+    if (rec.monthMode === 'nthWeekday' && rec.nthWeekday && rec.nthWeekdayDay) {
+      // Repeat on nth weekday of month (e.g., "second Monday")
+      const targetDow = DAY_NAMES.indexOf(rec.nthWeekdayDay); // 0=Sun...6=Sat
+      let m = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
+      while (count < maxOccurrences) {
+        // Find the nth occurrence of targetDow in this month
+        const firstDay = new Date(m.getFullYear(), m.getMonth(), 1);
+        let dayOffset = (targetDow - firstDay.getDay() + 7) % 7;
+        const nthDate = 1 + dayOffset + (rec.nthWeekday - 1) * 7;
+        if (nthDate <= daysInMonth(m)) {
+          const d = new Date(m.getFullYear(), m.getMonth(), nthDate);
+          if (d >= baseDate) addOccurrence(d);
+        }
+        m.setMonth(m.getMonth() + interval);
+        if (isoDate(m) > rangeEnd) break;
+        if (until && m > until) break;
+        count++;
+      }
+    } else {
+      const d = new Date(baseDate);
+      while (count < maxOccurrences) {
+        addOccurrence(d);
+        d.setMonth(d.getMonth() + interval);
+        if (isoDate(d) > rangeEnd) break;
+        if (until && d > until) break;
+        count++;
+      }
     }
   } else if (freq === 'yearly') {
     const d = new Date(baseDate);
+    const ym = rec.yearMonth != null ? rec.yearMonth : d.getMonth();
+    const yd = rec.yearDay || d.getDate();
     while (count < maxOccurrences) {
-      addOccurrence(d);
+      const yearDate = new Date(d.getFullYear(), ym, yd);
+      if (yearDate >= baseDate) addOccurrence(yearDate);
       d.setFullYear(d.getFullYear() + interval);
       if (isoDate(d) > rangeEnd) break;
       if (until && d > until) break;
@@ -170,15 +263,30 @@ function getExpandRange(view, date) {
 }
 
 // ── Custom Recurrence Modal ──
-function CustomRecurrenceModal({ open, onClose, onSave }) {
+function CustomRecurrenceModal({ open, onClose, onSave, eventDate }) {
   const [freq, setFreq] = useState('weekly');
   const [interval, setInterval] = useState(1);
   const [days, setDays] = useState([]);
+  const [monthMode, setMonthMode] = useState('date'); // 'date' | 'nthWeekday'
+  const [yearMonth, setYearMonth] = useState(0);
+  const [yearDay, setYearDay] = useState(1);
   const [until, setUntil] = useState('');
 
-  useEffect(() => { if (open) { setFreq('weekly'); setInterval(1); setDays([]); setUntil(''); } }, [open]);
+  useEffect(() => {
+    if (open && eventDate) {
+      const d = new Date(eventDate + 'T00:00:00');
+      setFreq('weekly'); setInterval(1); setUntil('');
+      setDays([DAY_NAMES[d.getDay()]]);
+      setMonthMode('date');
+      setYearMonth(d.getMonth());
+      setYearDay(d.getDate());
+    }
+  }, [open, eventDate]);
 
   const toggleDay = (d) => setDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
+
+  const evDate = eventDate ? new Date(eventDate + 'T00:00:00') : new Date();
+  const nthInfo = nthWeekdayLabel(evDate);
 
   return (
     <Modal open={open} onClose={onClose} title="Custom Recurrence">
@@ -194,24 +302,65 @@ function CustomRecurrenceModal({ open, onClose, onSave }) {
             </select>
           </div>
         </Field>
+
+        {/* Weekly: day-of-week toggles */}
         {freq === 'weekly' && (
-          <Field label="On days">
-            <div className="flex gap-1.5 flex-wrap">
-              {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
+          <Field label="Repeat on">
+            <div className="flex gap-1.5">
+              {DAY_NAMES.map((d, i) => (
                 <button key={d} type="button" onClick={() => toggleDay(d)}
-                  className={'h-8 w-10 rounded-lg text-[12px] font-semibold transition ' + (days.includes(d) ? 'bg-brand-blue text-white' : 'bg-ink-100 text-ink-500 hover:bg-ink-200')}>
-                  {d}
+                  className={'h-9 w-9 rounded-full text-[12px] font-semibold transition ' + (days.includes(d) ? 'bg-brand-blue text-white shadow-sm' : 'bg-ink-100 text-ink-500 hover:bg-ink-200')}>
+                  {DAY_LABELS[i]}
                 </button>
               ))}
             </div>
           </Field>
         )}
+
+        {/* Monthly: date vs nth weekday */}
+        {freq === 'monthly' && (
+          <Field label="Repeat on">
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="monthMode" checked={monthMode === 'date'} onChange={() => setMonthMode('date')} className="accent-brand-blue" />
+                <span className="text-[13px] text-ink-900">Day {evDate.getDate()} of every month</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="monthMode" checked={monthMode === 'nthWeekday'} onChange={() => setMonthMode('nthWeekday')} className="accent-brand-blue" />
+                <span className="text-[13px] text-ink-900">{nthInfo.label} of every month</span>
+              </label>
+            </div>
+          </Field>
+        )}
+
+        {/* Yearly: month + day */}
+        {freq === 'yearly' && (
+          <Field label="On date">
+            <div className="flex gap-2">
+              <select className={inputCls} value={yearMonth} onChange={e => setYearMonth(Number(e.target.value))}>
+                {MONTH_NAMES.map((m, i) => <option key={i} value={i}>{m}</option>)}
+              </select>
+              <input type="number" min="1" max="31" className={inputCls + ' !w-20'} value={yearDay} onChange={e => setYearDay(Number(e.target.value))} />
+            </div>
+          </Field>
+        )}
+
         <Field label="Ends">
-          <input type="date" className={inputCls} value={until} onChange={e => setUntil(e.target.value)} placeholder="Never (leave blank)" />
+          <input type="date" className={inputCls} value={until} onChange={e => setUntil(e.target.value)} />
           {!until && <p className="text-[11px] text-ink-300 mt-1">Leave blank to repeat forever</p>}
         </Field>
+
         <button type="button" onClick={() => {
-          onSave({ freq, interval, days: freq === 'weekly' ? days : undefined, until: until || undefined });
+          const rec = { freq, interval };
+          if (freq === 'weekly' && days.length) rec.days = days;
+          if (freq === 'monthly') {
+            rec.monthMode = monthMode;
+            if (monthMode === 'date') rec.monthDay = evDate.getDate();
+            else { rec.nthWeekday = nthInfo.nth; rec.nthWeekdayDay = nthInfo.weekday; rec.nthWeekdayLabel = nthInfo.label; }
+          }
+          if (freq === 'yearly') { rec.yearMonth = yearMonth; rec.yearDay = yearDay; }
+          if (until) rec.until = until;
+          onSave(rec);
           onClose();
         }} className="w-full h-11 rounded-[10px] bg-brand-blue text-white font-semibold">Done</button>
       </div>
@@ -219,26 +368,81 @@ function CustomRecurrenceModal({ open, onClose, onSave }) {
   );
 }
 
-// ── Recurrence Picker ──
-function RecurrencePicker({ value, onChange }) {
+// ── Recurrence Picker (Google Calendar style — inline options per frequency) ──
+function RecurrencePicker({ value, onChange, eventDate }) {
   const [customOpen, setCustomOpen] = useState(false);
-  const current = value ? (typeof value === 'string' ? value : 'custom') : '';
+
+  // Determine current selection for the dropdown
+  const current = (() => {
+    if (!value) return '';
+    if (typeof value === 'string') return value;
+    // It's a custom object
+    return 'custom';
+  })();
+
+  const evDate = eventDate ? new Date(eventDate + 'T00:00:00') : new Date();
+  const dayName = DAY_NAMES[evDate.getDay()];
+  const nthInfo = nthWeekdayLabel(evDate);
+
+  // Build context-aware options like Google Calendar
+  const options = [
+    { value: '', label: 'Does not repeat' },
+    { value: 'daily', label: 'Daily' },
+    { value: 'weekly', label: `Weekly on ${dayName}` },
+    { value: 'monthly', label: `Monthly on day ${evDate.getDate()}` },
+    { value: 'yearly', label: `Annually on ${MONTH_NAMES[evDate.getMonth()]} ${evDate.getDate()}` },
+    { value: 'weekdays', label: 'Every weekday (Mon–Fri)' },
+    { value: 'custom', label: 'Custom…' },
+  ];
+
+  const handleChange = (v) => {
+    if (v === 'custom') { setCustomOpen(true); return; }
+    if (!v) { onChange(null); return; }
+    // Build smart default recurrence object
+    if (v === 'daily') { onChange({ freq: 'daily', interval: 1 }); return; }
+    if (v === 'weekly') { onChange({ freq: 'weekly', interval: 1, days: [dayName] }); return; }
+    if (v === 'monthly') { onChange({ freq: 'monthly', interval: 1, monthMode: 'date', monthDay: evDate.getDate() }); return; }
+    if (v === 'yearly') { onChange({ freq: 'yearly', interval: 1, yearMonth: evDate.getMonth(), yearDay: evDate.getDate() }); return; }
+    onChange(v);
+  };
 
   return (
     <>
       <Field label="Repeat">
-        <select className={inputCls} value={current} onChange={e => {
-          const v = e.target.value;
-          if (v === 'custom') { setCustomOpen(true); return; }
-          onChange(v || null);
-        }}>
-          {RECURRENCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        <select className={inputCls} value={current} onChange={e => handleChange(e.target.value)}>
+          {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        {value && typeof value === 'object' && (
-          <p className="text-[11px] text-brand-blue mt-1">{recurrenceLabel(value)}{value.until ? ` until ${value.until}` : ''}</p>
+        {/* Show summary for custom recurrence */}
+        {value && typeof value === 'object' && current === 'custom' && (
+          <p className="text-[11px] text-brand-blue mt-1 flex items-center gap-1">
+            <span>🔁</span>
+            {recurrenceLabel(value)}{value.until ? ` · until ${value.until}` : ''}
+          </p>
         )}
       </Field>
-      <CustomRecurrenceModal open={customOpen} onClose={() => setCustomOpen(false)} onSave={onChange} />
+
+      {/* Inline day-of-week toggles when weekly is selected */}
+      {value && typeof value === 'object' && (value.freq === 'weekly') && current !== 'custom' && (
+        <div className="-mt-2 mb-3">
+          <p className="text-[11px] text-ink-400 mb-1.5">Repeat on</p>
+          <div className="flex gap-1.5">
+            {DAY_NAMES.map((d, i) => (
+              <button key={d} type="button" onClick={() => {
+                const cur = value.days || [];
+                const next = cur.includes(d) ? cur.filter(x => x !== d) : [...cur, d];
+                if (next.length === 0) return; // must have at least one day
+                onChange({ ...value, days: next });
+              }}
+                className={'h-8 w-8 rounded-full text-[11px] font-semibold transition ' +
+                  ((value.days || []).includes(d) ? 'bg-brand-blue text-white shadow-sm' : 'bg-ink-100 text-ink-500 hover:bg-ink-200')}>
+                {DAY_LABELS[i]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <CustomRecurrenceModal open={customOpen} onClose={() => setCustomOpen(false)} onSave={onChange} eventDate={eventDate} />
     </>
   );
 }
@@ -289,7 +493,7 @@ function AddEventModal({ open, onClose, onCreated, date, prefillTitle = '' }) {
           <Field label="Time"><input type="time" className={inputCls} value={time} onChange={e => setTime(e.target.value)} required /></Field>
           <Field label="Duration (min)"><input type="number" min="15" step="15" className={inputCls} value={duration} onChange={e => setDuration(e.target.value)} /></Field>
         </div>
-        <RecurrencePicker value={recurrence} onChange={setRecurrence} />
+        <RecurrencePicker value={recurrence} onChange={setRecurrence} eventDate={eventDate} />
         <button disabled={busy} type="submit" className="w-full h-11 rounded-[10px] bg-brand-blue text-white font-semibold disabled:opacity-60">{busy ? 'Adding…' : 'Add Event'}</button>
       </form>
     </Modal>
@@ -387,7 +591,7 @@ function EditEventModal({ open, onClose, event, onUpdated, onDeleted }) {
           <Field label="Time"><input type="time" className={inputCls} value={time} onChange={e => setTime(e.target.value)} required /></Field>
         </div>
         <Field label="Duration (min)"><input type="number" min="15" step="15" className={inputCls} value={duration} onChange={e => setDuration(e.target.value)} /></Field>
-        <RecurrencePicker value={recurrence} onChange={setRecurrence} />
+        <RecurrencePicker value={recurrence} onChange={setRecurrence} eventDate={date} />
         {event.metadata?.recurrence && (
           <p className="text-[11px] text-ink-400 -mt-2 mb-3 flex items-center gap-1">
             <span>🔁</span> Changes apply to all occurrences of this event
@@ -681,6 +885,7 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
   const [deleteLeaveId, setDeleteLeaveId] = useState(null);
   const [prevView, setPrevView] = useState(null);
   const [prefillTitle, setPrefillTitle] = useState('');
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
 
   // Team calendar state
   const [teamUsers, setTeamUsers] = useState([]);
@@ -776,13 +981,19 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
       {/* Header */}
       <div className="flex items-start justify-between pt-1">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 relative">
             {view === 'Day' && prevView && (
               <button onClick={() => { setView(prevView); setPrevView(null); }} className="w-8 h-8 rounded-full border border-line-light flex items-center justify-center text-ink-500 hover:bg-[#F7F8FA] transition"><ArrowLeft /></button>
             )}
             <button onClick={() => nav(-1)} className="w-8 h-8 rounded-full border border-line-light flex items-center justify-center text-ink-500 hover:bg-[#F7F8FA] transition"><ChevronLeft /></button>
-            <h1 className="text-[20px] font-bold text-ink-900 tracking-tight">{headerLabel}</h1>
+            <button onClick={() => setDatePickerOpen(o => !o)} className="text-left hover:bg-ink-50 px-2 py-1 -mx-2 rounded-lg transition">
+              <h1 className="text-[20px] font-bold text-ink-900 tracking-tight flex items-center gap-1.5">
+                {headerLabel}
+                <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="text-ink-300"><polyline points="6 9 12 15 18 9"/></svg>
+              </h1>
+            </button>
             <button onClick={() => nav(1)} className="w-8 h-8 rounded-full border border-line-light flex items-center justify-center text-ink-500 hover:bg-[#F7F8FA] transition"><ChevronRight /></button>
+            {datePickerOpen && <DateJumpPicker date={date} onJump={(d) => setDate(d)} onClose={() => setDatePickerOpen(false)} />}
           </div>
           <p className="text-[12px] text-ink-400 mt-0.5 ml-0.5">
             {events.length} event{events.length !== 1 ? 's' : ''}{view === 'Day' ? ' today' : ''}
