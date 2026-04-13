@@ -95,8 +95,8 @@ body {
 
 /* Blue branded backgrounds keep glow */
 .bg-brand-blue {
-  background: #5B8CFF !important;
-  box-shadow: 0 0 20px rgba(91,140,255,0.35);
+  background: linear-gradient(135deg, #6E9CFF 0%, #4A7AEE 100%) !important;
+  box-shadow: 0 0 20px rgba(91,140,255,0.35), inset 0 1px 0 rgba(255,255,255,0.2);
 }
 
 /* Ring overrides */
@@ -105,7 +105,7 @@ body {
 
 /* ─── Nav + Sidebar ─── */
 nav {
-  background: rgba(11,15,26,0.92) !important;
+  background: linear-gradient(180deg, rgba(14,19,34,0.95) 0%, rgba(11,15,26,0.98) 100%) !important;
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border-color: rgba(255,255,255,0.08) !important;
@@ -113,7 +113,7 @@ nav {
 }
 
 aside {
-  background: rgba(8,13,24,0.95) !important;
+  background: linear-gradient(180deg, rgba(12,17,30,0.97) 0%, rgba(8,13,24,0.99) 100%) !important;
   border-color: rgba(255,255,255,0.08) !important;
   box-shadow: 4px 0 24px rgba(0,0,0,0.3);
 }
@@ -131,27 +131,31 @@ aside {
 .card {
   padding: 16px !important;
   border-radius: 16px !important;
-  background: rgba(255,255,255,0.07) !important;
+  background: linear-gradient(135deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.04) 100%) !important;
   backdrop-filter: blur(24px) !important;
   -webkit-backdrop-filter: blur(24px) !important;
   border: 1px solid rgba(255,255,255,0.12) !important;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06), inset 0 1px 0 rgba(255,255,255,0.1) !important;
-  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease !important;
+  border-top-color: rgba(255,255,255,0.18) !important;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.1) !important;
+  transition: box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease, background 0.25s ease !important;
 }
 .card:hover, .card-hover:hover {
-  border-color: rgba(255,255,255,0.2) !important;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 30px rgba(91,140,255,0.12), inset 0 1px 0 rgba(255,255,255,0.12) !important;
+  border-color: rgba(255,255,255,0.22) !important;
+  border-top-color: rgba(255,255,255,0.28) !important;
+  background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.05) 100%) !important;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 30px rgba(91,140,255,0.12), inset 0 1px 0 rgba(255,255,255,0.14) !important;
   transform: translateY(-2px) !important;
 }
 
 /* ─── Rounded-card glass (Home task cards, etc.) ─── */
 .rounded-card {
   border-radius: 14px !important;
-  background: rgba(255,255,255,0.06) !important;
+  background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%) !important;
   backdrop-filter: blur(20px) !important;
   -webkit-backdrop-filter: blur(20px) !important;
   border: 1px solid rgba(255,255,255,0.1) !important;
-  box-shadow: 0 2px 16px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06) !important;
+  border-top-color: rgba(255,255,255,0.15) !important;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08) !important;
 }
 
 /* ─── Pills ─── */
@@ -169,24 +173,27 @@ aside {
 }
 .pill:active { transform: scale(0.97) !important; }
 .pill-primary {
-  background: #5B8CFF !important;
+  background: linear-gradient(135deg, #6E9CFF 0%, #4A7AEE 100%) !important;
   color: white !important;
-  border: none !important;
-  box-shadow: 0 0 20px rgba(91,140,255,0.4), 0 4px 12px rgba(91,140,255,0.2) !important;
+  border: 1px solid rgba(255,255,255,0.15) !important;
+  border-top-color: rgba(255,255,255,0.25) !important;
+  box-shadow: 0 0 20px rgba(91,140,255,0.4), 0 4px 12px rgba(91,140,255,0.25), inset 0 1px 0 rgba(255,255,255,0.2) !important;
 }
 .pill-primary:hover {
-  background: #4A7AEE !important;
-  box-shadow: 0 0 28px rgba(91,140,255,0.5), 0 4px 16px rgba(91,140,255,0.3) !important;
+  background: linear-gradient(135deg, #7DA8FF 0%, #5B8CFF 100%) !important;
+  box-shadow: 0 0 28px rgba(91,140,255,0.5), 0 4px 16px rgba(91,140,255,0.35), inset 0 1px 0 rgba(255,255,255,0.25) !important;
 }
 .pill-outline {
-  background: rgba(255,255,255,0.07) !important;
+  background: linear-gradient(135deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.04) 100%) !important;
   border: 1px solid rgba(255,255,255,0.14) !important;
+  border-top-color: rgba(255,255,255,0.20) !important;
   color: #9CA3AF !important;
   backdrop-filter: blur(12px);
 }
 .pill-outline:hover {
-  background: rgba(255,255,255,0.12) !important;
+  background: linear-gradient(135deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.06) 100%) !important;
   border-color: rgba(255,255,255,0.22) !important;
+  border-top-color: rgba(255,255,255,0.30) !important;
   color: #E5E7EB !important;
 }
 
@@ -216,11 +223,12 @@ aside {
   padding: 0 14px !important;
   outline: none !important;
   border-radius: 12px !important;
-  background: rgba(0,0,0,0.35) !important;
+  background: linear-gradient(180deg, rgba(0,0,0,0.40) 0%, rgba(0,0,0,0.28) 100%) !important;
   border: 1px solid rgba(255,255,255,0.1) !important;
+  border-bottom-color: rgba(255,255,255,0.14) !important;
   color: #E5E7EB !important;
   font-size: 14px !important;
-  box-shadow: inset 0 2px 6px rgba(0,0,0,0.4) !important;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.4), inset 0 -1px 0 rgba(255,255,255,0.04) !important;
   transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
 }
 .input-base::placeholder { color: #4B5563 !important; }
@@ -264,10 +272,11 @@ select.inline-control {
 
 /* ─── Inputs inside forms (select, input, textarea) ─── */
 input, select, textarea {
-  background: rgba(0,0,0,0.3) !important;
+  background: linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.22) 100%) !important;
   border-color: rgba(255,255,255,0.08) !important;
+  border-bottom-color: rgba(255,255,255,0.12) !important;
   color: #E5E7EB !important;
-  box-shadow: inset 0 2px 4px rgba(0,0,0,0.3) !important;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.3), inset 0 -1px 0 rgba(255,255,255,0.03) !important;
 }
 input:focus, select:focus, textarea:focus {
   border-color: rgba(91,140,255,0.5) !important;
@@ -329,12 +338,13 @@ input[type="radio"], input[type="checkbox"] {
   top: 38%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: rgba(255,255,255,0.08);
+  background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 100%);
   backdrop-filter: blur(20px);
   padding: 12px 28px;
   border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.1);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-top-color: rgba(255,255,255,0.22);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.12);
   color: #E5E7EB;
   animation: celebrate-pop 2.2s cubic-bezier(.34,1.56,.64,1) forwards;
   z-index: 10;
@@ -364,11 +374,12 @@ input[type="radio"], input[type="checkbox"] {
 
 /* ─── Calendar event cards glass ─── */
 [style*="borderLeftWidth"] {
-  background: rgba(255,255,255,0.06) !important;
+  background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255,255,255,0.1) !important;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06) !important;
+  border-top-color: rgba(255,255,255,0.16) !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08) !important;
 }
 
 /* ─── Section headings glow ─── */
@@ -377,9 +388,10 @@ h2.text-lg { text-shadow: 0 0 20px rgba(229,231,235,0.1); }
 /* ─── Stat cards (Profile stats, etc.) ─── */
 [class*="rounded-card"][class*="text-center"],
 [class*="rounded-xl"][class*="text-center"] {
-  background: rgba(255,255,255,0.06) !important;
+  background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%) !important;
   border: 1px solid rgba(255,255,255,0.1) !important;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.3) !important;
+  border-top-color: rgba(255,255,255,0.16) !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08) !important;
 }
 
 /* ─── Micro Interactions ─── */

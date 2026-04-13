@@ -677,11 +677,14 @@ function DayView({ events, leaves, date, onEventClick, onDeleteLeave }) {
           <div className="w-14 pt-3 text-[12px] text-ink-400 flex-shrink-0 text-right">{fmtTime(ev.start_time)}</div>
           <div className={'flex-1 rounded-[12px] p-3.5 transition'}
             style={{
-              background: ev._isTeam ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.06)',
+              background: ev._isTeam
+                ? 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)'
+                : 'linear-gradient(135deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.03) 100%)',
               border: ev._isTeam ? '1px dashed rgba(255,255,255,0.12)' : '1px solid rgba(255,255,255,0.12)',
+              borderTopColor: ev._isTeam ? undefined : 'rgba(255,255,255,0.18)',
               borderLeftWidth: 4, borderLeftStyle: 'solid', borderLeftColor: accentFor(ev),
               backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
-              boxShadow: '0 2px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06)',
+              boxShadow: '0 2px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)',
             }}>
             <div className="flex items-center gap-2">
               <p className="font-semibold text-[14px] text-ink-900 flex-1">
@@ -850,7 +853,7 @@ function ScheduleView({ allEvents, leaves, date, onEventClick }) {
               {dayEvents.map(ev => (
                 <div key={ev.id} onClick={() => !ev._isTeam && onEventClick?.(ev)}
                   className={'flex items-center gap-3 rounded-[10px] px-3 py-2.5 transition ' + (ev._isTeam ? 'opacity-80' : 'cursor-pointer')}
-                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)', backdropFilter: 'blur(16px)', boxShadow: '0 2px 12px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.06)' }}>
+                  style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)', border: '1px solid rgba(255,255,255,0.10)', borderTopColor: 'rgba(255,255,255,0.16)', backdropFilter: 'blur(16px)', boxShadow: '0 2px 12px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
                   <span className="w-1 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: accentFor(ev) }} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">

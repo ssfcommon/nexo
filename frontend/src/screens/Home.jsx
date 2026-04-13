@@ -36,20 +36,21 @@ function TaskCard({ task }) {
   const dueToday = task.deadline === today;
   const state = overdue ? 'overdue' : dueToday ? 'due' : 'upcoming';
   const styles = {
-    overdue:  { dot: '#EF4444', bg: 'rgba(239,68,68,0.10)', border: 'rgba(239,68,68,0.20)', glow: 'rgba(239,68,68,0.15)', text: '#EF4444', label: 'Overdue' },
-    due:      { dot: '#F59E0B', bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.20)', glow: 'rgba(245,158,11,0.12)', text: '#D97706', label: 'Due Today' },
-    upcoming: { dot: '#5B8CFF', bg: 'rgba(91,140,255,0.08)', border: 'rgba(91,140,255,0.18)', glow: 'rgba(91,140,255,0.10)', text: '#5B8CFF', label: 'Upcoming' },
+    overdue:  { dot: '#EF4444', bgFrom: 'rgba(239,68,68,0.14)', bgTo: 'rgba(239,68,68,0.06)', border: 'rgba(239,68,68,0.20)', borderTop: 'rgba(239,68,68,0.30)', glow: 'rgba(239,68,68,0.15)', text: '#EF4444', label: 'Overdue' },
+    due:      { dot: '#F59E0B', bgFrom: 'rgba(245,158,11,0.14)', bgTo: 'rgba(245,158,11,0.06)', border: 'rgba(245,158,11,0.20)', borderTop: 'rgba(245,158,11,0.30)', glow: 'rgba(245,158,11,0.12)', text: '#D97706', label: 'Due Today' },
+    upcoming: { dot: '#5B8CFF', bgFrom: 'rgba(91,140,255,0.12)', bgTo: 'rgba(91,140,255,0.04)', border: 'rgba(91,140,255,0.18)', borderTop: 'rgba(91,140,255,0.28)', glow: 'rgba(91,140,255,0.10)', text: '#5B8CFF', label: 'Upcoming' },
   }[state];
 
   return (
     <div
       className={'rounded-[14px] p-3.5 flex items-center gap-3 transition-all ' + (overdue ? 'overdue-pulse' : '')}
       style={{
-        background: styles.bg,
+        background: `linear-gradient(135deg, ${styles.bgFrom} 0%, ${styles.bgTo} 100%)`,
         border: `1px solid ${styles.border}`,
+        borderTopColor: styles.borderTop,
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        boxShadow: `0 4px 20px rgba(0,0,0,0.3), 0 0 16px ${styles.glow}, inset 0 1px 0 rgba(255,255,255,0.06)`,
+        boxShadow: `0 4px 20px rgba(0,0,0,0.3), 0 0 16px ${styles.glow}, inset 0 1px 0 rgba(255,255,255,0.08)`,
       }}
     >
       <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: styles.dot, boxShadow: `0 0 8px ${styles.dot}60` }} />
@@ -137,10 +138,13 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
                 onClick={() => onSwitchTab?.('projects', { kind: 'bugs' })}
                 className="w-full text-left rounded-[14px] p-3.5 flex items-center gap-3 transition-all"
                 style={{
-                  background: b.status === 'open' ? 'rgba(239,68,68,0.10)' : 'rgba(245,158,11,0.10)',
+                  background: b.status === 'open'
+                    ? 'linear-gradient(135deg, rgba(239,68,68,0.14) 0%, rgba(239,68,68,0.05) 100%)'
+                    : 'linear-gradient(135deg, rgba(245,158,11,0.14) 0%, rgba(245,158,11,0.05) 100%)',
                   border: `1px solid ${b.status === 'open' ? 'rgba(239,68,68,0.20)' : 'rgba(245,158,11,0.20)'}`,
+                  borderTopColor: b.status === 'open' ? 'rgba(239,68,68,0.30)' : 'rgba(245,158,11,0.30)',
                   backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
-                  boxShadow: `0 4px 20px rgba(0,0,0,0.3), 0 0 12px ${b.status === 'open' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)'}, inset 0 1px 0 rgba(255,255,255,0.06)`,
+                  boxShadow: `0 4px 20px rgba(0,0,0,0.3), 0 0 12px ${b.status === 'open' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)'}, inset 0 1px 0 rgba(255,255,255,0.08)`,
                 }}
               >
                 <span className="text-base">🐛</span>
@@ -163,7 +167,7 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
 
       {/* Leave banner */}
       {upcomingLeave && (
-        <div className="rounded-[14px] px-4 py-3 flex items-center gap-2.5 text-sm" style={{ background: 'rgba(16,185,129,0.10)', border: '1px solid rgba(16,185,129,0.20)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: '0 4px 20px rgba(0,0,0,0.3), 0 0 12px rgba(16,185,129,0.10), inset 0 1px 0 rgba(255,255,255,0.06)' }}>
+        <div className="rounded-[14px] px-4 py-3 flex items-center gap-2.5 text-sm" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.14) 0%, rgba(16,185,129,0.05) 100%)', border: '1px solid rgba(16,185,129,0.20)', borderTopColor: 'rgba(16,185,129,0.30)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: '0 4px 20px rgba(0,0,0,0.3), 0 0 12px rgba(16,185,129,0.10), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
           <span className="text-base">🏖️</span>
           <span className="text-ink-700">
             <span className="font-medium text-ink-900">{upcomingLeave.name?.split(' ')[0]}</span> is on leave {fmtRange(upcomingLeave.start_date, upcomingLeave.end_date)}
@@ -181,7 +185,7 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
           ) : activity.length === 0 ? (
             <EmptyState icon="📭" title="No activity yet" subtitle="Team updates will show up here." />
           ) : (
-            <div className="rounded-[14px] divide-y divide-white/[0.06]" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(16px)', boxShadow: '0 2px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06)' }}>
+            <div className="rounded-[14px] divide-y divide-white/[0.06]" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%)', border: '1px solid rgba(255,255,255,0.10)', borderTopColor: 'rgba(255,255,255,0.16)', backdropFilter: 'blur(16px)', boxShadow: '0 2px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
               {(showAllActivity ? activity : activity.slice(0, 3)).map(a => (
                 <div key={a.id} className="flex items-start gap-3 px-4 py-3">
                   <Avatar user={{ initials: a.initials, avatar_color: a.color, avatar_url: a.avatar_url, name: a.actor }} size={30} />

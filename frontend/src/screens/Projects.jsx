@@ -306,11 +306,11 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
       </div>
 
       {/* Section toggle */}
-      <div className="flex gap-1 rounded-full p-0.5 mb-1" style={{ background: 'rgba(255,255,255,0.06)' }}>
+      <div className="flex gap-1 rounded-full p-0.5 mb-1" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%)' }}>
         <button onClick={() => setSection('projects')} className={'flex-1 h-9 rounded-full text-sm font-semibold transition flex items-center justify-center ' + (section === 'projects' ? 'text-ink-900' : 'text-ink-500')}
-          style={section === 'projects' ? { background: 'rgba(255,255,255,0.10)', boxShadow: '0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' } : {}}>Projects</button>
+          style={section === 'projects' ? { background: 'linear-gradient(135deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.06) 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12)' } : {}}>Projects</button>
         <button onClick={() => setSection('bugs')} className={'flex-1 h-9 rounded-full text-sm font-semibold transition flex items-center justify-center ' + (section === 'bugs' ? 'text-ink-900' : 'text-ink-500')}
-          style={section === 'bugs' ? { background: 'rgba(255,255,255,0.10)', boxShadow: '0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)' } : {}}>Bug Tracker</button>
+          style={section === 'bugs' ? { background: 'linear-gradient(135deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.06) 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12)' } : {}}>Bug Tracker</button>
       </div>
 
       {section === 'bugs' ? (
@@ -352,7 +352,7 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
       {/* Quick tasks */}
       <div>
         <p className="section-label mb-2">Quick Tasks</p>
-        <div className="rounded-[14px]" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: '0 4px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)' }}>
+        <div className="rounded-[14px]" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)', border: '1px solid rgba(255,255,255,0.10)', borderTopColor: 'rgba(255,255,255,0.16)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: '0 4px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
           {quickTasks.map((t, i) => (
             <div
               key={t.id}
