@@ -402,6 +402,15 @@ export function NewMeetingModal({ open, onClose, onCreated, projectId, members =
   );
 }
 
+const RECURRENCE_QUICK = [
+  { value: '', label: 'Does not repeat' },
+  { value: 'daily', label: 'Every day' },
+  { value: 'weekly', label: 'Every week' },
+  { value: 'monthly', label: 'Every month' },
+  { value: 'yearly', label: 'Every year' },
+  { value: 'weekdays', label: 'Every weekday (Mon–Fri)' },
+];
+
 export function NewEventModal({ open, onClose, onCreated }) {
   const showToast = useToast();
   const [title, setTitle] = useState('');
@@ -409,11 +418,12 @@ export function NewEventModal({ open, onClose, onCreated }) {
   const [time, setTime] = useState('09:00');
   const [duration, setDuration] = useState(60);
   const [eventType, setEventType] = useState('work');
+  const [recurrence, setRecurrence] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setTitle(''); setDate(today()); setDuration(60); setEventType('work');
+      setTitle(''); setDate(today()); setDuration(60); setEventType('work'); setRecurrence('');
       const now = new Date();
       const nextHour = new Date(now);
       nextHour.setMinutes(0, 0, 0);
@@ -432,6 +442,7 @@ export function NewEventModal({ open, onClose, onCreated }) {
         startTime: (() => { const d = new Date(`${date}T${time}:00`); return d.toISOString(); })(),
         durationMin: Number(duration),
         eventType,
+        recurrence: recurrence || undefined,
       });
       onCreated?.();
       onClose();
@@ -463,6 +474,11 @@ export function NewEventModal({ open, onClose, onCreated }) {
             </select>
           </Field>
         </div>
+        <Field label="Repeat">
+          <select className={inputCls} value={recurrence} onChange={e => setRecurrence(e.target.value)}>
+            {RECURRENCE_QUICK.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </Field>
         <button disabled={busy} type="submit" className="w-full h-11 rounded-[10px] bg-brand-blue text-white font-semibold disabled:opacity-60">
           {busy ? 'Creating…' : 'Create Event'}
         </button>

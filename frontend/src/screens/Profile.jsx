@@ -461,6 +461,8 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
                 right={<select value={prefs?.calendarSync || 'Google'} onChange={e => update({ calendarSync: e.target.value })} className="inline-control text-[13px] text-ink-500 outline-none"><option>Google</option><option>Outlook</option><option>None</option></select>} />
               <Row icon="clock" label="Mood check-in time"
                 right={<input type="time" value={prefs?.moodTime || '09:00'} onChange={e => update({ moodTime: e.target.value })} className="inline-control text-[13px] text-ink-500 outline-none" />} />
+              <Row icon="calendar" label="Calendar visibility"
+                right={<select value={prefs?.calendarVisibility || 'full'} onChange={e => update({ calendarVisibility: e.target.value })} className="inline-control text-[13px] text-ink-500 outline-none"><option value="full">Show details</option><option value="busy">Show as Busy</option></select>} />
             </div>
           </div>
 

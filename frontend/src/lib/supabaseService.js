@@ -495,13 +495,15 @@ async function events(date) {
 }
 
 async function createEvent(data) {
-  const { title, startTime, durationMin, eventType, department, priority, meetLink, attendeeIds = [] } = data;
-  const e = unwrap(await supabase.from('events').insert({
+  const { title, startTime, durationMin, eventType, department, priority, meetLink, attendeeIds = [], recurrence } = data;
+  const row = {
     title, owner_id: uid(), start_time: startTime,
     duration_min: durationMin || 60, event_type: eventType || 'work',
     department: department || null, priority: priority || null,
     meet_link: meetLink || null,
-  }).select().single());
+  };
+  if (recurrence) row.metadata = { recurrence };
+  const e = unwrap(await supabase.from('events').insert(row).select().single());
   for (const aid of attendeeIds) {
     await supabase.from('event_attendees').upsert({ event_id: e.id, user_id: aid }, { onConflict: 'event_id,user_id' });
   }
@@ -514,7 +516,30 @@ async function updateEvent(id, data) {
   if (data.startTime) updates.start_time = data.startTime;
   if (data.durationMin) updates.duration_min = data.durationMin;
   if (data.eventType) updates.event_type = data.eventType;
+  if (data.recurrence !== undefined) {
+    // Merge recurrence into existing metadata
+    const { data: existing } = await supabase.from('events').select('metadata').eq('id', id).single();
+    updates.metadata = { ...(existing?.metadata || {}), recurrence: data.recurrence || null };
+  }
   return unwrap(await supabase.from('events').update(updates).eq('id', id).select().single());
+}
+
+async function teamEvents() {
+  // Fetch all users' events + owner info for team calendar overlay
+  const { data } = await supabase
+    .from('events')
+    .select('*, owner:users!owner_id(id, name, initials, avatar_color, avatar_url, preferences)')
+    .order('start_time');
+  return (data || []).map(e => ({
+    ...e,
+    owner_name: e.owner?.name,
+    owner_initials: e.owner?.initials,
+    owner_avatar_color: e.owner?.avatar_color,
+    owner_avatar_url: e.owner?.avatar_url,
+    // Respect calendar visibility preference
+    calendarVisibility: e.owner?.preferences?.calendarVisibility || 'full',
+    owner: undefined,
+  }));
 }
 
 async function deleteEvent(id) {
@@ -1314,6 +1339,7 @@ export const api = {
   createEvent,
   updateEvent,
   deleteEvent,
+  teamEvents,
   streaks,
   createStreak,
   logStreak,
