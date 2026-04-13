@@ -43,8 +43,8 @@ function SubtaskMenu({ s, meId, depth, onEdit, onDelete, onPoke, onAddSub }) {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
       </button>
       {open && (
-        <div className="absolute right-0 top-9 z-50 min-w-[160px] py-1.5 rounded-xl animate-fade-in"
-          style={{ background: 'linear-gradient(160deg, rgba(22,30,50,0.95) 0%, rgba(12,18,32,0.98) 100%)', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 12px 40px rgba(0,0,0,0.6)' }}>
+        <div className="absolute right-0 bottom-full mb-2 z-50 min-w-[160px] py-1.5 rounded-xl animate-fade-in"
+          style={{ background: 'linear-gradient(160deg, rgba(22,30,50,0.97) 0%, rgba(12,18,32,0.99) 100%)', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 12px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,0,0,0.2)' }}>
           {items.map((item, idx) => (
             <button key={idx} onClick={item.action}
               className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] font-medium text-left transition-colors hover:bg-white/[0.06]"
@@ -97,7 +97,7 @@ function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke
     setLeaveWarn(null);
   };
   return (
-    <div className="card !p-0 overflow-hidden">
+    <div className="card !p-0 overflow-visible">
       {subtasks.map((s, i) => (
         <React.Fragment key={s.id}>
         <div
