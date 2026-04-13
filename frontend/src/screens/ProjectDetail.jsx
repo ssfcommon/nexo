@@ -141,23 +141,28 @@ function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke
         )}
       </React.Fragment>
       ))}
-      <form onSubmit={submit} className="px-4 py-3 border-t border-[#F3F4F6] bg-[#FAFBFC] space-y-2">
-        <div className="flex items-center gap-2">
-          <span className="text-ink-300 text-lg">+</span>
+      <form onSubmit={submit} className="px-4 py-3 space-y-2"
+        style={{ borderTop: '1px dashed rgba(91,140,255,0.25)', background: 'linear-gradient(135deg, rgba(91,140,255,0.06) 0%, rgba(91,140,255,0.02) 100%)' }}>
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={{ background: 'linear-gradient(135deg, rgba(91,140,255,0.2) 0%, rgba(91,140,255,0.1) 100%)', border: '1px solid rgba(91,140,255,0.25)' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7EB0FF" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </div>
           <input
             value={newTitle}
             onChange={e => setNewTitle(e.target.value)}
             placeholder="Add a subtask…"
-            className="flex-1 bg-transparent text-[14px] outline-none placeholder:text-ink-300"
+            className="flex-1 bg-transparent text-[14px] outline-none placeholder:text-[#7EB0FF]/50"
+            style={{ color: '#E5E7EB' }}
           />
         </div>
         {newTitle && (
           <>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <select
                 value={ownerId}
                 onChange={e => setOwnerId(e.target.value)}
-                className="flex-1 h-9 px-2 text-[13px] rounded-[8px] border border-line-light bg-white"
+                className="flex-1 min-w-[120px] h-9 px-2 text-[13px] rounded-[8px] input-base"
               >
                 <option value="">Assign to me</option>
                 {members.map(m => (
@@ -167,7 +172,7 @@ function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke
               <select
                 value={newComplexity}
                 onChange={e => setNewComplexity(e.target.value)}
-                className="h-9 px-2 text-[12px] rounded-[8px] border border-line-light bg-white"
+                className="h-9 px-2 text-[12px] rounded-[8px] input-base"
               >
                 <option value="">Complexity</option>
                 {COMPLEXITIES.map(c => <option key={c} value={c}>{c}</option>)}
@@ -176,7 +181,7 @@ function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke
                 type="date"
                 value={deadline}
                 onChange={e => setDeadline(e.target.value)}
-                className="h-9 px-2 text-[13px] rounded-[8px] border border-line-light bg-white"
+                className="h-9 px-2 text-[13px] rounded-[8px] input-base"
               />
               <button type="submit" className="pill pill-primary !h-9 !px-3 !text-[13px]">Add</button>
             </div>
