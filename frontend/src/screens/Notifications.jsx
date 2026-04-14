@@ -20,6 +20,9 @@ const TYPE_META = {
   bug_resolved:      { icon: '🐞', accent: '#22C55E' },
   bug_reopened:      { icon: '🔁', accent: '#F59E0B' },
   bug_confirmed:     { icon: '✅', accent: '#3B82F6' },
+  deadline_soon:     { icon: '⏳', accent: '#F59E0B' },
+  project_completed: { icon: '🎉', accent: '#22C55E' },
+  daily_summary:     { icon: '📊', accent: '#A78BFA' },
 };
 
 function timeAgo(iso) {
@@ -119,8 +122,65 @@ function AssignmentCard({ n, onChanged }) {
   );
 }
 
+function DailySummaryCard({ n, onMarkRead }) {
+  const meta = TYPE_META.daily_summary;
+  const m = n.meta || {};
+  return (
+    <div
+      role={n.read ? undefined : 'button'}
+      onClick={n.read ? undefined : () => onMarkRead?.(n.id)}
+      className={'rounded-[16px] p-5 border transition-all ' + (n.read ? '' : 'cursor-pointer')}
+      style={{
+        background: n.read
+          ? 'rgba(255,255,255,0.03)'
+          : 'linear-gradient(135deg, rgba(167,139,250,0.12) 0%, rgba(91,140,255,0.06) 100%)',
+        borderColor: n.read ? 'rgba(255,255,255,0.08)' : 'rgba(167,139,250,0.3)',
+        backdropFilter: 'blur(12px)',
+        boxShadow: n.read ? 'none' : '0 0 24px rgba(167,139,250,0.12)',
+      }}>
+      <div className="flex items-start gap-3">
+        <span className="text-[24px]" style={{ filter: `drop-shadow(0 0 8px ${meta.accent}60)` }}>{meta.icon}</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <p className="font-bold text-[15px]" style={{ color: '#E5E7EB' }}>{n.title}</p>
+            <span className="text-[10px] flex-shrink-0" style={{ color: '#6B7280' }}>{timeAgo(n.created_at)}</span>
+          </div>
+          {(m.done != null || m.pending != null || m.upcoming != null) && (
+            <div className="flex gap-2 mt-2">
+              {m.done != null && (
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                  style={{ background: 'rgba(34,197,94,0.15)', color: '#86EFAC' }}>
+                  ✅ {m.done} done
+                </span>
+              )}
+              {m.pending != null && m.pending > 0 && (
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                  style={{ background: 'rgba(239,68,68,0.15)', color: '#FCA5A5' }}>
+                  ⚠️ {m.pending} pending
+                </span>
+              )}
+              {m.upcoming != null && m.upcoming > 0 && (
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                  style={{ background: 'rgba(91,140,255,0.15)', color: '#93C5FD' }}>
+                  📅 {m.upcoming} tomorrow
+                </span>
+              )}
+            </div>
+          )}
+          {n.body && (
+            <pre className="text-[12.5px] mt-3 whitespace-pre-wrap font-sans leading-relaxed"
+              style={{ color: '#CBD5E1', fontFamily: 'inherit' }}>{n.body}</pre>
+          )}
+        </div>
+        {!n.read && <span className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5" style={{ background: meta.accent, boxShadow: `0 0 6px ${meta.accent}` }} />}
+      </div>
+    </div>
+  );
+}
+
 function NotifCard({ n, onChanged, onMarkRead }) {
   if (n.type === 'assignment' && n.subtask_id) return <AssignmentCard n={n} onChanged={onChanged} />;
+  if (n.type === 'daily_summary') return <DailySummaryCard n={n} onMarkRead={onMarkRead} />;
 
   const meta = TYPE_META[n.type] || { icon: '🔔', accent: '#6B7280' };
   return (

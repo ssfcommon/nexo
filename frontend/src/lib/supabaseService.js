@@ -443,6 +443,35 @@ async function updateSubtask(id, data) {
         await supabase.from('notifications').insert(rows);
       }
     } catch (e) { console.warn('subtask_completed notification failed:', e); }
+
+    // Project completion check — fire once per project
+    try {
+      const { data: allSubs } = await supabase.from('subtasks')
+        .select('status').eq('project_id', sub.project_id);
+      const total = (allSubs || []).length;
+      const done = (allSubs || []).filter(s => s.status === 'done').length;
+      if (total > 0 && done === total) {
+        // Idempotent — only insert if we haven't sent a project_completed for this project yet
+        const { data: existingDone } = await supabase.from('notifications')
+          .select('id').eq('type', 'project_completed')
+          .eq('ref_project', sub.project_id).limit(1);
+        if (!existingDone || existingDone.length === 0) {
+          const { data: members } = await supabase.from('project_members').select('user_id').eq('project_id', sub.project_id);
+          const { data: projRow } = await supabase.from('projects').select('title').eq('id', sub.project_id).single();
+          const recipientIds = (members || []).map(m => m.user_id);
+          if (recipientIds.length > 0) {
+            const rows = recipientIds.map(mid => ({
+              user_id: mid,
+              type: 'project_completed',
+              title: `🎉 Project completed: ${projRow?.title || 'project'}`,
+              body: `All ${total} tasks done. Nice work, team!`,
+              ref_project: sub.project_id,
+            }));
+            await supabase.from('notifications').insert(rows);
+          }
+        }
+      }
+    } catch (e) { console.warn('project_completed notification failed:', e); }
   }
 
   return sub;
@@ -714,6 +743,34 @@ async function createComment(projectId, body, attachments = []) {
   const c = unwrap(await supabase.from('comments').insert({
     project_id: projectId, author_id: uid(), body,
   }).select('*, author:users!author_id(name, initials, avatar_color, avatar_url)').single());
+
+  // @mentions → 'mention' notifications for matched users in the project
+  try {
+    const mentions = body.match(/@(\w+)/g) || [];
+    if (mentions.length) {
+      const [{ data: proj }, { data: members }, { data: allUsers }] = await Promise.all([
+        supabase.from('projects').select('title').eq('id', projectId).single(),
+        supabase.from('project_members').select('user_id').eq('project_id', projectId),
+        supabase.from('users').select('id, name'),
+      ]);
+      const memberIds = new Set((members || []).map(m => m.user_id));
+      const authorName = c.author?.name || 'Someone';
+      const seen = new Set();
+      for (const mention of mentions) {
+        const want = mention.slice(1).toLowerCase();
+        const target = (allUsers || []).find(u => u.name?.toLowerCase().startsWith(want));
+        if (!target || target.id === uid() || seen.has(target.id)) continue;
+        if (!memberIds.has(target.id)) continue; // only notify project members
+        seen.add(target.id);
+        await supabase.from('notifications').insert({
+          user_id: target.id, type: 'mention',
+          title: `${authorName} mentioned you in "${proj?.title || 'a project'}"`,
+          body: body.slice(0, 120),
+          ref_project: projectId,
+        });
+      }
+    }
+  } catch (e) { console.warn('mention notification failed:', e); }
 
   // Upload attachments to Storage
   const savedAttachments = [];
@@ -1002,6 +1059,14 @@ async function updateBug(id, data) {
         body: `${reporter.name} reopened the bug: ${data.reopenComment.slice(0, 80)}`,
       });
     }
+    if (data.status === 'confirmed' && existing.assigned_to && existing.assigned_to !== uid()) {
+      const confirmer = unwrap(await supabase.from('users').select('name').eq('id', uid()).single());
+      await supabase.from('notifications').insert({
+        user_id: existing.assigned_to, type: 'bug_confirmed',
+        title: `Bug confirmed fixed: ${existing.issue?.slice(0, 50)}`,
+        body: `${confirmer.name} confirmed your ${existing.app_name} fix`,
+      });
+    }
   } catch (e) { console.warn('Bug notification failed:', e); }
 
   return result;
@@ -1224,6 +1289,105 @@ async function syncReminders() {
           meta: { ref: `${i.kind}:${i.id}` },
         }));
       if (toInsert.length) await supabase.from('notifications').insert(toInsert);
+    }
+
+    // ─── Deadlines approaching within 24 hours (tasks + subtasks owned by me) ───
+    const tomorrow = new Date(nowMs + 86400000).toISOString().slice(0, 10);
+    const [{ data: soonTasks }, { data: soonSubs }] = await Promise.all([
+      supabase.from('tasks').select('id, title, deadline')
+        .eq('owner_id', me).neq('status', 'done').eq('deadline', tomorrow),
+      supabase.from('subtasks').select('id, title, deadline, project_id, projects(title)')
+        .eq('owner_id', me).neq('status', 'done').eq('deadline', tomorrow),
+    ]);
+    const soonItems = [
+      ...(soonTasks || []).map(t => ({ kind: 'task', id: t.id, title: t.title, deadline: t.deadline })),
+      ...(soonSubs || []).map(s => ({ kind: 'subtask', id: s.id, title: s.title, deadline: s.deadline, project_id: s.project_id, project_title: s.projects?.title })),
+    ];
+    if (soonItems.length > 0) {
+      const ids = soonItems.map(i => `${i.kind}:${i.id}`);
+      const { data: existingSoon } = await supabase.from('notifications')
+        .select('meta').eq('user_id', me).eq('type', 'deadline_soon')
+        .in('meta->>ref', ids);
+      const already = new Set((existingSoon || []).map(r => r.meta?.ref).filter(Boolean));
+      const toInsert = soonItems
+        .filter(i => !already.has(`${i.kind}:${i.id}`))
+        .map(i => ({
+          user_id: me,
+          type: 'deadline_soon',
+          title: `Due tomorrow: ${i.title}`,
+          body: i.project_title ? `In "${i.project_title}" · due ${i.deadline}` : `Due ${i.deadline}`,
+          ref_subtask: i.kind === 'subtask' ? i.id : null,
+          ref_project: i.project_id || null,
+          meta: { ref: `${i.kind}:${i.id}` },
+        }));
+      if (toInsert.length) await supabase.from('notifications').insert(toInsert);
+    }
+
+    // ─── Daily summary (once per day, after 6 PM local) ───
+    const nowLocal = new Date();
+    if (nowLocal.getHours() >= 18) {
+      const todayStart = today + 'T00:00:00';
+      // Idempotent: only one daily_summary per user per day
+      const { data: alreadyToday } = await supabase.from('notifications')
+        .select('id').eq('user_id', me).eq('type', 'daily_summary')
+        .gte('created_at', todayStart).limit(1);
+      if (!alreadyToday || alreadyToday.length === 0) {
+        const [doneSubs, doneTasks, pendingSubs, pendingTasks, dueTomorrowSubs, dueTomorrowTasks] = await Promise.all([
+          supabase.from('subtasks').select('id, title, projects(title)')
+            .eq('owner_id', me).eq('status', 'done').gte('updated_at', todayStart),
+          supabase.from('tasks').select('id, title')
+            .eq('owner_id', me).eq('status', 'done').gte('updated_at', todayStart),
+          supabase.from('subtasks').select('id, title, deadline, projects(title)')
+            .eq('owner_id', me).neq('status', 'done').lt('deadline', today),
+          supabase.from('tasks').select('id, title, deadline')
+            .eq('owner_id', me).neq('status', 'done').lt('deadline', today),
+          supabase.from('subtasks').select('id, title, projects(title)')
+            .eq('owner_id', me).neq('status', 'done').eq('deadline', tomorrow),
+          supabase.from('tasks').select('id, title')
+            .eq('owner_id', me).neq('status', 'done').eq('deadline', tomorrow),
+        ]);
+        const completed = [
+          ...(doneSubs.data || []).map(s => ({ title: s.title, ctx: s.projects?.title })),
+          ...(doneTasks.data || []).map(t => ({ title: t.title, ctx: null })),
+        ];
+        const overdue = [
+          ...(pendingSubs.data || []).map(s => ({ title: s.title, deadline: s.deadline, ctx: s.projects?.title })),
+          ...(pendingTasks.data || []).map(t => ({ title: t.title, deadline: t.deadline, ctx: null })),
+        ];
+        const upcoming = [
+          ...(dueTomorrowSubs.data || []).map(s => ({ title: s.title, ctx: s.projects?.title })),
+          ...(dueTomorrowTasks.data || []).map(t => ({ title: t.title, ctx: null })),
+        ];
+
+        if (completed.length || overdue.length || upcoming.length) {
+          const lines = [];
+          if (completed.length) {
+            lines.push(`✅ Completed today (${completed.length}):`);
+            completed.slice(0, 5).forEach(c => lines.push(`  • ${c.title}${c.ctx ? ` — ${c.ctx}` : ''}`));
+            if (completed.length > 5) lines.push(`  …and ${completed.length - 5} more`);
+          }
+          if (overdue.length) {
+            if (lines.length) lines.push('');
+            lines.push(`⚠️ Still pending (${overdue.length}):`);
+            overdue.slice(0, 5).forEach(p => lines.push(`  • ${p.title}${p.ctx ? ` — ${p.ctx}` : ''} (was due ${p.deadline})`));
+            if (overdue.length > 5) lines.push(`  …and ${overdue.length - 5} more`);
+          }
+          if (upcoming.length) {
+            if (lines.length) lines.push('');
+            lines.push(`📅 Due tomorrow (${upcoming.length}):`);
+            upcoming.slice(0, 5).forEach(u => lines.push(`  • ${u.title}${u.ctx ? ` — ${u.ctx}` : ''}`));
+            if (upcoming.length > 5) lines.push(`  …and ${upcoming.length - 5} more`);
+          }
+
+          await supabase.from('notifications').insert({
+            user_id: me,
+            type: 'daily_summary',
+            title: `Your day in review — ${nowLocal.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}`,
+            body: lines.join('\n'),
+            meta: { date: today, done: completed.length, pending: overdue.length, upcoming: upcoming.length },
+          });
+        }
+      }
     }
   } catch (e) {
     console.warn('syncReminders failed:', e);
