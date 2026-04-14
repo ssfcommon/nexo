@@ -632,6 +632,11 @@ function EventActionSheet({ open, onClose, event, onAction, onChanged }) {
           ⏭️ Partial — follow-up scheduled
         </div>
       )}
+      {!isCompleted && !isPartial && event.linked_subtask?.status === 'done' && (
+        <div className="mb-3 px-3 py-2 rounded-[10px] text-[12px] font-medium" style={{ background: 'rgba(34,197,94,0.1)', color: '#86EFAC', border: '1px solid rgba(34,197,94,0.25)' }}>
+          ✓ Linked task <span className="font-semibold">"{event.linked_subtask.title}"</span> already done — you can mark this event complete.
+        </div>
+      )}
 
       {step === 'menu' && (
         <div className="space-y-2">
@@ -812,8 +817,13 @@ function TeamToggle({ users, selected, onToggle }) {
   );
 }
 
+// Helper: stale event whose linked subtask is already done
+function hasStaleLink(ev) {
+  return ev?.status === 'scheduled' && ev?.linked_subtask?.status === 'done';
+}
+
 // ── Day view ──
-function DayView({ events, leaves, date, onEventClick, onDeleteLeave }) {
+function DayView({ events, leaves, date, onEventClick, onDeleteLeave, onQuickComplete }) {
   const iso = isoDate(date);
   const onLeave = leavesOnDate(leaves, iso);
   return (
@@ -871,6 +881,19 @@ function DayView({ events, leaves, date, onEventClick, onDeleteLeave }) {
               )}
             </div>
             {ev.meet_link && <a href={ev.meet_link} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="inline-block mt-2 pill bg-success text-white !h-7 !px-3 !text-[11px]">Join</a>}
+            {hasStaleLink(ev) && (
+              <div className="mt-2 flex items-center gap-2 px-2.5 py-1.5 rounded-[8px]" style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)' }}
+                onClick={e => e.stopPropagation()}>
+                <span className="text-[11px] flex-1" style={{ color: '#86EFAC' }}>
+                  ✓ Linked task <span className="font-semibold">{ev.linked_subtask.title}</span> is done
+                </span>
+                <button onClick={() => onQuickComplete?.(ev)}
+                  className="text-[11px] font-semibold px-2 py-0.5 rounded-[6px]"
+                  style={{ background: 'rgba(34,197,94,0.2)', color: '#86EFAC' }}>
+                  Mark event complete
+                </button>
+              </div>
+            )}
           </div>
         </div>
       ))}
@@ -979,7 +1002,7 @@ function MonthView({ date, allEvents, leaves, onDayClick }) {
 }
 
 // ── Schedule (Agenda) view ──
-function ScheduleView({ allEvents, leaves, date, onEventClick }) {
+function ScheduleView({ allEvents, leaves, date, onEventClick, onQuickComplete }) {
   const days = Array.from({ length: 14 }, (_, i) => addDays(date, i));
   const daysWithContent = days.filter(d => {
     const iso = isoDate(d);
@@ -1043,6 +1066,14 @@ function ScheduleView({ allEvents, leaves, date, onEventClick }) {
                     </div>
                   )}
                   {ev.meet_link && <a href={ev.meet_link} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[11px] text-success font-semibold">Join</a>}
+                  {hasStaleLink(ev) && (
+                    <button onClick={e => { e.stopPropagation(); onQuickComplete?.(ev); }}
+                      className="text-[10px] font-semibold px-2 py-1 rounded-[6px] whitespace-nowrap"
+                      style={{ background: 'rgba(34,197,94,0.15)', color: '#86EFAC', border: '1px solid rgba(34,197,94,0.25)' }}
+                      title={`Linked task "${ev.linked_subtask.title}" is done`}>
+                      ✓ Complete
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -1159,6 +1190,15 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
 
   const refresh = () => { loadDay(date); loadAll(); };
 
+  const quickComplete = async (ev) => {
+    const id = ev._originalId || ev.id;
+    try {
+      await api.completeEvent(id);
+      showToast('Event marked complete');
+      refresh();
+    } catch (err) { showToast(err.message || 'Failed to complete event', 'error'); }
+  };
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -1201,10 +1241,10 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
       </div>
 
       {/* View body */}
-      {view === 'Day' && <DayView events={[...events, ...allEvents.filter(e => e._isTeam && eventLocalDate(e) === isoDate(date))].sort((a,b) => a.start_time.localeCompare(b.start_time))} leaves={leaves} date={date} onEventClick={setActionEvent} onDeleteLeave={setDeleteLeaveId} />}
+      {view === 'Day' && <DayView events={[...events, ...allEvents.filter(e => e._isTeam && eventLocalDate(e) === isoDate(date))].sort((a,b) => a.start_time.localeCompare(b.start_time))} leaves={leaves} date={date} onEventClick={setActionEvent} onDeleteLeave={setDeleteLeaveId} onQuickComplete={quickComplete} />}
       {view === 'Week' && <WeekView date={date} allEvents={allEvents} leaves={leaves} onDayClick={switchToDay} />}
       {view === 'Month' && <MonthView date={date} allEvents={allEvents} leaves={leaves} onDayClick={switchToDay} />}
-      {view === 'Schedule' && <ScheduleView allEvents={allEvents} leaves={leaves} date={date} onEventClick={setActionEvent} />}
+      {view === 'Schedule' && <ScheduleView allEvents={allEvents} leaves={leaves} date={date} onEventClick={setActionEvent} onQuickComplete={quickComplete} />}
 
       <AddEventModal open={addOpen} onClose={() => { setAddOpen(false); setPrefillTitle(''); }} onCreated={() => { refresh(); showToast('Event created'); }} date={isoDate(date)} prefillTitle={prefillTitle} />
       <AddLeaveModal open={leaveOpen} onClose={() => setLeaveOpen(false)} onCreated={() => { loadLeaves(); showToast('Leave added'); }} date={isoDate(date)} />

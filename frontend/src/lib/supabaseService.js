@@ -617,7 +617,10 @@ async function applyTemplate(id, data) {
 // ── Events ───────────────────────────────────────────────
 
 async function events(date) {
-  let q = supabase.from('events').select('*').eq('owner_id', uid());
+  let q = supabase
+    .from('events')
+    .select('*, linked_subtask:linked_subtask_id(id, title, status)')
+    .eq('owner_id', uid());
   if (date) {
     // Filter using local timezone boundaries so events match the user's calendar day
     const dayStart = new Date(`${date}T00:00:00`).toISOString();
