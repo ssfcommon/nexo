@@ -497,8 +497,8 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
         </div>
       </div>
 
-      {/* Quick tasks */}
-      <div>
+      {/* Quick tasks — only in "My Projects" view */}
+      {scope === 'mine' && <div>
         <p className="section-label mb-2">Quick Tasks</p>
         <div className="rounded-[14px]" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)', border: '1px solid rgba(255,255,255,0.10)', borderTopColor: 'rgba(255,255,255,0.16)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: '0 4px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
           {quickTasks.map((t, i) => (
@@ -539,7 +539,7 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
           ))}
           {quickTasks.length === 0 && <p className="p-4 text-ink-300 text-sm">No quick tasks.</p>}
         </div>
-      </div>
+      </div>}
       </>}
       <ConfirmModal
         open={!!deleteTaskId}

@@ -537,6 +537,166 @@ function AddLeaveModal({ open, onClose, onCreated, date }) {
 }
 
 // ── Edit Event Modal ──
+// ── Event Action Sheet: Complete / Reschedule / Continue later / Edit ──
+function EventActionSheet({ open, onClose, event, onAction, onChanged }) {
+  const showToast = useToast();
+  const [step, setStep] = useState('menu'); // menu | complete | reschedule | partial
+  const [busy, setBusy] = useState(false);
+  const [linkSubtaskId, setLinkSubtaskId] = useState('');
+  const [pendingSubs, setPendingSubs] = useState([]);
+  const [newDate, setNewDate] = useState('');
+  const [newTime, setNewTime] = useState('09:00');
+  const [newDuration, setNewDuration] = useState(60);
+
+  const realEvent = event?._originalId ? { ...event, id: event._originalId } : event;
+  const isCompleted = event?.status === 'completed';
+  const isPartial = event?.status === 'partial';
+
+  useEffect(() => {
+    if (open && event) {
+      setStep('menu');
+      setLinkSubtaskId('');
+      // Default "continue later" to next day same time
+      const orig = new Date(event.start_time);
+      const next = new Date(orig); next.setDate(next.getDate() + 1);
+      setNewDate(isoDate(next));
+      setNewTime(`${String(orig.getHours()).padStart(2, '0')}:${String(orig.getMinutes()).padStart(2, '0')}`);
+      setNewDuration(event.duration_min || 60);
+      // Fetch pending subtasks lazily when user opens Complete step
+    }
+  }, [open, event]);
+
+  const loadSubs = async () => {
+    try { setPendingSubs(await api.myPendingSubtasks()); } catch {}
+  };
+
+  const doComplete = async () => {
+    if (!realEvent) return; setBusy(true);
+    try {
+      await api.completeEvent(realEvent.id, { linkedSubtaskId: linkSubtaskId || null });
+      showToast(linkSubtaskId ? 'Event completed & task marked done' : 'Event marked complete');
+      onChanged?.(); onClose();
+    } catch (err) { showToast(err.message || 'Failed to complete', 'error'); }
+    finally { setBusy(false); }
+  };
+
+  const doReschedule = async () => {
+    if (!realEvent) return; setBusy(true);
+    try {
+      const iso = new Date(`${newDate}T${newTime}:00`).toISOString();
+      await api.rescheduleEvent(realEvent.id, iso);
+      showToast('Event rescheduled');
+      onChanged?.(); onClose();
+    } catch (err) { showToast(err.message || 'Failed to reschedule', 'error'); }
+    finally { setBusy(false); }
+  };
+
+  const doPartial = async () => {
+    if (!realEvent) return; setBusy(true);
+    try {
+      const iso = new Date(`${newDate}T${newTime}:00`).toISOString();
+      await api.partialEvent(realEvent.id, {
+        startTime: iso,
+        durationMin: Number(newDuration),
+        title: realEvent.title,
+      });
+      showToast('Follow-up session scheduled');
+      onChanged?.(); onClose();
+    } catch (err) { showToast(err.message || 'Failed to create follow-up', 'error'); }
+    finally { setBusy(false); }
+  };
+
+  if (!event) return null;
+
+  const actionBtn = (icon, label, desc, color, onClick) => (
+    <button onClick={onClick} disabled={busy}
+      className="w-full flex items-start gap-3 p-3 rounded-[12px] border transition text-left hover:bg-white/5 disabled:opacity-50"
+      style={{ borderColor: 'rgba(255,255,255,0.10)', background: 'rgba(255,255,255,0.03)' }}>
+      <span className="text-[22px] flex-shrink-0" style={{ filter: `drop-shadow(0 0 6px ${color}60)` }}>{icon}</span>
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-[14px]" style={{ color: '#E5E7EB' }}>{label}</p>
+        <p className="text-[12px] mt-0.5" style={{ color: '#9CA3AF' }}>{desc}</p>
+      </div>
+    </button>
+  );
+
+  return (
+    <Modal open={open} onClose={onClose} title={event.title || 'Event'}>
+      {isCompleted && (
+        <div className="mb-3 px-3 py-2 rounded-[10px] text-[12px] font-medium" style={{ background: 'rgba(34,197,94,0.12)', color: '#86EFAC', border: '1px solid rgba(34,197,94,0.3)' }}>
+          ✓ Completed successfully
+        </div>
+      )}
+      {isPartial && (
+        <div className="mb-3 px-3 py-2 rounded-[10px] text-[12px] font-medium" style={{ background: 'rgba(245,158,11,0.12)', color: '#FBBF24', border: '1px solid rgba(245,158,11,0.3)' }}>
+          ⏭️ Partial — follow-up scheduled
+        </div>
+      )}
+
+      {step === 'menu' && (
+        <div className="space-y-2">
+          {!isCompleted && actionBtn('✅', 'Complete', 'Mark this event as done', '#22C55E', () => { loadSubs(); setStep('complete'); })}
+          {!isCompleted && actionBtn('📅', 'Reschedule', 'Move to a different date or time', '#5B8CFF', () => setStep('reschedule'))}
+          {!isCompleted && actionBtn('⏭️', 'Continue later', 'Did some work — schedule a follow-up session', '#F59E0B', () => setStep('partial'))}
+          {actionBtn('✏️', 'Edit details', 'Change title, duration, or delete', '#A78BFA', () => { onAction?.('edit'); })}
+        </div>
+      )}
+
+      {step === 'complete' && (
+        <div className="space-y-3">
+          <p className="text-[13px]" style={{ color: '#9CA3AF' }}>Also mark a task as done? (optional)</p>
+          <select value={linkSubtaskId} onChange={e => setLinkSubtaskId(e.target.value)} className={inputCls}>
+            <option value="">— None —</option>
+            {pendingSubs.map(s => (
+              <option key={s.id} value={s.id}>{s.title}{s.project_title ? ` · ${s.project_title}` : ''}</option>
+            ))}
+          </select>
+          <div className="flex gap-2">
+            <button onClick={() => setStep('menu')} className="flex-1 h-11 rounded-[10px] border border-white/10 text-[13px]" style={{ color: '#9CA3AF' }}>Back</button>
+            <button onClick={doComplete} disabled={busy} className="flex-1 h-11 rounded-[10px] text-white font-semibold disabled:opacity-60"
+              style={{ background: 'linear-gradient(135deg, #22C55E 0%, #16A34A 100%)' }}>
+              {busy ? 'Saving…' : 'Mark Complete'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 'reschedule' && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="New date"><input type="date" className={inputCls} value={newDate} onChange={e => setNewDate(e.target.value)} /></Field>
+            <Field label="New time"><input type="time" className={inputCls} value={newTime} onChange={e => setNewTime(e.target.value)} /></Field>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => setStep('menu')} className="flex-1 h-11 rounded-[10px] border border-white/10 text-[13px]" style={{ color: '#9CA3AF' }}>Back</button>
+            <button onClick={doReschedule} disabled={busy} className="flex-1 h-11 rounded-[10px] bg-brand-blue text-white font-semibold disabled:opacity-60">
+              {busy ? 'Saving…' : 'Reschedule'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 'partial' && (
+        <div className="space-y-3">
+          <p className="text-[13px]" style={{ color: '#9CA3AF' }}>Schedule a follow-up session to continue this work.</p>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Date"><input type="date" className={inputCls} value={newDate} onChange={e => setNewDate(e.target.value)} /></Field>
+            <Field label="Time"><input type="time" className={inputCls} value={newTime} onChange={e => setNewTime(e.target.value)} /></Field>
+          </div>
+          <Field label="Duration (min)"><input type="number" min="15" step="15" className={inputCls} value={newDuration} onChange={e => setNewDuration(e.target.value)} /></Field>
+          <div className="flex gap-2">
+            <button onClick={() => setStep('menu')} className="flex-1 h-11 rounded-[10px] border border-white/10 text-[13px]" style={{ color: '#9CA3AF' }}>Back</button>
+            <button onClick={doPartial} disabled={busy} className="flex-1 h-11 rounded-[10px] text-white font-semibold disabled:opacity-60"
+              style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)' }}>
+              {busy ? 'Saving…' : 'Create Follow-up'}
+            </button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 function EditEventModal({ open, onClose, event, onUpdated, onDeleted }) {
   const showToast = useToast();
   const [title, setTitle] = useState('');
@@ -692,6 +852,12 @@ function DayView({ events, leaves, date, onEventClick, onDeleteLeave }) {
                 {ev._isTeam && ev._busyOnly ? 'Busy' : ev.title}
               </p>
               {ev.metadata?.recurrence && <span className="text-ink-300 text-[11px]" title={recurrenceLabel(ev.metadata.recurrence)}>🔁</span>}
+              {ev.status === 'completed' && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(34,197,94,0.15)', color: '#86EFAC' }}>✓ Completed successfully</span>
+              )}
+              {ev.status === 'partial' && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(245,158,11,0.15)', color: '#FBBF24' }}>⏭️ Follow-up</span>
+              )}
             </div>
             <div className="flex items-center gap-2 mt-1">
               <p className="text-[11px] text-ink-500 flex-1">
@@ -859,6 +1025,12 @@ function ScheduleView({ allEvents, leaves, date, onEventClick }) {
                     <div className="flex items-center gap-1.5">
                       <p className="text-[13px] font-medium text-ink-900 truncate">{ev._isTeam && ev._busyOnly ? 'Busy' : ev.title}</p>
                       {ev.metadata?.recurrence && <span className="text-[10px] text-ink-300">🔁</span>}
+                      {ev.status === 'completed' && (
+                        <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap" style={{ background: 'rgba(34,197,94,0.15)', color: '#86EFAC' }}>✓ Done</span>
+                      )}
+                      {ev.status === 'partial' && (
+                        <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap" style={{ background: 'rgba(245,158,11,0.15)', color: '#FBBF24' }}>⏭️ Partial</span>
+                      )}
                     </div>
                     <p className="text-[11px] text-ink-500">
                       {fmtTime(ev.start_time)} · {ev.duration_min} min
@@ -892,6 +1064,7 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
   const [addOpen, setAddOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [editEvent, setEditEvent] = useState(null);
+  const [actionEvent, setActionEvent] = useState(null);
   const [deleteLeaveId, setDeleteLeaveId] = useState(null);
   const [prevView, setPrevView] = useState(null);
   const [prefillTitle, setPrefillTitle] = useState('');
@@ -1028,10 +1201,10 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
       </div>
 
       {/* View body */}
-      {view === 'Day' && <DayView events={[...events, ...allEvents.filter(e => e._isTeam && eventLocalDate(e) === isoDate(date))].sort((a,b) => a.start_time.localeCompare(b.start_time))} leaves={leaves} date={date} onEventClick={setEditEvent} onDeleteLeave={setDeleteLeaveId} />}
+      {view === 'Day' && <DayView events={[...events, ...allEvents.filter(e => e._isTeam && eventLocalDate(e) === isoDate(date))].sort((a,b) => a.start_time.localeCompare(b.start_time))} leaves={leaves} date={date} onEventClick={setActionEvent} onDeleteLeave={setDeleteLeaveId} />}
       {view === 'Week' && <WeekView date={date} allEvents={allEvents} leaves={leaves} onDayClick={switchToDay} />}
       {view === 'Month' && <MonthView date={date} allEvents={allEvents} leaves={leaves} onDayClick={switchToDay} />}
-      {view === 'Schedule' && <ScheduleView allEvents={allEvents} leaves={leaves} date={date} onEventClick={setEditEvent} />}
+      {view === 'Schedule' && <ScheduleView allEvents={allEvents} leaves={leaves} date={date} onEventClick={setActionEvent} />}
 
       <AddEventModal open={addOpen} onClose={() => { setAddOpen(false); setPrefillTitle(''); }} onCreated={() => { refresh(); showToast('Event created'); }} date={isoDate(date)} prefillTitle={prefillTitle} />
       <AddLeaveModal open={leaveOpen} onClose={() => setLeaveOpen(false)} onCreated={() => { loadLeaves(); showToast('Leave added'); }} date={isoDate(date)} />
@@ -1048,6 +1221,13 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
             showToast('Leave removed');
           } catch (err) { showToast(err.message || 'Failed to remove leave', 'error'); setDeleteLeaveId(null); }
         }}
+      />
+      <EventActionSheet
+        open={!!actionEvent}
+        onClose={() => setActionEvent(null)}
+        event={actionEvent}
+        onAction={(kind) => { if (kind === 'edit') { setEditEvent(actionEvent); setActionEvent(null); } }}
+        onChanged={() => { refresh(); }}
       />
       <EditEventModal open={!!editEvent} onClose={() => setEditEvent(null)} event={editEvent}
         onUpdated={() => { refresh(); showToast('Event updated'); }}

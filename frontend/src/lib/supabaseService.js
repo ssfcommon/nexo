@@ -690,6 +690,65 @@ async function deleteEvent(id) {
   return { ok: true };
 }
 
+// ── Event lifecycle: complete, reschedule, partial (follow-up) ───────────
+async function myPendingSubtasks() {
+  // Lightweight list used by EventActionSheet → Complete → "Also mark task done"
+  const { data } = await supabase
+    .from('subtasks')
+    .select('id, title, project_id, status, projects:project_id(title)')
+    .eq('assigned_to', uid())
+    .neq('status', 'done')
+    .order('deadline', { ascending: true, nullsFirst: false })
+    .limit(30);
+  return (data || []).map(s => ({ id: s.id, title: s.title, project_id: s.project_id, project_title: s.projects?.title }));
+}
+
+async function completeEvent(id, { linkedSubtaskId = null } = {}) {
+  const updates = { status: 'completed', completed_at: new Date().toISOString() };
+  if (linkedSubtaskId) updates.linked_subtask_id = linkedSubtaskId;
+  const e = unwrap(await supabase.from('events').update(updates).eq('id', id).select().single());
+  // If linked to a subtask, also mark that subtask done
+  if (linkedSubtaskId) {
+    try { await updateSubtask(linkedSubtaskId, { status: 'done' }); } catch {}
+  }
+  return e;
+}
+
+async function rescheduleEvent(id, newStartTime) {
+  // Mutate original to the new time; track old state via status (stays 'scheduled' since it's still active)
+  return unwrap(await supabase.from('events').update({ start_time: newStartTime, status: 'scheduled' }).eq('id', id).select().single());
+}
+
+async function partialEvent(id, followUp) {
+  // Mark the original as 'partial' (done what could be done, carrying over)
+  const original = unwrap(await supabase.from('events').update({
+    status: 'partial',
+    completed_at: new Date().toISOString(),
+  }).eq('id', id).select('*').single());
+  // Fetch attendees on original so we can mirror onto follow-up
+  const { data: atts } = await supabase.from('event_attendees').select('user_id').eq('event_id', id);
+  const attendeeIds = (atts || []).map(a => a.user_id);
+  // Create a follow-up event chained via parent_event_id
+  const row = {
+    title: followUp.title || original.title,
+    owner_id: original.owner_id,
+    start_time: followUp.startTime,
+    duration_min: followUp.durationMin || original.duration_min,
+    event_type: original.event_type,
+    department: original.department,
+    priority: original.priority,
+    meet_link: original.meet_link,
+    parent_event_id: id,
+    linked_subtask_id: followUp.linkedSubtaskId || original.linked_subtask_id || null,
+    project_id: original.project_id || null,
+  };
+  const next = unwrap(await supabase.from('events').insert(row).select().single());
+  for (const aid of attendeeIds) {
+    await supabase.from('event_attendees').upsert({ event_id: next.id, user_id: aid }, { onConflict: 'event_id,user_id' });
+  }
+  return { original, next };
+}
+
 async function deleteComment(id) {
   await supabase.from('attachments').delete().eq('comment_id', id);
   await supabase.from('comments').delete().eq('id', id);
@@ -1762,6 +1821,10 @@ export const api = {
   createEvent,
   updateEvent,
   deleteEvent,
+  completeEvent,
+  rescheduleEvent,
+  partialEvent,
+  myPendingSubtasks,
   teamEvents,
   streaks,
   createStreak,
