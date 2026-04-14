@@ -66,7 +66,15 @@ export default function App() {
   const content = (
     <ErrorBoundary>
       {notifOpen ? (
-        <Notifications onClose={closeNotifications} />
+        <Notifications
+          onClose={closeNotifications}
+          onNavigate={(nextTab, payload) => {
+            setNotifOpen(false);
+            if (nextTab) setTab(nextTab);
+            if (payload) setDeepLink({ ...payload, ts: Date.now() });
+            refreshUnread();
+          }}
+        />
       ) : (
         <Active me={me} unreadCount={unreadCount} onOpenNotifications={openNotifications} deepLink={deepLink} onSwitchTab={(t, payload) => { setTab(t); setNotifOpen(false); if (payload?.addEvent) setDeepLink({ kind: 'addEvent', title: payload.addEvent, ts: Date.now() }); if (payload?.kind) setDeepLink({ ...payload, ts: Date.now() }); }} />
       )}

@@ -414,9 +414,11 @@ async function updateSubtask(id, data) {
     ]);
 
     if (nextSub?.owner_id && nextSub.owner_id !== uid()) {
+      // Use 'reminder' not 'assignment' — the subtask was already accepted earlier,
+      // this is just an "up next" nudge, not a new assignment needing a response.
       await supabase.from('notifications').insert({
         user_id: nextSub.owner_id,
-        type: 'assignment',
+        type: 'reminder',
         title: `Your turn: ${nextSub.title}`,
         body: `${completer.data?.name || 'Someone'} completed "${sub.title}" in ${proj.data?.title || 'a project'}. You're up next.`,
         ref_subtask: nextSub.id,

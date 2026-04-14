@@ -38,7 +38,7 @@ function timeAgo(iso) {
   return new Date(iso).toLocaleDateString();
 }
 
-function AssignmentCard({ n, onChanged }) {
+function AssignmentCard({ n, onChanged, onNavigate }) {
   const [mode, setMode] = useState(null);
   const [deadline, setDeadline] = useState(new Date().toISOString().slice(0, 10));
   const [note, setNote] = useState('');
@@ -54,6 +54,8 @@ function AssignmentCard({ n, onChanged }) {
   };
 
   const meta = TYPE_META[n.type] || TYPE_META.reminder;
+  const canNav = !!(n.project_id || n.subtask_id);
+  const navigate = () => { if (canNav) onNavigate?.('projects', { kind: 'project', id: n.project_id }); };
   return (
     <div className="rounded-[14px] p-4 border"
       style={{
@@ -64,11 +66,16 @@ function AssignmentCard({ n, onChanged }) {
       <div className="flex items-start gap-3">
         <span className="text-[20px]" style={{ filter: `drop-shadow(0 0 6px ${meta.accent}40)` }}>{meta.icon}</span>
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <p className="font-semibold text-[14px]" style={{ color: '#E5E7EB' }}>{n.title}</p>
-            <span className="text-[10px] flex-shrink-0" style={{ color: '#6B7280' }}>{timeAgo(n.created_at)}</span>
+          <div
+            role={canNav ? 'button' : undefined}
+            onClick={canNav ? navigate : undefined}
+            className={canNav ? 'cursor-pointer' : ''}>
+            <div className="flex items-start justify-between gap-2">
+              <p className="font-semibold text-[14px]" style={{ color: '#E5E7EB' }}>{n.title}</p>
+              <span className="text-[10px] flex-shrink-0" style={{ color: '#6B7280' }}>{timeAgo(n.created_at)}</span>
+            </div>
+            {n.body && <p className="text-[13px] mt-1" style={{ color: '#9CA3AF' }}>{n.body}</p>}
           </div>
-          {n.body && <p className="text-[13px] mt-1" style={{ color: '#9CA3AF' }}>{n.body}</p>}
           {!mode && (
             <div className="flex flex-wrap gap-2 mt-3">
               <button disabled={busy} onClick={() => respond('accept')}
@@ -125,10 +132,11 @@ function AssignmentCard({ n, onChanged }) {
 function DailySummaryCard({ n, onMarkRead }) {
   const meta = TYPE_META.daily_summary;
   const m = n.meta || {};
+  const handleClick = () => { if (!n.read) onMarkRead?.(n.id); };
   return (
     <div
       role={n.read ? undefined : 'button'}
-      onClick={n.read ? undefined : () => onMarkRead?.(n.id)}
+      onClick={n.read ? undefined : handleClick}
       className={'rounded-[16px] p-5 border transition-all ' + (n.read ? '' : 'cursor-pointer')}
       style={{
         background: n.read
@@ -178,16 +186,22 @@ function DailySummaryCard({ n, onMarkRead }) {
   );
 }
 
-function NotifCard({ n, onChanged, onMarkRead }) {
-  if (n.type === 'assignment' && n.subtask_id) return <AssignmentCard n={n} onChanged={onChanged} />;
+function NotifCard({ n, onChanged, onMarkRead, onNavigate }) {
+  if (n.type === 'assignment' && n.subtask_id) return <AssignmentCard n={n} onChanged={onChanged} onNavigate={onNavigate} />;
   if (n.type === 'daily_summary') return <DailySummaryCard n={n} onMarkRead={onMarkRead} />;
 
   const meta = TYPE_META[n.type] || { icon: '🔔', accent: '#6B7280' };
+  const canNav = !!(n.project_id || n.subtask_id);
+  const handleClick = () => {
+    if (!n.read) onMarkRead?.(n.id);
+    if (canNav) onNavigate?.('projects', { kind: 'project', id: n.project_id });
+  };
+  const interactive = canNav || !n.read;
   return (
     <div
-      role={n.read ? undefined : 'button'}
-      onClick={n.read ? undefined : () => onMarkRead?.(n.id)}
-      className={'rounded-[14px] p-4 border transition-all ' + (n.read ? '' : 'cursor-pointer hover:border-opacity-60')}
+      role={interactive ? 'button' : undefined}
+      onClick={interactive ? handleClick : undefined}
+      className={'rounded-[14px] p-4 border transition-all ' + (interactive ? 'cursor-pointer hover:border-opacity-60' : '')}
       style={{
         background: n.read ? 'rgba(255,255,255,0.02)' : `${meta.accent}10`,
         borderColor: n.read ? 'rgba(255,255,255,0.06)' : `${meta.accent}33`,
@@ -208,7 +222,7 @@ function NotifCard({ n, onChanged, onMarkRead }) {
   );
 }
 
-export default function Notifications({ onClose }) {
+export default function Notifications({ onClose, onNavigate }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const load = async () => {
@@ -263,7 +277,7 @@ export default function Notifications({ onClose }) {
             <p className="text-sm" style={{ color: '#6B7280' }}>All caught up.</p>
           </div>
         )}
-        {items.map(n => <NotifCard key={n.id} n={n} onChanged={load} onMarkRead={markRead} />)}
+        {items.map(n => <NotifCard key={n.id} n={n} onChanged={load} onMarkRead={markRead} onNavigate={onNavigate} />)}
       </div>
     </div>
   );
