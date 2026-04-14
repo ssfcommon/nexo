@@ -488,8 +488,9 @@ CREATE POLICY projects_update ON nexo.projects FOR UPDATE TO authenticated USING
 );
 CREATE POLICY projects_delete ON nexo.projects FOR DELETE TO authenticated USING (true);
 
--- Notifications: own only
+-- Notifications: read/update/delete own; insert open (one user notifies another)
 CREATE POLICY notifications_select ON nexo.notifications FOR SELECT TO authenticated USING (user_id = nexo.current_user_id());
+CREATE POLICY notifications_insert ON nexo.notifications FOR INSERT TO authenticated WITH CHECK (true);
 CREATE POLICY notifications_update ON nexo.notifications FOR UPDATE TO authenticated USING (user_id = nexo.current_user_id());
 CREATE POLICY notifications_delete ON nexo.notifications FOR DELETE TO authenticated USING (user_id = nexo.current_user_id());
 
