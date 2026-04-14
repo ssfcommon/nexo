@@ -898,23 +898,25 @@ async function updateBug(id, data) {
 
   const result = unwrap(await supabase.from('bugs').update(updates).eq('id', id).select().single());
 
-  // Send notifications on status changes
-  if (data.status === 'resolved' && existing.reported_by && existing.reported_by !== uid()) {
-    const resolver = unwrap(await supabase.from('users').select('name').eq('id', uid()).single());
-    await supabase.from('notifications').insert({
-      user_id: existing.reported_by, type: 'bug_resolved',
-      title: `Bug resolved: ${existing.issue?.slice(0, 50)}`,
-      body: `${resolver.name} resolved a ${existing.app_name} bug — please confirm the fix`,
-    }).catch(() => {});
-  }
-  if (data.status === 'in_progress' && data.reopenComment && existing.assigned_to) {
-    const reporter = unwrap(await supabase.from('users').select('name').eq('id', uid()).single());
-    await supabase.from('notifications').insert({
-      user_id: existing.assigned_to, type: 'bug_reopened',
-      title: `Bug reopened: ${existing.issue?.slice(0, 50)}`,
-      body: `${reporter.name} reopened the bug: ${data.reopenComment.slice(0, 80)}`,
-    }).catch(() => {});
-  }
+  // Send notifications on status changes (wrapped in try/catch — notifications are best-effort)
+  try {
+    if (data.status === 'resolved' && existing.reported_by && existing.reported_by !== uid()) {
+      const resolver = unwrap(await supabase.from('users').select('name').eq('id', uid()).single());
+      await supabase.from('notifications').insert({
+        user_id: existing.reported_by, type: 'bug_resolved',
+        title: `Bug resolved: ${existing.issue?.slice(0, 50)}`,
+        body: `${resolver.name} resolved a ${existing.app_name} bug — please confirm the fix`,
+      });
+    }
+    if (data.status === 'in_progress' && data.reopenComment && existing.assigned_to) {
+      const reporter = unwrap(await supabase.from('users').select('name').eq('id', uid()).single());
+      await supabase.from('notifications').insert({
+        user_id: existing.assigned_to, type: 'bug_reopened',
+        title: `Bug reopened: ${existing.issue?.slice(0, 50)}`,
+        body: `${reporter.name} reopened the bug: ${data.reopenComment.slice(0, 80)}`,
+      });
+    }
+  } catch (e) { console.warn('Bug notification failed:', e); }
 
   return result;
 }
