@@ -13,6 +13,9 @@ export default function useAlarms() {
     }
 
     const check = async () => {
+      // Create DB notifications for upcoming events + overdue tasks/subtasks
+      try { await api.syncReminders?.(); } catch {}
+
       try {
         const due = await api.alarmsDue?.();
         if (!due || !due.length) return;
@@ -46,7 +49,7 @@ export default function useAlarms() {
     };
 
     check();
-    timer.current = setInterval(check, 30000); // check every 30s
+    timer.current = setInterval(check, 60000); // check every 60s
     return () => clearInterval(timer.current);
   }, []);
 }

@@ -219,11 +219,26 @@ async function createProject(data) {
 
   // Add creator + members
   await supabase.from('project_members').insert({ project_id: p.id, user_id: uid() });
-  for (const mid of memberIds) {
-    if (mid !== uid()) {
-      await supabase.from('project_members').upsert({ project_id: p.id, user_id: mid }, { onConflict: 'project_id,user_id' });
-    }
+  const otherMembers = memberIds.filter(mid => mid !== uid());
+  for (const mid of otherMembers) {
+    await supabase.from('project_members').upsert({ project_id: p.id, user_id: mid }, { onConflict: 'project_id,user_id' });
   }
+
+  // Notify each added member
+  try {
+    if (otherMembers.length > 0) {
+      const { data: creator } = await supabase.from('users').select('name').eq('id', uid()).single();
+      const rows = otherMembers.map(mid => ({
+        user_id: mid,
+        type: 'project_created',
+        title: `Added to project: ${title}`,
+        body: `${creator?.name || 'Someone'} added you to "${title}"${deadline ? ' · Due ' + deadline : ''}`,
+        ref_project: p.id,
+      }));
+      await supabase.from('notifications').insert(rows);
+    }
+  } catch (e) { console.warn('project_created notification failed:', e); }
+
   return p;
 }
 
@@ -303,6 +318,27 @@ async function createSubtask(projectId, data) {
     });
   }
 
+  // Notify other project members (excluding creator + assignee) that a subtask was added
+  try {
+    const { data: proj } = await supabase.from('projects').select('title').eq('id', projectId).single();
+    const { data: members } = await supabase.from('project_members').select('user_id').eq('project_id', projectId);
+    const { data: adder } = await supabase.from('users').select('name').eq('id', uid()).single();
+    const recipientIds = (members || [])
+      .map(m => m.user_id)
+      .filter(mid => mid !== uid() && mid !== owner);
+    if (recipientIds.length > 0) {
+      const rows = recipientIds.map(mid => ({
+        user_id: mid,
+        type: 'subtask_added',
+        title: `New task added: ${title}`,
+        body: `${adder?.name || 'Someone'} added a task in "${proj?.title || 'project'}"`,
+        ref_subtask: sub.id,
+        ref_project: projectId,
+      }));
+      await supabase.from('notifications').insert(rows);
+    }
+  } catch (e) { console.warn('subtask_added notification failed:', e); }
+
   return sub;
 }
 
@@ -359,7 +395,7 @@ async function updateSubtask(id, data) {
 
   // Progress is auto-recalculated by the DB trigger
 
-  // When subtask completed, notify next subtask owner
+  // When subtask completed, notify next subtask owner + project owner + other members
   if (data.status === 'done') {
     const { data: nextSub } = await supabase
       .from('subtasks')
@@ -372,11 +408,12 @@ async function updateSubtask(id, data) {
       .limit(1)
       .maybeSingle();
 
+    const [completer, proj] = await Promise.all([
+      supabase.from('users').select('name').eq('id', uid()).single(),
+      supabase.from('projects').select('title, owner_id').eq('id', sub.project_id).single(),
+    ]);
+
     if (nextSub?.owner_id && nextSub.owner_id !== uid()) {
-      const [completer, proj] = await Promise.all([
-        supabase.from('users').select('name').eq('id', uid()).single(),
-        supabase.from('projects').select('title').eq('id', sub.project_id).single(),
-      ]);
       await supabase.from('notifications').insert({
         user_id: nextSub.owner_id,
         type: 'assignment',
@@ -386,13 +423,62 @@ async function updateSubtask(id, data) {
         ref_project: sub.project_id,
       });
     }
+
+    // Notify project members (except completer) that a subtask was completed
+    try {
+      const { data: members } = await supabase.from('project_members').select('user_id').eq('project_id', sub.project_id);
+      const nextOwnerId = nextSub?.owner_id;
+      const recipientIds = (members || [])
+        .map(m => m.user_id)
+        .filter(mid => mid !== uid() && mid !== nextOwnerId); // don't double-notify next owner
+      if (recipientIds.length > 0) {
+        const rows = recipientIds.map(mid => ({
+          user_id: mid,
+          type: 'subtask_completed',
+          title: `Task completed: ${sub.title}`,
+          body: `${completer.data?.name || 'Someone'} completed a task in "${proj.data?.title || 'project'}"`,
+          ref_subtask: sub.id,
+          ref_project: sub.project_id,
+        }));
+        await supabase.from('notifications').insert(rows);
+      }
+    } catch (e) { console.warn('subtask_completed notification failed:', e); }
   }
 
   return sub;
 }
 
 async function deleteSubtask(id) {
+  // Gather context before deletion so we can notify
+  let ctx = null;
+  try {
+    const { data: sub } = await supabase.from('subtasks')
+      .select('id, title, project_id, owner_id, projects(title)')
+      .eq('id', id).single();
+    ctx = sub;
+  } catch {}
+
   await supabase.from('subtasks').delete().eq('id', id);
+
+  // Notify project members (except deleter)
+  try {
+    if (ctx) {
+      const { data: members } = await supabase.from('project_members').select('user_id').eq('project_id', ctx.project_id);
+      const { data: deleter } = await supabase.from('users').select('name').eq('id', uid()).single();
+      const recipientIds = (members || []).map(m => m.user_id).filter(mid => mid !== uid());
+      if (recipientIds.length > 0) {
+        const rows = recipientIds.map(mid => ({
+          user_id: mid,
+          type: 'subtask_deleted',
+          title: `Task removed: ${ctx.title}`,
+          body: `${deleter?.name || 'Someone'} removed a task from "${ctx.projects?.title || 'project'}"`,
+          ref_project: ctx.project_id,
+        }));
+        await supabase.from('notifications').insert(rows);
+      }
+    }
+  } catch (e) { console.warn('subtask_deleted notification failed:', e); }
+
   return { ok: true };
 }
 
@@ -1058,6 +1144,92 @@ async function alarmsDue() {
   return data || [];
 }
 
+// Create notifications for upcoming events (10 min window) + overdue items.
+// Idempotent: checks meta.event_id / meta.task_id before inserting.
+async function syncReminders() {
+  const me = uid();
+  const nowMs = Date.now();
+  const in10Min = new Date(nowMs + 10 * 60 * 1000).toISOString();
+  const nowIso = new Date(nowMs).toISOString();
+
+  try {
+    // ─── Upcoming events (starting in the next 10 minutes) ───
+    // Events I'm attending OR I own
+    const [{ data: myEvents }, { data: attendingRows }] = await Promise.all([
+      supabase.from('events').select('id, title, start_time, duration_min, meet_link')
+        .eq('owner_id', me).gte('start_time', nowIso).lte('start_time', in10Min),
+      supabase.from('event_attendees').select('event_id, events(id, title, start_time, duration_min, meet_link)')
+        .eq('user_id', me),
+    ]);
+    const attendingEvents = (attendingRows || [])
+      .map(r => r.events).filter(e => e && e.start_time >= nowIso && e.start_time <= in10Min);
+    const allEvents = [...(myEvents || []), ...attendingEvents];
+    // Dedupe by id
+    const uniqEvents = Array.from(new Map(allEvents.map(e => [e.id, e])).values());
+
+    if (uniqEvents.length > 0) {
+      // Find already-sent reminders for these events (meta->>event_id)
+      const eventIds = uniqEvents.map(e => e.id);
+      const { data: existing } = await supabase.from('notifications')
+        .select('meta').eq('user_id', me).eq('type', 'event_reminder')
+        .in('meta->>event_id', eventIds);
+      const alreadySent = new Set((existing || []).map(r => r.meta?.event_id).filter(Boolean));
+
+      const toInsert = uniqEvents
+        .filter(e => !alreadySent.has(e.id))
+        .map(e => {
+          const mins = Math.max(1, Math.round((new Date(e.start_time).getTime() - nowMs) / 60000));
+          return {
+            user_id: me,
+            type: 'event_reminder',
+            title: `Starts in ${mins} min: ${e.title}`,
+            body: e.meet_link ? `Meeting link: ${e.meet_link}` : null,
+            meta: { event_id: e.id },
+          };
+        });
+      if (toInsert.length) await supabase.from('notifications').insert(toInsert);
+    }
+
+    // ─── Overdue tasks (deadline passed, not done) ───
+    const today = todayStr();
+    const { data: overdueTasks } = await supabase.from('tasks')
+      .select('id, title, deadline').eq('owner_id', me).neq('status', 'done')
+      .lt('deadline', today);
+    // Overdue subtasks assigned to me
+    const { data: overdueSubs } = await supabase.from('subtasks')
+      .select('id, title, deadline, project_id, projects(title)')
+      .eq('owner_id', me).neq('status', 'done').lt('deadline', today);
+
+    const overdueItems = [
+      ...(overdueTasks || []).map(t => ({ kind: 'task', id: t.id, title: t.title, deadline: t.deadline })),
+      ...(overdueSubs || []).map(s => ({ kind: 'subtask', id: s.id, title: s.title, deadline: s.deadline, project_id: s.project_id, project_title: s.projects?.title })),
+    ];
+
+    if (overdueItems.length > 0) {
+      const ids = overdueItems.map(i => `${i.kind}:${i.id}`);
+      const { data: existingOverdue } = await supabase.from('notifications')
+        .select('meta').eq('user_id', me).eq('type', 'overdue')
+        .in('meta->>ref', ids);
+      const already = new Set((existingOverdue || []).map(r => r.meta?.ref).filter(Boolean));
+
+      const toInsert = overdueItems
+        .filter(i => !already.has(`${i.kind}:${i.id}`))
+        .map(i => ({
+          user_id: me,
+          type: 'overdue',
+          title: `Overdue: ${i.title}`,
+          body: i.project_title ? `In "${i.project_title}" · was due ${i.deadline}` : `Was due ${i.deadline}`,
+          ref_subtask: i.kind === 'subtask' ? i.id : null,
+          ref_project: i.project_id || null,
+          meta: { ref: `${i.kind}:${i.id}` },
+        }));
+      if (toInsert.length) await supabase.from('notifications').insert(toInsert);
+    }
+  } catch (e) {
+    console.warn('syncReminders failed:', e);
+  }
+}
+
 // ── Activity Feed ────────────────────────────────────────
 
 async function activity(limit = 15) {
@@ -1438,6 +1610,7 @@ export const api = {
   focusStop,
   focusStats,
   alarmsDue,
+  syncReminders,
   bugs,
   bugApps,
   createBug,

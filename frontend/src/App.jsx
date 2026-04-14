@@ -46,7 +46,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated) refreshUnread();
+    if (!isAuthenticated) return;
+    refreshUnread();
+    // Poll unread count every 60s so newly-created notifications show up in the badge
+    const i = setInterval(refreshUnread, 60000);
+    return () => clearInterval(i);
   }, [isAuthenticated, refreshUnread]);
 
   useAlarms();
