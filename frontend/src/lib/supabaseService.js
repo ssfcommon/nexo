@@ -750,19 +750,26 @@ async function createComment(projectId, body, attachments = []) {
   try {
     const mentions = body.match(/@(\w+)/g) || [];
     if (mentions.length) {
-      const [{ data: proj }, { data: members }, { data: allUsers }] = await Promise.all([
-        supabase.from('projects').select('title').eq('id', projectId).single(),
-        supabase.from('project_members').select('user_id').eq('project_id', projectId),
-        supabase.from('users').select('id, name'),
+      const [{ data: proj }, { data: memberRows }] = await Promise.all([
+        supabase.from('projects').select('title, owner_id').eq('id', projectId).single(),
+        supabase.from('project_members').select('user_id, user:users!user_id(id, name)').eq('project_id', projectId),
       ]);
-      const memberIds = new Set((members || []).map(m => m.user_id));
+      // Project members (+ owner, just in case they weren't added to project_members)
+      const memberUsers = (memberRows || []).map(r => r.user).filter(Boolean);
+      if (proj?.owner_id && !memberUsers.find(u => u.id === proj.owner_id)) {
+        const { data: owner } = await supabase.from('users').select('id, name').eq('id', proj.owner_id).single();
+        if (owner) memberUsers.push(owner);
+      }
       const authorName = c.author?.name || 'Someone';
       const seen = new Set();
       for (const mention of mentions) {
         const want = mention.slice(1).toLowerCase();
-        const target = (allUsers || []).find(u => u.name?.toLowerCase().startsWith(want));
+        // Prefer first-name exact match, then fall back to substring match
+        const target =
+          memberUsers.find(u => u.name?.split(' ')[0]?.toLowerCase() === want) ||
+          memberUsers.find(u => u.name?.toLowerCase().startsWith(want)) ||
+          memberUsers.find(u => u.name?.toLowerCase().includes(want));
         if (!target || target.id === uid() || seen.has(target.id)) continue;
-        if (!memberIds.has(target.id)) continue; // only notify project members
         seen.add(target.id);
         await supabase.from('notifications').insert({
           user_id: target.id, type: 'mention',

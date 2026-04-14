@@ -350,6 +350,102 @@ function EditProjectModal({ open, onClose, project, onUpdated }) {
   );
 }
 
+function MentionInput({ value, onChange, onSubmit, members, placeholder, className }) {
+  const inputRef = React.useRef(null);
+  const [mentionQuery, setMentionQuery] = useState(null); // null | { start, query }
+  const [activeIdx, setActiveIdx] = useState(0);
+
+  const filtered = React.useMemo(() => {
+    if (mentionQuery == null) return [];
+    const q = mentionQuery.query.toLowerCase();
+    return (members || [])
+      .filter(m => m.name?.toLowerCase().includes(q))
+      .slice(0, 6);
+  }, [mentionQuery, members]);
+
+  const detect = (text, caret) => {
+    // Look backward from caret for '@' without whitespace in between
+    const prefix = text.slice(0, caret);
+    const m = prefix.match(/@(\w*)$/);
+    if (!m) return null;
+    return { start: caret - m[0].length, query: m[1] };
+  };
+
+  const handleChange = (e) => {
+    const text = e.target.value;
+    const caret = e.target.selectionStart || text.length;
+    onChange(text);
+    setMentionQuery(detect(text, caret));
+    setActiveIdx(0);
+  };
+
+  const select = (member) => {
+    const first = member.name.split(' ')[0];
+    const before = value.slice(0, mentionQuery.start);
+    const after = value.slice((inputRef.current?.selectionStart) ?? value.length);
+    const next = `${before}@${first} ${after}`;
+    onChange(next);
+    setMentionQuery(null);
+    setActiveIdx(0);
+    // Restore focus + caret right after the inserted mention
+    requestAnimationFrame(() => {
+      if (inputRef.current) {
+        const pos = before.length + first.length + 2; // @ + name + space
+        inputRef.current.focus();
+        inputRef.current.setSelectionRange(pos, pos);
+      }
+    });
+  };
+
+  const handleKeyDown = (e) => {
+    if (mentionQuery != null && filtered.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(i => (i + 1) % filtered.length); return; }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setActiveIdx(i => (i - 1 + filtered.length) % filtered.length); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); select(filtered[activeIdx]); return; }
+      if (e.key === 'Escape')    { setMentionQuery(null); return; }
+    }
+    if (e.key === 'Enter' && !e.shiftKey && onSubmit) { e.preventDefault(); onSubmit(); }
+  };
+
+  return (
+    <div className="relative flex-1">
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        onBlur={() => setTimeout(() => setMentionQuery(null), 120)}
+        placeholder={placeholder}
+        className={className}
+      />
+      {mentionQuery != null && filtered.length > 0 && (
+        <div className="absolute bottom-full left-0 mb-2 min-w-[220px] max-h-[240px] overflow-auto rounded-xl py-1.5 z-50"
+          style={{
+            background: 'linear-gradient(160deg, rgba(22,30,50,0.98) 0%, rgba(12,18,32,0.99) 100%)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.6)',
+          }}>
+          {filtered.map((m, i) => (
+            <button
+              key={m.id}
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); select(m); }}
+              onMouseEnter={() => setActiveIdx(i)}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors"
+              style={{ background: i === activeIdx ? 'rgba(91,140,255,0.12)' : 'transparent' }}>
+              <Avatar user={m} size={24} />
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-medium truncate" style={{ color: '#E5E7EB' }}>{m.name}</p>
+                {m.department && <p className="text-[11px] truncate" style={{ color: '#6B7280' }}>{m.department}</p>}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ProjectDetail({ projectId, me, onBack }) {
   const showToast = useToast();
   const [p, setP] = useState(null);
@@ -452,7 +548,7 @@ export default function ProjectDetail({ projectId, me, onBack }) {
     setConfirmDelete({ type: 'comment', id, title: 'this comment' });
   };
   const submitComment = async (e) => {
-    e.preventDefault();
+    e?.preventDefault?.();
     if (!newComment.trim() && pendingFiles.length === 0) return;
     try {
       const attachments = await Promise.all(
@@ -669,11 +765,13 @@ export default function ProjectDetail({ projectId, me, onBack }) {
         </div>
         <form onSubmit={submitComment} className="mt-3 space-y-2">
           <div className="flex items-center gap-2">
-            <input
+            <MentionInput
               value={newComment}
-              onChange={e => setNewComment(e.target.value)}
+              onChange={setNewComment}
+              onSubmit={() => submitComment()}
+              members={p.members || []}
               placeholder="Add a comment… use @Name to mention"
-              className="flex-1 px-4 h-11 rounded-pill border border-line-light bg-white text-[14px]"
+              className="w-full px-4 h-11 rounded-pill border border-line-light bg-white text-[14px]"
             />
             <label className="pill pill-outline cursor-pointer !px-3" title="Attach files">
               📎
