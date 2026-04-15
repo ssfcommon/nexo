@@ -532,10 +532,11 @@ export function ReportBugModal({ open, onClose, onCreated }) {
   const [previews, setPreviews] = useState([]);
   const [assignedTo, setAssignedTo] = useState('');
   const [deadline, setDeadline] = useState('');
+  const [priority, setPriority] = useState('medium');
   const [users, setUsers] = useState([]);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { if (open) { setAppName(''); setIssue(''); setScreenshots([]); setPreviews([]); setAssignedTo(''); setDeadline(''); api.users().then(setUsers); } }, [open]);
+  useEffect(() => { if (open) { setAppName(''); setIssue(''); setScreenshots([]); setPreviews([]); setAssignedTo(''); setDeadline(''); setPriority('medium'); api.users().then(setUsers); } }, [open]);
 
   const readFile = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
 
@@ -556,7 +557,7 @@ export function ReportBugModal({ open, onClose, onCreated }) {
     setBusy(true);
     try {
       const screenshotDataUrls = await Promise.all(screenshots.map(readFile));
-      await api.createBug({ appName: appName.trim(), issue: issue.trim(), screenshots: screenshotDataUrls, assignedTo: assignedTo || null, deadline: deadline || null });
+      await api.createBug({ appName: appName.trim(), issue: issue.trim(), screenshots: screenshotDataUrls, assignedTo: assignedTo || null, deadline: deadline || null, priority });
       onCreated?.();
       onClose();
     } catch (err) { showToast(err.message || 'Failed to report bug', 'error'); } finally { setBusy(false); }
@@ -606,6 +607,28 @@ export function ReportBugModal({ open, onClose, onCreated }) {
             <input type="date" className={inputCls} value={deadline} onChange={e => setDeadline(e.target.value)} />
           </Field>
         </div>
+        <Field label="Priority">
+          <div className="flex gap-2">
+            {[
+              { id: 'high',   label: 'High',   color: '#EF4444' },
+              { id: 'medium', label: 'Medium', color: '#F59E0B' },
+              { id: 'low',    label: 'Low',    color: '#6B7280' },
+            ].map(p => {
+              const active = priority === p.id;
+              return (
+                <button key={p.id} type="button" onClick={() => setPriority(p.id)}
+                  className="flex-1 h-10 rounded-[10px] text-[13px] font-semibold transition-all border-2"
+                  style={{
+                    borderColor: active ? p.color : 'transparent',
+                    backgroundColor: active ? `${p.color}15` : 'rgba(255,255,255,0.04)',
+                    color: active ? p.color : '#6B7280',
+                  }}>
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+        </Field>
         <button disabled={busy} type="submit" className="w-full h-11 rounded-[10px] bg-danger text-white font-semibold disabled:opacity-60">{busy ? 'Reporting…' : 'Report Bug'}</button>
       </form>
     </Modal>

@@ -1211,7 +1211,7 @@ async function bugApps() {
 }
 
 async function createBug(data) {
-  const { appName, issue, screenshots = [], assignedTo, deadline } = data;
+  const { appName, issue, screenshots = [], assignedTo, deadline, priority } = data;
   // Support legacy single screenshotDataUrl too
   const allScreenshots = data.screenshotDataUrl ? [data.screenshotDataUrl, ...screenshots] : screenshots;
 
@@ -1228,11 +1228,14 @@ async function createBug(data) {
   const screenshotUrl = uploadedUrls[0] || null;
   const extraScreenshots = uploadedUrls.slice(1);
 
+  const meta = {};
+  if (extraScreenshots.length > 0) meta.extra_screenshots = extraScreenshots;
+  if (priority) meta.priority = priority; // 'high' | 'medium' | 'low'
   const b = unwrap(await supabase.from('bugs').insert({
     app_name: appName, issue, screenshot_url: screenshotUrl,
     assigned_to: assignedTo || null, deadline: deadline || null,
     reported_by: uid(), status: 'open',
-    metadata: extraScreenshots.length > 0 ? { extra_screenshots: extraScreenshots } : {},
+    metadata: meta,
   }).select('*, assigned:users!assigned_to(name, initials, avatar_color, avatar_url), reporter:users!reported_by(name)').single());
 
   if (assignedTo && assignedTo !== uid()) {
@@ -1261,6 +1264,10 @@ async function updateBug(id, data) {
   if (data.assignedTo !== undefined) updates.assigned_to = data.assignedTo;
   if (data.deadline !== undefined) updates.deadline = data.deadline;
   if (data.resolution !== undefined) meta.resolution = data.resolution;
+  if (data.priority !== undefined) {
+    if (data.priority === null || data.priority === '') delete meta.priority;
+    else meta.priority = data.priority;
+  }
   if (data.reopenComment) {
     meta.reopen_comments = [...(meta.reopen_comments || []), { text: data.reopenComment, by: uid(), at: new Date().toISOString() }];
   }

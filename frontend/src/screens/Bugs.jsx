@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ASSET_ORIGIN } from '../api.js';
 import { Avatar } from '../components/ui.jsx';
 import HeaderActions from '../components/HeaderActions.jsx';
@@ -17,29 +17,111 @@ import {
   ClockIcon,
   BugIcon,
   CheckIcon,
-  CloseIcon,
 } from '../components/Icons.jsx';
 
-// ── Stages shared by BugDetailModal and status rendering ─────
-
+// ── Stages (status) ─────────────────────────────────────────────
 const BUG_STAGES = [
   { id: 'open',        label: 'Open',        color: '#EF4444' },
   { id: 'in_progress', label: 'In Progress', color: '#F59E0B' },
   { id: 'resolved',    label: 'Resolved',    color: '#22C55E' },
   { id: 'confirmed',   label: 'Confirmed',   color: '#3B82F6' },
 ];
-
 const statusColor = (s) => (BUG_STAGES.find(x => x.id === s) || BUG_STAGES[0]).color;
 const statusLabel = (s) => (BUG_STAGES.find(x => x.id === s) || BUG_STAGES[0]).label;
 
-// ── Bug Detail Modal ─────────────────────────────────────────
+// ── Priority (H/M/L) ────────────────────────────────────────────
+const PRIORITIES = [
+  { id: 'high',   label: 'High',   letter: 'H', color: '#EF4444' },
+  { id: 'medium', label: 'Medium', letter: 'M', color: '#F59E0B' },
+  { id: 'low',    label: 'Low',    letter: 'L', color: '#9CA3AF' },
+];
+const priorityOf = (bug) => bug?.metadata?.priority || null;
 
+function PriorityChip({ priority }) {
+  const p = PRIORITIES.find(x => x.id === priority);
+  if (!p) return null;
+  return (
+    <span
+      className="inline-flex items-center justify-center w-5 h-5 rounded-[6px] text-[10px] font-bold flex-shrink-0 tabular-nums"
+      style={{
+        color: p.color,
+        background: `${p.color}15`,
+        border: `1px solid ${p.color}33`,
+      }}
+      title={`${p.label} priority`}
+    >
+      {p.letter}
+    </span>
+  );
+}
+
+// ── Deadline helpers (urgency-colored, matches Home) ───────────
+function deadlineLabel(d) {
+  if (!d) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  if (d < today) return 'Overdue';
+  if (d === today) return 'Today';
+  if (d === tomorrow) return 'Tomorrow';
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+function deadlineColor(d) {
+  if (!d) return '#9CA3AF';
+  const today = new Date().toISOString().slice(0, 10);
+  if (d < today) return '#EF4444';   // overdue
+  if (d === today) return '#F59E0B'; // today
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  if (d === tomorrow) return '#F59E0B';
+  return '#9CA3AF';
+}
+
+// ── Stepper (replaces 4-bar ladder in modal) ───────────────────
+function StageStepper({ status }) {
+  const currentIdx = BUG_STAGES.findIndex(s => s.id === status);
+  return (
+    <div className="flex items-center">
+      {BUG_STAGES.map((stage, i) => {
+        const isPast = i < currentIdx;
+        const isCurrent = i === currentIdx;
+        const isFuture = i > currentIdx;
+        const dotColor = isFuture ? 'rgba(255,255,255,0.15)' : stage.color;
+        return (
+          <React.Fragment key={stage.id}>
+            <div className="flex flex-col items-center gap-1" style={{ minWidth: 60 }}>
+              <span
+                className="w-3 h-3 rounded-full transition-all"
+                style={{
+                  background: dotColor,
+                  boxShadow: isCurrent ? `0 0 0 3px ${stage.color}33, 0 0 8px ${stage.color}80` : 'none',
+                }}
+              />
+              <span
+                className="text-[10px] font-semibold whitespace-nowrap"
+                style={{ color: isFuture ? '#6B7280' : stage.color, opacity: isPast ? 0.7 : 1 }}
+              >
+                {stage.label}
+              </span>
+            </div>
+            {i < BUG_STAGES.length - 1 && (
+              <div className="flex-1 h-px mb-4"
+                style={{ background: i < currentIdx ? BUG_STAGES[i].color : 'rgba(255,255,255,0.08)' }}
+              />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Bug Detail Modal ───────────────────────────────────────────
 function BugDetailModal({ open, onClose, bug, users, onUpdated, meId }) {
   const showToast = useToast();
   const [status, setStatus] = useState('');
   const [resolution, setResolution] = useState('');
   const [reopenComment, setReopenComment] = useState('');
   const [assignedTo, setAssignedTo] = useState('');
+  const [priority, setPriority] = useState('');
   const [busy, setBusy] = useState(false);
   const [showReopen, setShowReopen] = useState(false);
 
@@ -48,6 +130,7 @@ function BugDetailModal({ open, onClose, bug, users, onUpdated, meId }) {
       setStatus(bug.status);
       setResolution(bug.metadata?.resolution || '');
       setAssignedTo(bug.assigned_to || '');
+      setPriority(bug.metadata?.priority || 'medium');
       setReopenComment('');
       setShowReopen(false);
     }
@@ -56,8 +139,6 @@ function BugDetailModal({ open, onClose, bug, users, onUpdated, meId }) {
   if (!bug) return null;
 
   const isReporter = bug.reported_by === meId;
-  const currentStage = BUG_STAGES.find(s => s.id === bug.status) || BUG_STAGES[0];
-
   const allowedStatuses = (() => {
     if (bug.status === 'confirmed') return [];
     if (bug.status === 'resolved' && isReporter) return [];
@@ -70,6 +151,7 @@ function BugDetailModal({ open, onClose, bug, users, onUpdated, meId }) {
       const patch = { status };
       if (resolution.trim()) patch.resolution = resolution.trim();
       if (assignedTo !== (bug.assigned_to || '')) patch.assignedTo = assignedTo || null;
+      if (priority !== (bug.metadata?.priority || 'medium')) patch.priority = priority;
       await api.updateBug(bug.id, patch);
       showToast(status === 'resolved' ? 'Bug resolved — awaiting reporter confirmation' : 'Bug updated');
       onUpdated?.();
@@ -87,6 +169,16 @@ function BugDetailModal({ open, onClose, bug, users, onUpdated, meId }) {
     } catch (err) { showToast(err.message || 'Failed to confirm', 'error'); } finally { setBusy(false); }
   };
 
+  const reopenFromConfirmed = async () => {
+    setBusy(true);
+    try {
+      await api.updateBug(bug.id, { status: 'in_progress', reopenComment: 'Reopened from archive' });
+      showToast('Bug reopened');
+      onUpdated?.();
+      onClose();
+    } catch (err) { showToast(err.message || 'Failed to reopen', 'error'); } finally { setBusy(false); }
+  };
+
   const reopenBug = async () => {
     if (!reopenComment.trim()) return;
     setBusy(true);
@@ -98,30 +190,27 @@ function BugDetailModal({ open, onClose, bug, users, onUpdated, meId }) {
     } catch (err) { showToast(err.message || 'Failed to reopen', 'error'); } finally { setBusy(false); }
   };
 
+  // Modal title = first chunk of the issue, fallback to app name
+  const title = (bug.issue || '').trim().slice(0, 60) || `${bug.app_name} bug`;
+  const truncated = (bug.issue || '').length > 60;
+
   return (
-    <Modal open={open} onClose={onClose} title="Bug Details">
+    <Modal open={open} onClose={onClose} title={title + (truncated ? '…' : '')}>
       <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: currentStage.color }} />
-          <span className="text-[12px] font-bold uppercase text-ink-400">{bug.app_name}</span>
-          <span className="ml-auto text-[11px] text-ink-300">Reported by {bug.reporter_name?.split(' ')[0] || '—'}</span>
+        {/* Meta row */}
+        <div className="flex items-center gap-2 text-[11px] text-ink-400">
+          <span className="font-bold uppercase tracking-wide">{bug.app_name}</span>
+          <PriorityChip priority={priorityOf(bug)} />
+          <span className="ml-auto">Reported by {bug.reporter_name?.split(' ')[0] || '—'}</span>
         </div>
 
-        {/* Stage progress bar */}
-        <div className="flex items-center gap-1">
-          {BUG_STAGES.map((stage, i) => {
-            const stageIdx = BUG_STAGES.findIndex(s => s.id === bug.status);
-            const isPast = i <= stageIdx;
-            return (
-              <div key={stage.id} className="flex flex-col items-center gap-1 flex-1">
-                <div className="w-full h-1.5 rounded-full transition-all" style={{ background: isPast ? stage.color : 'rgba(255,255,255,0.08)' }} />
-                <span className="text-[9px] font-semibold" style={{ color: isPast ? stage.color : '#4B5563' }}>{stage.label}</span>
-              </div>
-            );
-          })}
-        </div>
+        {/* Stage stepper */}
+        <StageStepper status={bug.status} />
 
-        <p className="text-[15px] text-ink-900 leading-relaxed">{bug.issue}</p>
+        {/* Full issue text (only shown if title was truncated) */}
+        {truncated && (
+          <p className="text-[14px] text-ink-700 leading-relaxed">{bug.issue}</p>
+        )}
 
         {/* Screenshots */}
         {(() => {
@@ -132,7 +221,7 @@ function BugDetailModal({ open, onClose, bug, users, onUpdated, meId }) {
               {allUrls.map((url, i) => (
                 <a key={i} href={url.startsWith('http') ? url : ASSET_ORIGIN + url} target="_blank" rel="noreferrer">
                   <img src={url.startsWith('http') ? url : ASSET_ORIGIN + url} alt={`screenshot ${i + 1}`}
-                    className={allUrls.length === 1 ? 'w-full max-h-48 rounded-[10px] object-cover border border-line-light' : 'w-24 h-24 rounded-[8px] object-cover border border-line-light'} />
+                    className={allUrls.length === 1 ? 'w-full max-h-48 rounded-[10px] object-cover border border-white/10' : 'w-24 h-24 rounded-[8px] object-cover border border-white/10'} />
                 </a>
               ))}
             </div>
@@ -140,8 +229,15 @@ function BugDetailModal({ open, onClose, bug, users, onUpdated, meId }) {
         })()}
 
         <div className="flex items-center gap-4 text-[12px] text-ink-500">
-          {bug.deadline && <span className="flex items-center gap-1.5"><CalendarIcon width="13" height="13" /> Due {bug.deadline}</span>}
-          <span className="flex items-center gap-1.5"><ClockIcon width="13" height="13" /> {new Date(bug.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+          {bug.deadline && (
+            <span className="flex items-center gap-1.5" style={{ color: deadlineColor(bug.deadline) }}>
+              <CalendarIcon width="13" height="13" /> Due {deadlineLabel(bug.deadline)}
+            </span>
+          )}
+          <span className="flex items-center gap-1.5">
+            <ClockIcon width="13" height="13" />
+            {new Date(bug.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </span>
         </div>
 
         {bug.metadata?.resolution && (
@@ -232,6 +328,25 @@ function BugDetailModal({ open, onClose, bug, users, onUpdated, meId }) {
               </Field>
             )}
 
+            <Field label="Priority">
+              <div className="flex gap-2">
+                {PRIORITIES.map(p => {
+                  const active = priority === p.id;
+                  return (
+                    <button key={p.id} type="button" onClick={() => setPriority(p.id)}
+                      className="flex-1 h-10 rounded-[10px] text-[13px] font-semibold transition-all border-2"
+                      style={{
+                        borderColor: active ? p.color : 'transparent',
+                        backgroundColor: active ? `${p.color}15` : 'rgba(255,255,255,0.04)',
+                        color: active ? p.color : '#6B7280',
+                      }}>
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+
             <Field label="Assigned to">
               <select className={inputCls} value={assignedTo} onChange={e => setAssignedTo(e.target.value)}>
                 <option value="">Unassigned</option>
@@ -259,11 +374,19 @@ function BugDetailModal({ open, onClose, bug, users, onUpdated, meId }) {
           </>
         )}
 
+        {/* Confirmed — archive; reopening still possible */}
         {bug.status === 'confirmed' && (
-          <div className="text-center py-2">
-            <span className="text-[14px] font-semibold inline-flex items-center gap-1.5" style={{ color: '#3B82F6' }}>
-              <CheckIcon width="16" height="16" /> Bug confirmed as fixed
-            </span>
+          <div className="space-y-3">
+            <div className="text-center py-1">
+              <span className="text-[14px] font-semibold inline-flex items-center gap-1.5" style={{ color: '#3B82F6' }}>
+                <CheckIcon width="16" height="16" /> Confirmed fixed · archived
+              </span>
+            </div>
+            <button onClick={reopenFromConfirmed} disabled={busy}
+              className="w-full h-10 rounded-[10px] text-[13px] font-semibold transition-all disabled:opacity-60"
+              style={{ background: 'rgba(239,68,68,0.12)', color: '#F87171', border: '1px solid rgba(239,68,68,0.25)' }}>
+              {busy ? 'Reopening…' : 'Reopen bug'}
+            </button>
           </div>
         )}
       </div>
@@ -271,15 +394,19 @@ function BugDetailModal({ open, onClose, bug, users, onUpdated, meId }) {
   );
 }
 
-// ── Filter popover ───────────────────────────────────────────
-
-function FilterPopover({ open, onClose, apps, appFilter, onAppFilterChange }) {
+// ── Filter popover (3 dimensions) ───────────────────────────────
+function FilterPopover({ open, onClose, apps, appFilter, setAppFilter, priorityFilter, setPriorityFilter, scope, setScope }) {
   if (!open) return null;
+  const scopes = [
+    { id: 'all',      label: 'All' },
+    { id: 'assigned', label: 'Assigned to me' },
+    { id: 'reported', label: 'Reported by me' },
+  ];
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
-        className="absolute right-0 top-[calc(100%+6px)] z-50 w-56 rounded-[12px] p-3"
+        className="absolute right-0 top-[calc(100%+6px)] z-50 w-64 rounded-[12px] p-3 space-y-3"
         style={{
           background: 'linear-gradient(180deg, rgba(22,24,32,0.98) 0%, rgba(16,18,24,0.98) 100%)',
           border: '1px solid rgba(255,255,255,0.10)',
@@ -287,22 +414,64 @@ function FilterPopover({ open, onClose, apps, appFilter, onAppFilterChange }) {
           boxShadow: '0 10px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)',
         }}
       >
-        <p className="text-[10px] font-bold uppercase tracking-wide text-ink-400 mb-1.5">App</p>
-        <select
-          value={appFilter}
-          onChange={e => onAppFilterChange(e.target.value)}
-          className="w-full h-9 px-2.5 rounded-[8px] text-[13px] bg-white/5 text-ink-900 border border-white/10 focus:outline-none focus:border-brand-blue/50"
-        >
-          <option value="">All apps</option>
-          {apps.map(a => <option key={a} value={a}>{a}</option>)}
-        </select>
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-ink-400 mb-1.5">Scope</p>
+          <div className="flex gap-1.5">
+            {scopes.map(s => {
+              const active = scope === s.id;
+              return (
+                <button key={s.id} onClick={() => setScope(s.id)}
+                  className="flex-1 h-8 rounded-md text-[11px] font-semibold transition"
+                  style={{
+                    background: active ? 'rgba(91,140,255,0.15)' : 'rgba(255,255,255,0.04)',
+                    color: active ? '#A8C4FF' : '#9CA3AF',
+                    border: active ? '1px solid rgba(91,140,255,0.30)' : '1px solid rgba(255,255,255,0.08)',
+                  }}>
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-ink-400 mb-1.5">App</p>
+          <select
+            value={appFilter}
+            onChange={e => setAppFilter(e.target.value)}
+            className="w-full h-9 px-2.5 rounded-[8px] text-[13px] bg-white/5 text-ink-900 border border-white/10 focus:outline-none focus:border-brand-blue/50"
+          >
+            <option value="">All apps</option>
+            {apps.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-ink-400 mb-1.5">Priority</p>
+          <div className="flex gap-1.5">
+            {[{ id: '', label: 'All' }, ...PRIORITIES].map(p => {
+              const active = priorityFilter === p.id;
+              const color = p.color || '#9CA3AF';
+              return (
+                <button key={p.id || 'all'} onClick={() => setPriorityFilter(p.id)}
+                  className="flex-1 h-8 rounded-md text-[11px] font-semibold transition"
+                  style={{
+                    background: active ? `${color}15` : 'rgba(255,255,255,0.04)',
+                    color: active ? color : '#9CA3AF',
+                    border: active ? `1px solid ${color}55` : '1px solid rgba(255,255,255,0.08)',
+                  }}>
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </>
   );
 }
 
-// ── Overflow menu ────────────────────────────────────────────
-
+// ── Overflow menu ──────────────────────────────────────────────
 function OverflowMenu({ open, onClose, onExportCsv }) {
   if (!open) return null;
   return (
@@ -329,22 +498,25 @@ function OverflowMenu({ open, onClose, onExportCsv }) {
   );
 }
 
-// ── Bug card ─────────────────────────────────────────────────
-
+// ── Bug card ───────────────────────────────────────────────────
 function BugCard({ bug, onOpen, onInlineConfirm, onInlineReopen, meId, busy }) {
   const isReporter = bug.reported_by === meId;
+  const isAssignee = bug.assigned_to === meId;
   const isAwaitingMyConfirm = bug.status === 'resolved' && isReporter;
   const isConfirmed = bug.status === 'confirmed';
+  const isResolved = bug.status === 'resolved';
 
   const accent =
     isConfirmed ? 'none' :
     isAwaitingMyConfirm ? 'green' :
-    bug.status === 'resolved' ? 'none' :
+    isResolved ? 'none' :
     bug.status === 'in_progress' ? 'amber' :
     'red';
 
-  const tagColor = statusColor(bug.status);
-  const tagLabel = isAwaitingMyConfirm ? 'Confirm?' : statusLabel(bug.status);
+  // Status is encoded in the accent bar + section; show status text inline
+  // next to the app name only when the distinction matters within a section
+  // (Active section: open vs in_progress).
+  const showInlineStatus = bug.status === 'open' || bug.status === 'in_progress';
 
   const subtle = isConfirmed ? 'opacity-50' : '';
 
@@ -355,30 +527,50 @@ function BugCard({ bug, onOpen, onInlineConfirm, onInlineReopen, meId, busy }) {
         className="w-full text-left flex items-start gap-3 pl-4 pr-3 py-3"
       >
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] font-bold uppercase tracking-wide text-ink-400">{bug.app_name}</span>
-            <span
-              className="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-full"
-              style={{ color: tagColor, background: `${tagColor}20`, border: `1px solid ${tagColor}33` }}
-            >
-              {tagLabel}
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-ink-400 truncate">
+              {bug.app_name}
+              {showInlineStatus && (
+                <span className="text-ink-500 font-semibold normal-case tracking-normal"> · {statusLabel(bug.status).toLowerCase()}</span>
+              )}
+            </span>
+            <span className="ml-auto flex items-center gap-1.5">
+              <PriorityChip priority={priorityOf(bug)} />
             </span>
           </div>
-          <p className={'text-[14px] leading-snug ' + (isConfirmed || bug.status === 'resolved' ? 'text-ink-400' : 'text-ink-900 font-medium')}>
+
+          <p className={'text-[14px] leading-snug ' + (isConfirmed || isResolved ? 'text-ink-400' : 'text-ink-900 font-medium')}>
             {bug.issue}
           </p>
-          {bug.metadata?.resolution && (isConfirmed || bug.status === 'resolved') && (
-            <p className="text-[11px] text-ink-500 mt-1 italic truncate">✓ {bug.metadata.resolution}</p>
+
+          {bug.metadata?.resolution && (isConfirmed || isResolved) && (
+            <p className="text-[11px] text-ink-500 mt-1 truncate flex items-center gap-1">
+              <CheckIcon width="10" height="10" />
+              <span className="truncate">{bug.metadata.resolution}</span>
+            </p>
           )}
+
           <div className="flex items-center gap-3 mt-2 text-[11px] text-ink-500">
-            {bug.assigned_name && (
+            {bug.assigned_name && !isAssignee && (
               <span className="flex items-center gap-1.5">
                 <Avatar user={{ initials: bug.assigned_initials, avatar_color: bug.assigned_color, avatar_url: bug.assigned_avatar }} size={16} />
                 {bug.assigned_name.split(' ')[0]}
               </span>
             )}
-            {bug.deadline && <span className="flex items-center gap-1"><CalendarIcon width="12" height="12" /> {bug.deadline}</span>}
-            <span>by {bug.reporter_name?.split(' ')[0]}</span>
+            {isAssignee && (
+              <span className="text-ink-400 font-semibold">Assigned to you</span>
+            )}
+            {bug.deadline && (
+              <span
+                className="flex items-center gap-1 tabular-nums"
+                style={{ color: deadlineColor(bug.deadline), fontWeight: deadlineColor(bug.deadline) === '#EF4444' ? 700 : 500 }}
+              >
+                <CalendarIcon width="12" height="12" /> {deadlineLabel(bug.deadline)}
+              </span>
+            )}
+            {!isReporter && bug.reporter_name && (
+              <span>by {bug.reporter_name.split(' ')[0]}</span>
+            )}
           </div>
         </div>
 
@@ -422,8 +614,31 @@ function BugCard({ bug, onOpen, onInlineConfirm, onInlineReopen, meId, busy }) {
   );
 }
 
-// ── Bugs screen ──────────────────────────────────────────────
+// ── Section — compact, consistent label ────────────────────────
+function Section({ title, count, color, children }) {
+  return (
+    <section>
+      <p className="text-[11px] font-bold uppercase tracking-wide mb-2 flex items-center gap-1.5"
+        style={{ color: color || '#9CA3AF' }}>
+        {title}
+        {count > 0 && <span className="tabular-nums opacity-80">· {count}</span>}
+      </p>
+      <div className="space-y-2">{children}</div>
+    </section>
+  );
+}
 
+// Sort by deadline ASC with nulls last (matches Projects)
+const byDeadline = (a, b) => {
+  const da = a?.deadline || null;
+  const db = b?.deadline || null;
+  if (!da && !db) return 0;
+  if (!da) return 1;
+  if (!db) return -1;
+  return da.localeCompare(db);
+};
+
+// ── Bugs screen ────────────────────────────────────────────────
 export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab }) {
   const showToast = useToast();
   const [bugs, setBugs] = useState([]);
@@ -431,6 +646,8 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
   const [users, setUsers] = useState([]);
   const [query, setQuery] = useState('');
   const [appFilter, setAppFilter] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState('');
+  const [scope, setScope] = useState('all'); // 'all' | 'assigned' | 'reported'
   const [addOpen, setAddOpen] = useState(false);
   const [showConfirmed, setShowConfirmed] = useState(false);
   const [detailBug, setDetailBug] = useState(null);
@@ -440,6 +657,7 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
 
   const filterWrap = useRef(null);
   const moreWrap = useRef(null);
+  const searchInputRef = useRef(null);
 
   const load = () => {
     api.bugs(appFilter || undefined).then(setBugs);
@@ -448,21 +666,29 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
   useEffect(() => { load(); }, [appFilter]);
   useEffect(() => { api.users().then(setUsers); }, []);
 
-  // Filter by query (issue text)
-  const visible = bugs.filter(b =>
-    !query.trim() || b.issue.toLowerCase().includes(query.toLowerCase()) || b.app_name.toLowerCase().includes(query.toLowerCase())
-  );
-
   const meId = me?.id;
-  const awaitingMine = visible.filter(b => b.status === 'resolved' && b.reported_by === meId);
-  const openBugs = visible.filter(b => b.status === 'open' || b.status === 'in_progress');
-  const awaitingOthers = visible.filter(b => b.status === 'resolved' && b.reported_by !== meId);
-  const confirmedBugs = visible.filter(b => b.status === 'confirmed');
+
+  // Apply all filters: search, scope, priority (app is server-side via appFilter)
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return bugs.filter(b => {
+      if (q && !b.issue.toLowerCase().includes(q) && !b.app_name.toLowerCase().includes(q)) return false;
+      if (priorityFilter && priorityOf(b) !== priorityFilter) return false;
+      if (scope === 'assigned' && b.assigned_to !== meId) return false;
+      if (scope === 'reported' && b.reported_by !== meId) return false;
+      return true;
+    });
+  }, [bugs, query, priorityFilter, scope, meId]);
+
+  const awaitingMine    = useMemo(() => visible.filter(b => b.status === 'resolved' && b.reported_by === meId).sort(byDeadline), [visible, meId]);
+  const openBugs        = useMemo(() => visible.filter(b => b.status === 'open' || b.status === 'in_progress').sort(byDeadline), [visible]);
+  const awaitingOthers  = useMemo(() => visible.filter(b => b.status === 'resolved' && b.reported_by !== meId).sort(byDeadline), [visible, meId]);
+  const confirmedBugs   = useMemo(() => visible.filter(b => b.status === 'confirmed').sort(byDeadline), [visible]);
 
   const exportCsv = () => {
-    const rows = [['#','App','Issue','Status','Assigned','Deadline']];
-    visible.forEach((b,i) => rows.push([i+1, b.app_name, `"${(b.issue||'').replace(/"/g,'""')}"`, b.status, b.assigned_name||'', b.deadline||'']));
-    const blob = new Blob([rows.map(r=>r.join(',')).join('\n')], {type:'text/csv'});
+    const rows = [['#','App','Issue','Status','Priority','Assigned','Deadline']];
+    visible.forEach((b,i) => rows.push([i+1, b.app_name, `"${(b.issue||'').replace(/"/g,'""')}"`, b.status, priorityOf(b) || '', b.assigned_name||'', b.deadline||'']));
+    const blob = new Blob([rows.map(r=>r.join(',')).join('\n')], { type:'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `bugs-${appFilter||'all'}-${new Date().toISOString().slice(0,10)}.csv`;
@@ -482,11 +708,51 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
     }
   };
 
-  // Inline "Not fixed" opens the detail modal with reopen UI primed,
-  // since we need a comment — don't fake a shortcut.
+  // Inline "Not fixed" opens the detail modal with reopen UI primed —
+  // we need a comment, so don't fake a shortcut.
   const inlineReopen = (bug) => { setDetailBug(bug); };
 
   const hasAny = visible.length > 0 || confirmedBugs.length > 0;
+
+  // ── Keyboard shortcuts (desktop) ──
+  const onKey = useCallback((e) => {
+    const tag = e.target?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target?.isContentEditable) {
+      // "/" focuses search even from other keypress origins — already blocked by input/textarea guard,
+      // but nothing to do here.
+      return;
+    }
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if (e.key === 'n' || e.key === 'N') { e.preventDefault(); setAddOpen(true); }
+    else if (e.key === '/') { e.preventDefault(); searchInputRef.current?.focus(); }
+    else if (e.key === 'c' || e.key === 'C') {
+      if (awaitingMine.length > 0 && !inlineBusy) { e.preventDefault(); inlineConfirm(awaitingMine[0]); }
+    }
+  }, [awaitingMine, inlineBusy]);
+  useEffect(() => {
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onKey]);
+
+  // Chips for active filters (scope="all" + empty app/priority/query = no chips)
+  const chips = [];
+  if (scope !== 'all') {
+    const label = scope === 'assigned' ? 'Assigned to me' : 'Reported by me';
+    chips.push({ label, clear: () => setScope('all') });
+  }
+  if (appFilter) chips.push({ label: appFilter, clear: () => setAppFilter('') });
+  if (priorityFilter) {
+    const p = PRIORITIES.find(x => x.id === priorityFilter);
+    chips.push({ label: `${p?.label || priorityFilter} priority`, clear: () => setPriorityFilter('') });
+  }
+
+  // Subtitle: active / to confirm / archived — each segment muted when 0
+  const subtitleSegments = [
+    { label: `${openBugs.length} active`, strong: openBugs.length > 0 },
+    { label: `${awaitingMine.length} to confirm`, strong: awaitingMine.length > 0 },
+    { label: `${confirmedBugs.length} archived`, strong: false },
+  ];
 
   return (
     <div className="space-y-5 pb-24">
@@ -494,8 +760,13 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
       <div className="flex items-center justify-between pt-2 gap-3">
         <div className="min-w-0">
           <h1 className="text-[26px] sm:text-3xl font-bold text-ink-900 tracking-tight leading-tight">Bugs</h1>
-          <p className="text-[13px] text-ink-500 mt-1">
-            {openBugs.length} open{awaitingMine.length > 0 ? ` · ${awaitingMine.length} to confirm` : ''}
+          <p className="text-[13px] text-ink-400 mt-1">
+            {subtitleSegments.map((s, i) => (
+              <React.Fragment key={i}>
+                {i > 0 && <span className="text-ink-400 mx-1">·</span>}
+                <span className={s.strong ? 'text-ink-700 font-medium' : 'text-ink-400'}>{s.label}</span>
+              </React.Fragment>
+            ))}
           </p>
         </div>
         <HeaderActions
@@ -514,6 +785,7 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
             <SearchIcon width="16" height="16" />
           </span>
           <input
+            ref={searchInputRef}
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="Search bugs…"
@@ -529,14 +801,18 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
             aria-label="Filter bugs"
           >
             <FilterIcon />
-            {appFilter ? <span className="text-brand-blue">· 1</span> : null}
+            {chips.length > 0 ? <span className="text-brand-blue">· {chips.length}</span> : null}
           </button>
           <FilterPopover
             open={filterOpen}
             onClose={() => setFilterOpen(false)}
             apps={apps}
             appFilter={appFilter}
-            onAppFilterChange={(v) => { setAppFilter(v); setFilterOpen(false); }}
+            setAppFilter={setAppFilter}
+            priorityFilter={priorityFilter}
+            setPriorityFilter={setPriorityFilter}
+            scope={scope}
+            setScope={setScope}
           />
         </div>
 
@@ -572,9 +848,9 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
       </div>
 
       {/* Active filter chips */}
-      {appFilter && (
+      {chips.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          <FilterChip label={appFilter} onRemove={() => setAppFilter('')} />
+          {chips.map((c, i) => <FilterChip key={i} label={c.label} onRemove={c.clear} />)}
         </div>
       )}
 
@@ -585,101 +861,55 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
             <span className="text-ink-400"><BugIcon /></span>
           </div>
           <p className="text-[15px] font-semibold text-ink-900">
-            {query || appFilter ? 'No bugs match' : 'No bugs reported'}
+            {chips.length > 0 || query ? 'No bugs match' : 'No bugs reported'}
           </p>
           <p className="text-[12px] text-ink-500 mt-1">
-            {query || appFilter ? 'Try a different search or clear the filter.' : 'Nothing to triage — nice.'}
+            {chips.length > 0 || query ? 'Try a different search or clear the filters.' : 'Nothing to triage — nice.'}
           </p>
         </div>
       )}
 
-      {/* Awaiting your confirmation */}
+      {/* Sections */}
       {awaitingMine.length > 0 && (
-        <section>
-          <p className="text-[11px] font-bold uppercase tracking-wide text-[#22C55E] mb-2">
-            Awaiting your confirmation · {awaitingMine.length}
-          </p>
-          <div className="space-y-2">
-            {awaitingMine.map(b => (
-              <BugCard
-                key={b.id}
-                bug={b}
-                meId={meId}
-                onOpen={() => setDetailBug(b)}
-                onInlineConfirm={inlineConfirm}
-                onInlineReopen={inlineReopen}
-                busy={inlineBusy}
-              />
-            ))}
-          </div>
-        </section>
+        <Section title="Confirm fix" count={awaitingMine.length} color="#22C55E">
+          {awaitingMine.map(b => (
+            <BugCard key={b.id} bug={b} meId={meId} onOpen={() => setDetailBug(b)} onInlineConfirm={inlineConfirm} onInlineReopen={inlineReopen} busy={inlineBusy} />
+          ))}
+        </Section>
       )}
 
-      {/* Open / In Progress */}
       {openBugs.length > 0 && (
-        <section>
-          <p className="text-[11px] font-bold uppercase tracking-wide text-ink-500 mb-2">
-            Active · {openBugs.length}
-          </p>
-          <div className="space-y-2">
-            {openBugs.map(b => (
-              <BugCard
-                key={b.id}
-                bug={b}
-                meId={meId}
-                onOpen={() => setDetailBug(b)}
-                onInlineConfirm={inlineConfirm}
-                onInlineReopen={inlineReopen}
-                busy={inlineBusy}
-              />
-            ))}
-          </div>
-        </section>
+        <Section title="Active" count={openBugs.length}>
+          {openBugs.map(b => (
+            <BugCard key={b.id} bug={b} meId={meId} onOpen={() => setDetailBug(b)} onInlineConfirm={inlineConfirm} onInlineReopen={inlineReopen} busy={inlineBusy} />
+          ))}
+        </Section>
       )}
 
-      {/* Resolved (not mine to confirm) */}
       {awaitingOthers.length > 0 && (
-        <section>
-          <p className="text-[11px] font-bold uppercase tracking-wide text-ink-500 mb-2">
-            Resolved · waiting on reporter · {awaitingOthers.length}
-          </p>
-          <div className="space-y-2">
-            {awaitingOthers.map(b => (
-              <BugCard
-                key={b.id}
-                bug={b}
-                meId={meId}
-                onOpen={() => setDetailBug(b)}
-                onInlineConfirm={inlineConfirm}
-                onInlineReopen={inlineReopen}
-                busy={inlineBusy}
-              />
-            ))}
-          </div>
-        </section>
+        <Section title="Awaiting reporter" count={awaitingOthers.length}>
+          {awaitingOthers.map(b => (
+            <BugCard key={b.id} bug={b} meId={meId} onOpen={() => setDetailBug(b)} onInlineConfirm={inlineConfirm} onInlineReopen={inlineReopen} busy={inlineBusy} />
+          ))}
+        </Section>
       )}
 
-      {/* Confirmed (toggleable) */}
       {confirmedBugs.length > 0 && (
         <section>
           <button
             onClick={() => setShowConfirmed(v => !v)}
-            className="w-full text-[12px] font-medium text-ink-400 hover:text-ink-700 py-2 transition"
+            className="w-full text-[11px] font-bold uppercase tracking-wide text-ink-400 hover:text-ink-700 py-2 transition flex items-center justify-between"
           >
-            {showConfirmed ? 'Hide' : 'Show'} {confirmedBugs.length} confirmed bug{confirmedBugs.length !== 1 ? 's' : ''}
+            <span>Confirmed · {confirmedBugs.length}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              className={'transition ' + (showConfirmed ? 'rotate-180' : '')}>
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
           </button>
           {showConfirmed && (
             <div className="space-y-2 mt-1">
               {confirmedBugs.map(b => (
-                <BugCard
-                  key={b.id}
-                  bug={b}
-                  meId={meId}
-                  onOpen={() => setDetailBug(b)}
-                  onInlineConfirm={inlineConfirm}
-                  onInlineReopen={inlineReopen}
-                  busy={inlineBusy}
-                />
+                <BugCard key={b.id} bug={b} meId={meId} onOpen={() => setDetailBug(b)} onInlineConfirm={inlineConfirm} onInlineReopen={inlineReopen} busy={inlineBusy} />
               ))}
             </div>
           )}
