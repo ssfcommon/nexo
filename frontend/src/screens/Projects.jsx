@@ -243,21 +243,13 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
   useEffect(() => { loadProjects(); }, [scope]);
   useEffect(() => { loadTasks(); }, []);
 
-  if (openId) {
-    return <ProjectDetail projectId={openId} me={me} onBack={() => { setOpenId(null); loadProjects(); }} onSwitchTab={onSwitchTab} />;
-  }
-
-  const toggleTask = async (t) => {
-    try {
-      const next = t.status === 'done' ? 'pending' : 'done';
-      await api.updateTask(t.id, { status: next });
-      if (next === 'done') fireConfetti();
-      setQuickTasks(ts => ts.map(x => x.id === t.id ? { ...x, status: next } : x));
-    } catch (err) { showToast(err.message || 'Failed to update task', 'error'); }
-  };
-
   // Client-side filter the fetched list. Project counts are small; DB-side
   // filtering would be premature optimisation.
+  //
+  // IMPORTANT: these memos must stay above the `if (openId)` early return
+  // below. Moving them after the return violates the Rules of Hooks —
+  // React will throw "Rendered fewer hooks than expected" when you click
+  // a project (openId flips and the memo calls get skipped).
   const departments = useMemo(
     () => Array.from(new Set(projects.map(p => p.department).filter(Boolean))).sort(),
     [projects]
@@ -272,6 +264,19 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
       return true;
     });
   }, [projects, query, department, priority]);
+
+  if (openId) {
+    return <ProjectDetail projectId={openId} me={me} onBack={() => { setOpenId(null); loadProjects(); }} onSwitchTab={onSwitchTab} />;
+  }
+
+  const toggleTask = async (t) => {
+    try {
+      const next = t.status === 'done' ? 'pending' : 'done';
+      await api.updateTask(t.id, { status: next });
+      if (next === 'done') fireConfetti();
+      setQuickTasks(ts => ts.map(x => x.id === t.id ? { ...x, status: next } : x));
+    } catch (err) { showToast(err.message || 'Failed to update task', 'error'); }
+  };
 
   const pendingTaskCount = quickTasks.filter(t => t.status !== 'done').length;
 
