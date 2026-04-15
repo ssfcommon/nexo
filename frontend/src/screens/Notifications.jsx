@@ -38,7 +38,27 @@ function timeAgo(iso) {
   return new Date(iso).toLocaleDateString();
 }
 
-function AssignmentCard({ n, onChanged, onNavigate }) {
+// Small circular button on every card: filled when unread, empty ring when read.
+// Click toggles between states. Uses stopPropagation so it doesn't also fire the
+// card's own click handler (navigate / mark-read).
+function ReadToggle({ read, onToggle, accent = '#5B8CFF' }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onToggle(); }}
+      aria-label={read ? 'Mark as unread' : 'Mark as read'}
+      title={read ? 'Mark as unread' : 'Mark as read'}
+      className="flex-shrink-0 w-3 h-3 rounded-full mt-1.5 transition-all hover:scale-125 active:scale-90"
+      style={{
+        background: read ? 'transparent' : accent,
+        border: read ? '1.5px solid rgba(255,255,255,0.22)' : `1.5px solid ${accent}`,
+        boxShadow: read ? 'none' : `0 0 6px ${accent}`,
+      }}
+    />
+  );
+}
+
+function AssignmentCard({ n, onChanged, onNavigate, onToggleRead }) {
   const [mode, setMode] = useState(null);
   const [deadline, setDeadline] = useState(new Date().toISOString().slice(0, 10));
   const [note, setNote] = useState('');
@@ -57,11 +77,12 @@ function AssignmentCard({ n, onChanged, onNavigate }) {
   const canNav = !!(n.project_id || n.subtask_id);
   const navigate = () => { if (canNav) onNavigate?.('projects', { kind: 'project', id: n.project_id }); };
   return (
-    <div className="rounded-[14px] p-4 border"
+    <div className="rounded-[14px] p-4 border transition-opacity"
       style={{
         background: n.read ? 'rgba(255,255,255,0.02)' : 'rgba(91,140,255,0.06)',
         borderColor: n.read ? 'rgba(255,255,255,0.06)' : 'rgba(91,140,255,0.2)',
         backdropFilter: 'blur(12px)',
+        opacity: n.read ? 0.62 : 1,
       }}>
       <div className="flex items-start gap-3">
         <span className="text-[20px]" style={{ filter: `drop-shadow(0 0 6px ${meta.accent}40)` }}>{meta.icon}</span>
@@ -72,7 +93,10 @@ function AssignmentCard({ n, onChanged, onNavigate }) {
             className={canNav ? 'cursor-pointer' : ''}>
             <div className="flex items-start justify-between gap-2">
               <p className="font-semibold text-[14px]" style={{ color: '#E5E7EB' }}>{n.title}</p>
-              <span className="text-[10px] flex-shrink-0" style={{ color: '#6B7280' }}>{timeAgo(n.created_at)}</span>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className="text-[10px]" style={{ color: '#6B7280' }}>{timeAgo(n.created_at)}</span>
+                <ReadToggle read={n.read} onToggle={() => onToggleRead?.(n)} accent={meta.accent} />
+              </div>
             </div>
             {n.body && <p className="text-[13px] mt-1" style={{ color: '#9CA3AF' }}>{n.body}</p>}
           </div>
@@ -129,7 +153,7 @@ function AssignmentCard({ n, onChanged, onNavigate }) {
   );
 }
 
-function DailySummaryCard({ n, onMarkRead }) {
+function DailySummaryCard({ n, onMarkRead, onToggleRead }) {
   const meta = TYPE_META.daily_summary;
   const m = n.meta || {};
   const handleClick = () => { if (!n.read) onMarkRead?.(n.id); };
@@ -145,13 +169,17 @@ function DailySummaryCard({ n, onMarkRead }) {
         borderColor: n.read ? 'rgba(255,255,255,0.08)' : 'rgba(167,139,250,0.3)',
         backdropFilter: 'blur(12px)',
         boxShadow: n.read ? 'none' : '0 0 24px rgba(167,139,250,0.12)',
+        opacity: n.read ? 0.62 : 1,
       }}>
       <div className="flex items-start gap-3">
         <span className="text-[24px]" style={{ filter: `drop-shadow(0 0 8px ${meta.accent}60)` }}>{meta.icon}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <p className="font-bold text-[15px]" style={{ color: '#E5E7EB' }}>{n.title}</p>
-            <span className="text-[10px] flex-shrink-0" style={{ color: '#6B7280' }}>{timeAgo(n.created_at)}</span>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <span className="text-[10px]" style={{ color: '#6B7280' }}>{timeAgo(n.created_at)}</span>
+              <ReadToggle read={n.read} onToggle={() => onToggleRead?.(n)} accent={meta.accent} />
+            </div>
           </div>
           {(m.done != null || m.pending != null || m.upcoming != null) && (
             <div className="flex gap-2 mt-2">
@@ -180,15 +208,14 @@ function DailySummaryCard({ n, onMarkRead }) {
               style={{ color: '#CBD5E1', fontFamily: 'inherit' }}>{n.body}</pre>
           )}
         </div>
-        {!n.read && <span className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5" style={{ background: meta.accent, boxShadow: `0 0 6px ${meta.accent}` }} />}
       </div>
     </div>
   );
 }
 
-function NotifCard({ n, onChanged, onMarkRead, onNavigate }) {
-  if (n.type === 'assignment' && n.subtask_id) return <AssignmentCard n={n} onChanged={onChanged} onNavigate={onNavigate} />;
-  if (n.type === 'daily_summary') return <DailySummaryCard n={n} onMarkRead={onMarkRead} />;
+function NotifCard({ n, onChanged, onMarkRead, onToggleRead, onNavigate }) {
+  if (n.type === 'assignment' && n.subtask_id) return <AssignmentCard n={n} onChanged={onChanged} onNavigate={onNavigate} onToggleRead={onToggleRead} />;
+  if (n.type === 'daily_summary') return <DailySummaryCard n={n} onMarkRead={onMarkRead} onToggleRead={onToggleRead} />;
 
   const meta = TYPE_META[n.type] || { icon: '🔔', accent: '#6B7280' };
   const canNav = !!(n.project_id || n.subtask_id);
@@ -206,17 +233,20 @@ function NotifCard({ n, onChanged, onMarkRead, onNavigate }) {
         background: n.read ? 'rgba(255,255,255,0.02)' : `${meta.accent}10`,
         borderColor: n.read ? 'rgba(255,255,255,0.06)' : `${meta.accent}33`,
         backdropFilter: 'blur(12px)',
+        opacity: n.read ? 0.62 : 1,
       }}>
       <div className="flex items-start gap-3">
         <span className="text-[20px]" style={{ filter: `drop-shadow(0 0 6px ${meta.accent}40)` }}>{meta.icon}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <p className="font-semibold text-[14px]" style={{ color: '#E5E7EB' }}>{n.title}</p>
-            <span className="text-[10px] flex-shrink-0" style={{ color: '#6B7280' }}>{timeAgo(n.created_at)}</span>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <span className="text-[10px]" style={{ color: '#6B7280' }}>{timeAgo(n.created_at)}</span>
+              <ReadToggle read={n.read} onToggle={() => onToggleRead?.(n)} accent={meta.accent} />
+            </div>
           </div>
           {n.body && <p className="text-[13px] mt-1" style={{ color: '#9CA3AF' }}>{n.body}</p>}
         </div>
-        {!n.read && <span className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5" style={{ background: meta.accent, boxShadow: `0 0 6px ${meta.accent}` }} />}
       </div>
     </div>
   );
@@ -225,6 +255,8 @@ function NotifCard({ n, onChanged, onMarkRead, onNavigate }) {
 export default function Notifications({ onClose, onNavigate }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all'); // 'all' | 'unread'
+
   const load = async () => {
     setLoading(true);
     try { setItems(await api.notifications()); } finally { setLoading(false); }
@@ -236,6 +268,20 @@ export default function Notifications({ onClose, onNavigate }) {
     try { await api.markRead(id); } catch {}
   };
 
+  // Toggle a single notification's read/unread state. Called from ReadToggle
+  // on every card type.
+  const toggleRead = async (n) => {
+    const next = !n.read;
+    setItems(prev => prev.map(x => x.id === n.id ? { ...x, read: next } : x));
+    try {
+      if (next) await api.markRead(n.id);
+      else await api.markUnread(n.id);
+    } catch {
+      // Revert on error
+      setItems(prev => prev.map(x => x.id === n.id ? { ...x, read: !next } : x));
+    }
+  };
+
   const markAllRead = async () => {
     const unread = items.filter(n => !n.read);
     setItems(prev => prev.map(n => ({ ...n, read: true })));
@@ -245,6 +291,7 @@ export default function Notifications({ onClose, onNavigate }) {
   };
 
   const unreadCount = items.filter(n => !n.read).length;
+  const visible = filter === 'unread' ? items.filter(n => !n.read) : items;
 
   return (
     <div className="space-y-5">
@@ -267,6 +314,51 @@ export default function Notifications({ onClose, onNavigate }) {
           </button>
         )}
       </div>
+
+      {/* Filter tabs: All / Unread */}
+      <div
+        className="inline-flex gap-1 p-1 rounded-[12px]"
+        style={{
+          background: 'rgba(255,255,255,0.04)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          backdropFilter: 'blur(8px)',
+        }}
+      >
+        {[
+          { id: 'all', label: 'All', count: items.length },
+          { id: 'unread', label: 'Unread', count: unreadCount },
+        ].map(tab => {
+          const active = filter === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setFilter(tab.id)}
+              className="h-7 px-3 rounded-[8px] text-[12px] font-semibold transition-all flex items-center gap-1.5"
+              style={{
+                background: active ? 'rgba(91,140,255,0.18)' : 'transparent',
+                color: active ? '#7EB0FF' : '#9CA3AF',
+                boxShadow: active ? 'inset 0 0 0 1px rgba(91,140,255,0.28)' : 'none',
+              }}
+            >
+              {tab.label}
+              {tab.count > 0 && (
+                <span
+                  className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                  style={{
+                    background: active ? 'rgba(91,140,255,0.22)' : 'rgba(255,255,255,0.06)',
+                    color: active ? '#7EB0FF' : '#6B7280',
+                    minWidth: '18px',
+                    textAlign: 'center',
+                  }}
+                >
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
       <div className="space-y-2.5">
         {loading && items.length === 0 && (
           <p className="text-center text-sm py-8" style={{ color: '#6B7280' }}>Loading…</p>
@@ -277,7 +369,22 @@ export default function Notifications({ onClose, onNavigate }) {
             <p className="text-sm" style={{ color: '#6B7280' }}>All caught up.</p>
           </div>
         )}
-        {items.map(n => <NotifCard key={n.id} n={n} onChanged={load} onMarkRead={markRead} onNavigate={onNavigate} />)}
+        {!loading && items.length > 0 && visible.length === 0 && (
+          <div className="text-center py-10">
+            <div className="text-[32px] mb-2">✨</div>
+            <p className="text-sm" style={{ color: '#6B7280' }}>No unread notifications.</p>
+          </div>
+        )}
+        {visible.map(n => (
+          <NotifCard
+            key={n.id}
+            n={n}
+            onChanged={load}
+            onMarkRead={markRead}
+            onToggleRead={toggleRead}
+            onNavigate={onNavigate}
+          />
+        ))}
       </div>
     </div>
   );

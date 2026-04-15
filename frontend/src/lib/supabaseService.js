@@ -1028,6 +1028,11 @@ async function markRead(id) {
   return { ok: true };
 }
 
+async function markUnread(id) {
+  await supabase.from('notifications').update({ is_read: false }).eq('id', id);
+  return { ok: true };
+}
+
 // ── Streaks ──────────────────────────────────────────────
 
 async function streaks() {
@@ -1905,6 +1910,7 @@ export const api = {
   logStreak,
   notifications,
   markRead,
+  markUnread,
   leaves,
   addLeave,
   deleteLeave,
