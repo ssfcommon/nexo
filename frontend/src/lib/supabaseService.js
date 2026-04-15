@@ -165,10 +165,10 @@ async function project(id) {
     .eq('project_id', id);
   p.members = (memberRows || []).map(m => m.user);
 
-  // Subtasks with owner info
+  // Subtasks with assignee (owner) and creator (assigned_by) info
   const { data: subtasks } = await supabase
     .from('subtasks')
-    .select('*, owner:users!owner_id(name, initials, avatar_color, avatar_url)')
+    .select('*, owner:users!owner_id(name, initials, avatar_color, avatar_url), creator:users!assigned_by(name, initials, avatar_color, avatar_url)')
     .eq('project_id', id)
     .order('sort_order', { ascending: true });
   p.subtasks = (subtasks || []).map(s => ({
@@ -178,7 +178,12 @@ async function project(id) {
     owner_initials: s.owner?.initials || null,
     owner_color: s.owner?.avatar_color || null,
     owner_avatar: s.owner?.avatar_url || null,
+    creator_name: s.creator?.name || null,
+    creator_initials: s.creator?.initials || null,
+    creator_color: s.creator?.avatar_color || null,
+    creator_avatar: s.creator?.avatar_url || null,
     owner: undefined,
+    creator: undefined,
   }));
 
   // Comments with author info

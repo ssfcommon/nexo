@@ -89,7 +89,7 @@ function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke
   const submit = (e) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
-    onAdd(newTitle.trim(), ownerId ? Number(ownerId) : null, deadline || null, null, newComplexity || null);
+    onAdd(newTitle.trim(), ownerId || null, deadline || null, null, newComplexity || null);
     setNewTitle('');
     setOwnerId('');
     setDeadline('');
@@ -161,6 +161,15 @@ function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke
                   {s.deadline && (
                     <span className="text-[11px]" style={{ color: '#6B7280' }}>
                       Due {new Date(s.deadline).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                    </span>
+                  )}
+                  {s.creator_name && s.assigned_by && s.assigned_by !== s.owner_id && (
+                    <span
+                      className="text-[11px]"
+                      style={{ color: '#4B5563' }}
+                      title={`Created by ${s.creator_name}`}
+                    >
+                      · by {s.creator_name.split(' ')[0]}
                     </span>
                   )}
                 </div>
@@ -261,7 +270,7 @@ function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke
             {leaveWarn && (
               <div className="rounded-[8px] px-3 py-2 text-[12px] flex items-start gap-2" style={{ backgroundColor: 'rgba(245,158,11,0.1)', color: '#B45309' }}>
                 <span>⚠️</span>
-                <span>{members.find(m => m.id === Number(ownerId))?.name.split(' ')[0]} is on leave {leaveWarn.from} → {leaveWarn.to}. You can still assign, but they'll see it on return.</span>
+                <span>{members.find(m => m.id === ownerId)?.name.split(' ')[0]} is on leave {leaveWarn.from} → {leaveWarn.to}. You can still assign, but they'll see it on return.</span>
               </div>
             )}
           </>
