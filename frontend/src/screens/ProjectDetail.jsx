@@ -68,6 +68,7 @@ function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke
   const [leaveWarn, setLeaveWarn] = useState(null);
   const [addingSubFor, setAddingSubFor] = useState(null);
   const [subTitle, setSubTitle] = useState('');
+  const [subDeadline, setSubDeadline] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [editComplexity, setEditComplexity] = useState('');
@@ -89,7 +90,14 @@ function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke
   const submit = (e) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
-    onAdd(newTitle.trim(), ownerId || null, deadline || null, null, newComplexity || null);
+    // Deadline is mandatory — don't let the form submit without one, and
+    // make the gap visually obvious by flashing focus onto the date field.
+    if (!deadline) {
+      const el = e.currentTarget?.querySelector?.('input[type="date"]');
+      if (el) el.focus();
+      return;
+    }
+    onAdd(newTitle.trim(), ownerId || null, deadline, null, newComplexity || null);
     setNewTitle('');
     setOwnerId('');
     setDeadline('');
@@ -199,11 +207,23 @@ function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke
           )}
         </div>
 
-        {/* Inline substep form */}
+        {/* Inline substep form — deadline required, same as top-level form */}
         {addingSubFor === s.id && (
           <form
-            onSubmit={(e) => { e.preventDefault(); if (subTitle.trim()) { onAdd(subTitle.trim(), null, null, s.id); setSubTitle(''); setAddingSubFor(null); } }}
-            className="flex items-center gap-2 py-2.5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!subTitle.trim()) return;
+              if (!subDeadline) {
+                const el = e.currentTarget?.querySelector?.('input[type="date"]');
+                if (el) el.focus();
+                return;
+              }
+              onAdd(subTitle.trim(), null, subDeadline, s.id);
+              setSubTitle('');
+              setSubDeadline('');
+              setAddingSubFor(null);
+            }}
+            className="flex flex-wrap items-center gap-2 py-2.5"
             style={{ paddingLeft: `${(s.depth || 0) * 20 + 48}px`, paddingRight: '16px', background: 'rgba(91,140,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
           >
             <div className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(91,140,255,0.15)' }}>
@@ -213,12 +233,25 @@ function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke
               value={subTitle}
               onChange={e => setSubTitle(e.target.value)}
               placeholder="Add a substep…"
-              className="flex-1 bg-transparent text-[13px] outline-none"
+              className="flex-1 min-w-[140px] bg-transparent text-[13px] outline-none"
               style={{ color: '#E5E7EB' }}
               autoFocus
             />
+            <input
+              type="date"
+              value={subDeadline}
+              onChange={e => setSubDeadline(e.target.value)}
+              required
+              aria-label="Deadline (required)"
+              title="Deadline is required"
+              className="h-7 px-2 text-[12px] rounded-lg input-base"
+              style={{
+                borderColor: subDeadline ? undefined : 'rgba(245,158,11,0.5)',
+                boxShadow: subDeadline ? undefined : 'inset 0 0 0 1px rgba(245,158,11,0.25)',
+              }}
+            />
             <button type="submit" className="h-7 px-2.5 text-[12px] font-semibold rounded-lg" style={{ background: 'rgba(91,140,255,0.15)', color: '#7EB0FF' }}>Add</button>
-            <button type="button" onClick={() => setAddingSubFor(null)} className="h-7 px-2 text-[12px] rounded-lg" style={{ color: '#6B7280' }}>Cancel</button>
+            <button type="button" onClick={() => { setAddingSubFor(null); setSubDeadline(''); setSubTitle(''); }} className="h-7 px-2 text-[12px] rounded-lg" style={{ color: '#6B7280' }}>Cancel</button>
           </form>
         )}
       </React.Fragment>
@@ -263,10 +296,22 @@ function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke
                 type="date"
                 value={deadline}
                 onChange={e => setDeadline(e.target.value)}
+                required
+                aria-label="Deadline (required)"
+                title="Deadline is required"
                 className="h-9 px-2 text-[13px] rounded-[8px] input-base"
+                style={{
+                  borderColor: deadline ? undefined : 'rgba(245,158,11,0.5)',
+                  boxShadow: deadline ? undefined : 'inset 0 0 0 1px rgba(245,158,11,0.25)',
+                }}
               />
               <button type="submit" className="pill pill-primary !h-9 !px-3 !text-[13px]">Add</button>
             </div>
+            {!deadline && (
+              <p className="text-[11px]" style={{ color: '#F59E0B' }}>
+                Pick a deadline — every subtask needs one so it can surface on Home's "This Week".
+              </p>
+            )}
             {leaveWarn && (
               <div className="rounded-[8px] px-3 py-2 text-[12px] flex items-start gap-2" style={{ backgroundColor: 'rgba(245,158,11,0.1)', color: '#B45309' }}>
                 <span>⚠️</span>

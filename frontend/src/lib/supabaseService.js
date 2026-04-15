@@ -271,6 +271,19 @@ async function createSubtask(projectId, data) {
   const owner = ownerId || uid();
   const assignedToOther = owner !== uid();
 
+  // Deadline is mandatory: fall back to the project's deadline when the caller
+  // didn't supply one (template application, child substeps, etc.). If the
+  // project itself has no deadline, refuse — every subtask must have a date.
+  let finalDeadline = deadline || null;
+  if (!finalDeadline) {
+    const { data: proj } = await supabase
+      .from('projects').select('deadline').eq('id', projectId).maybeSingle();
+    finalDeadline = proj?.deadline || null;
+  }
+  if (!finalDeadline) {
+    throw new Error('Deadline is required for every subtask.');
+  }
+
   // Find max sort_order
   const { data: maxRow } = await supabase
     .from('subtasks')
@@ -296,7 +309,7 @@ async function createSubtask(projectId, data) {
     owner_id: owner,
     assigned_by: uid(),
     assignment_status: assignedToOther ? 'pending' : 'accepted',
-    deadline: deadline || null,
+    deadline: finalDeadline,
     complexity: mapComplexityToDB(complexity),
     sort_order: maxSort + 1,
   }).select().single());
@@ -308,16 +321,16 @@ async function createSubtask(projectId, data) {
       supabase.from('users').select('name').eq('id', uid()).single(),
     ]);
     let leaveWarn = '';
-    if (deadline) {
+    if (finalDeadline) {
       const { data: leave } = await supabase.from('leaves')
-        .select('*').eq('user_id', owner).lte('start_date', deadline).gte('end_date', deadline).maybeSingle();
+        .select('*').eq('user_id', owner).lte('start_date', finalDeadline).gte('end_date', finalDeadline).maybeSingle();
       if (leave) leaveWarn = ' · ⚠️ assigned during your leave';
     }
     await supabase.from('notifications').insert({
       user_id: owner,
       type: 'assignment',
       title: `New Task Assigned: ${title}`,
-      body: `From ${assigner.data?.name || 'someone'} · ${proj.data?.title || ''}${deadline ? ' · Due ' + deadline : ''}${leaveWarn}`,
+      body: `From ${assigner.data?.name || 'someone'} · ${proj.data?.title || ''}${finalDeadline ? ' · Due ' + finalDeadline : ''}${leaveWarn}`,
       ref_subtask: sub.id,
       ref_project: projectId,
     });
@@ -673,11 +686,17 @@ async function applyTemplate(id, data) {
   for (const mid of memberIds) {
     if (mid !== uid()) await supabase.from('project_members').upsert({ project_id: p.id, user_id: mid }, { onConflict: 'project_id,user_id' });
   }
+  // Subtasks inherit the project's deadline so every subtask has a date.
+  // Callers that create projects from templates MUST supply a deadline.
+  if (!p.deadline) {
+    throw new Error('Project deadline is required — subtasks inherit it.');
+  }
   for (let i = 0; i < subtaskTitles.length; i++) {
     await supabase.from('subtasks').insert({
       project_id: p.id, title: subtaskTitles[i],
       owner_id: uid(), assigned_by: uid(),
       assignment_status: 'accepted', sort_order: i + 1,
+      deadline: p.deadline,
     });
   }
   return p;
