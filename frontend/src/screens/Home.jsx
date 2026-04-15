@@ -5,6 +5,8 @@ import HeaderActions from '../components/HeaderActions.jsx';
 import { SkeletonCard, EmptyState } from '../components/Skeleton.jsx';
 import useLiveUpdates from '../hooks/useLiveUpdates.js';
 import { useToast } from '../context/ToastContext.jsx';
+import AlarmModal from '../components/AlarmModal.jsx';
+import RowActions from '../components/RowActions.jsx';
 
 function greeting() {
   const h = new Date().getHours();
@@ -31,7 +33,7 @@ function relLabel(deadline) {
   return past ? `${pretty} ago` : `in ${pretty}`;
 }
 
-function TaskCard({ task, onComplete, completing }) {
+function TaskCard({ task, onComplete, completing, onSetAlarm, onAddToCal }) {
   const today = new Date().toISOString().slice(0, 10);
   const overdue = task.deadline && task.deadline < today;
   const dueToday = task.deadline === today;
@@ -93,6 +95,14 @@ function TaskCard({ task, onComplete, completing }) {
           </p>
         )}
       </div>
+      {(onSetAlarm || onAddToCal) && (
+        <RowActions
+          item={task}
+          size="sm"
+          onSetAlarm={onSetAlarm}
+          onAddToCal={onAddToCal}
+        />
+      )}
       <span className="text-xs font-medium flex-shrink-0 opacity-70" style={{ color: styles.text }}>{relLabel(task.deadline)}</span>
     </div>
   );
@@ -147,6 +157,7 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
   const [showAllActivity, setShowAllActivity] = useState(false);
   const [showAllUrgent, setShowAllUrgent] = useState(false);
   const [completingIds, setCompletingIds] = useState(() => new Set());
+  const [alarmItem, setAlarmItem] = useState(null); // { id, title, deadline, alarm_at, kind }
 
   const reloadTasks = () => api.homeTasks().then(setTasks);
   const reloadActivity = () => api.activity(8).then(setActivity);
@@ -216,6 +227,11 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
                 task={t}
                 onComplete={handleComplete}
                 completing={completingIds.has(`${t.kind}:${t.id}`)}
+                onSetAlarm={(item) => setAlarmItem(item)}
+                onAddToCal={(item) => {
+                  onSwitchTab?.('calendar', { addEvent: item.title });
+                  showToast('Opening calendar — add the details');
+                }}
               />
             ))
           )}
@@ -337,6 +353,19 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
           )}
         </div>
       </div>
+
+      <AlarmModal
+        open={!!alarmItem}
+        item={alarmItem}
+        kind={alarmItem?.kind === 'subtask' ? 'subtask' : 'task'}
+        onClose={() => setAlarmItem(null)}
+        onSaved={(ts) => {
+          // Patch the row in place so the amber accent appears immediately.
+          setTasks(prev => prev.map(t =>
+            t.id === alarmItem.id && t.kind === alarmItem.kind ? { ...t, alarm_at: ts } : t
+          ));
+        }}
+      />
     </div>
   );
 }

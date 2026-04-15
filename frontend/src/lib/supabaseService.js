@@ -408,6 +408,7 @@ async function updateSubtask(id, data) {
   if (data.ownerId) updates.owner_id = data.ownerId;
   if (data.complexity !== undefined) updates.complexity = mapComplexityToDB(data.complexity);
   if (data.sort_order !== undefined) updates.sort_order = data.sort_order;
+  if (data.alarm_at !== undefined) updates.alarm_at = data.alarm_at;
 
   const sub = unwrap(await supabase.from('subtasks').update(updates).eq('id', id).select().single());
 
@@ -572,7 +573,7 @@ async function homeTasks({ windowDays = 7 } = {}) {
   const [tasksRes, subtasksRes] = await Promise.all([
     supabase
       .from('tasks')
-      .select('id, title, deadline, status, is_quick, project_id')
+      .select('id, title, deadline, status, is_quick, project_id, alarm_at')
       .eq('owner_id', uid())
       .neq('status', 'done')
       .not('deadline', 'is', null)
@@ -580,7 +581,7 @@ async function homeTasks({ windowDays = 7 } = {}) {
       .order('deadline', { ascending: true }),
     supabase
       .from('subtasks')
-      .select('id, title, deadline, status, project_id, project:projects(title)')
+      .select('id, title, deadline, status, project_id, alarm_at, project:projects(title)')
       .eq('owner_id', uid())
       .neq('status', 'done')
       .neq('assignment_status', 'declined')
@@ -593,6 +594,7 @@ async function homeTasks({ windowDays = 7 } = {}) {
     id: t.id,
     title: t.title,
     deadline: t.deadline,
+    alarm_at: t.alarm_at || null,
     kind: 'task',
     project_title: null,
     project_id: t.project_id || null,
@@ -601,6 +603,7 @@ async function homeTasks({ windowDays = 7 } = {}) {
     id: s.id,
     title: s.title,
     deadline: s.deadline,
+    alarm_at: s.alarm_at || null,
     kind: 'subtask',
     project_title: s.project?.title || null,
     project_id: s.project_id,
@@ -1880,7 +1883,12 @@ async function digestPreview() {
 // ── No-op stubs ──────────────────────────────────────────
 
 async function resetSeed() { return { ok: false, error: 'Use Supabase dashboard to reseed' }; }
-function setAlarm(taskId, alarmAt) { return updateTask(taskId, { alarm_at: alarmAt }); }
+// Set/clear an alarm on a task or subtask. `kind` defaults to 'task' for
+// backwards compatibility with the original Quick Tasks callsite.
+function setAlarm(id, alarmAt, kind = 'task') {
+  if (kind === 'subtask') return updateSubtask(id, { alarm_at: alarmAt });
+  return updateTask(id, { alarm_at: alarmAt });
+}
 
 // ── Export ───────────────────────────────────────────────
 

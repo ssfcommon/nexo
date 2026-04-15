@@ -7,6 +7,8 @@ import { fireConfetti } from '../components/Confetti.jsx';
 import KanbanBoard from '../components/KanbanBoard.jsx';
 import GanttChart from '../components/GanttChart.jsx';
 import ConfirmModal from '../components/ConfirmModal.jsx';
+import AlarmModal from '../components/AlarmModal.jsx';
+import RowActions from '../components/RowActions.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import useLiveUpdates from '../hooks/useLiveUpdates.js';
 
@@ -61,7 +63,7 @@ function SubtaskMenu({ s, meId, depth, onEdit, onDelete, onPoke, onAddSub }) {
   );
 }
 
-function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke, onEdit, onDelete, onReorder }) {
+function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke, onEdit, onDelete, onReorder, onSetAlarm, onAddToCal }) {
   const [newTitle, setNewTitle] = useState('');
   const [ownerId, setOwnerId] = useState('');
   const [deadline, setDeadline] = useState('');
@@ -190,6 +192,18 @@ function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke
             <Avatar
               user={{ initials: s.owner_initials, avatar_color: s.owner_color, avatar_url: s.owner_avatar, name: s.owner_name }}
               size={28}
+            />
+          )}
+
+          {/* Row actions — alarm + add to calendar. Only on the user's own
+              active subtasks (matches Quick Tasks semantics) and hidden while
+              editing. Kept compact (24px) so the row stays clean. */}
+          {editingId !== s.id && s.status !== 'done' && s.owner_id === meId && (onSetAlarm || onAddToCal) && (
+            <RowActions
+              item={s}
+              size="sm"
+              onSetAlarm={onSetAlarm}
+              onAddToCal={onAddToCal}
             />
           )}
 
@@ -500,7 +514,7 @@ function MentionInput({ value, onChange, onSubmit, members, placeholder, classNa
   );
 }
 
-export default function ProjectDetail({ projectId, me, onBack }) {
+export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
   const showToast = useToast();
   const [p, setP] = useState(null);
   const [newComment, setNewComment] = useState('');
@@ -510,6 +524,7 @@ export default function ProjectDetail({ projectId, me, onBack }) {
   const [editOpen, setEditOpen] = useState(false);
   const [detailView, setDetailView] = useState('list'); // 'list' | 'board' | 'timeline'
   const [confirmDelete, setConfirmDelete] = useState(null); // { type, id, title }
+  const [alarmSub, setAlarmSub] = useState(null); // subtask object whose alarm is being edited
 
   const load = () => {
     api.project(projectId).then(setP);
@@ -724,6 +739,11 @@ export default function ProjectDetail({ projectId, me, onBack }) {
             onEdit={editSubtask}
             onDelete={deleteSubtask}
             onReorder={reorderSubtask}
+            onSetAlarm={(sub) => setAlarmSub(sub)}
+            onAddToCal={(sub) => {
+              onSwitchTab?.('calendar', { addEvent: sub.title });
+              showToast('Opening calendar — add the details');
+            }}
           />
         )}
         {detailView === 'board' && (
@@ -766,6 +786,14 @@ export default function ProjectDetail({ projectId, me, onBack }) {
       />
 
       <EditProjectModal open={editOpen} onClose={() => setEditOpen(false)} project={p} onUpdated={() => { load(); showToast('Project updated'); setEditOpen(false); }} />
+
+      <AlarmModal
+        open={!!alarmSub}
+        item={alarmSub}
+        kind="subtask"
+        onClose={() => setAlarmSub(null)}
+        onSaved={() => load()}
+      />
 
       <ConfirmModal
         open={!!confirmDelete}

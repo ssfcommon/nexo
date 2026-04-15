@@ -4,9 +4,10 @@ import { AvatarStack, PriorityTag, ProgressBar, Pill, deptDotColor } from '../co
 import HeaderActions from '../components/HeaderActions.jsx';
 import ProjectDetail from './ProjectDetail.jsx';
 import { fireConfetti } from '../components/Confetti.jsx';
-import { AlarmIcon, CalendarIcon } from '../components/Icons.jsx';
 import Modal, { Field, inputCls } from '../components/Modal.jsx';
 import ConfirmModal from '../components/ConfirmModal.jsx';
+import AlarmModal from '../components/AlarmModal.jsx';
+import RowActions from '../components/RowActions.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { ASSET_ORIGIN } from '../api.js';
 import { Avatar, COMPLEXITIES } from '../components/ui.jsx';
@@ -407,88 +408,6 @@ function BugTracker({ me, users }) {
   );
 }
 
-// Modal for setting / clearing an alarm on a quick task. Splits date + time
-// so mobile keyboards are friendlier and empty state is explicit. Replaces
-// the legacy window.prompt() flow which was blocked in some browsers and
-// lacked validation/feedback.
-function AlarmModal({ open, task, onClose, onSaved }) {
-  const showToast = useToast();
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('09:00');
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    // Seed with existing alarm, or the task's deadline @ 9am as a sensible default.
-    if (task?.alarm_at) {
-      const [d, t] = task.alarm_at.split(/[ T]/);
-      setDate(d || '');
-      setTime((t || '09:00').slice(0, 5));
-    } else {
-      setDate(task?.deadline || new Date().toISOString().slice(0, 10));
-      setTime('09:00');
-    }
-  }, [open, task]);
-
-  const save = async (e) => {
-    e?.preventDefault?.();
-    if (!date) { showToast('Pick a date', 'warning'); return; }
-    const ts = `${date} ${time || '09:00'}`;
-    setBusy(true);
-    try {
-      await api.setAlarm(task.id, ts);
-      onSaved?.(ts);
-      showToast(`Alarm set for ${date} ${time}`);
-      onClose?.();
-    } catch (err) {
-      showToast(err.message || 'Could not set alarm', 'error');
-    } finally { setBusy(false); }
-  };
-
-  const clear = async () => {
-    setBusy(true);
-    try {
-      await api.setAlarm(task.id, null);
-      onSaved?.(null);
-      showToast('Alarm cleared');
-      onClose?.();
-    } catch (err) {
-      showToast(err.message || 'Could not clear alarm', 'error');
-    } finally { setBusy(false); }
-  };
-
-  return (
-    <Modal open={open} onClose={onClose} title="Set Alarm">
-      <form onSubmit={save} className="space-y-3">
-        <p className="text-[13px] mb-1" style={{ color: '#9CA3AF' }}>
-          Remind me about <span className="font-semibold" style={{ color: '#E5E7EB' }}>{task?.title}</span>
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          <Field label="Date">
-            <input type="date" className={inputCls} value={date} onChange={e => setDate(e.target.value)} required />
-          </Field>
-          <Field label="Time">
-            <input type="time" className={inputCls} value={time} onChange={e => setTime(e.target.value)} required />
-          </Field>
-        </div>
-        <div className="flex gap-2 pt-1">
-          {task?.alarm_at && (
-            <button type="button" disabled={busy} onClick={clear}
-              className="h-10 px-4 rounded-[10px] text-[13px] font-semibold border"
-              style={{ background: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)', color: '#F87171' }}>
-              Clear
-            </button>
-          )}
-          <button type="submit" disabled={busy}
-            className="flex-1 h-10 rounded-[10px] bg-brand-blue text-white font-semibold disabled:opacity-60">
-            {busy ? 'Saving…' : 'Set Alarm'}
-          </button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
 // ── Main Projects ──
 export default function Projects({ me, unreadCount, onOpenNotifications, deepLink, onSwitchTab }) {
   const showToast = useToast();
@@ -516,7 +435,7 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
   useEffect(() => { loadProjects(); }, [scope]);
 
   if (openId) {
-    return <ProjectDetail projectId={openId} me={me} onBack={() => { setOpenId(null); loadProjects(); }} />;
+    return <ProjectDetail projectId={openId} me={me} onBack={() => { setOpenId(null); loadProjects(); }} onSwitchTab={onSwitchTab} />;
   }
 
   const toggleTask = async (t) => {
@@ -600,32 +519,14 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
                 <span>{t.title}</span>
                 {t.recurrence && <span className="text-[11px] text-ink-500" title={`Repeats ${t.recurrence}`}>🔁</span>}
               </span>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setAlarmTask(t); }}
-                aria-label={t.alarm_at ? `Change alarm for ${t.title}` : `Set alarm for ${t.title}`}
-                title={t.alarm_at ? `Alarm: ${t.alarm_at} — click to change` : 'Set alarm'}
-                className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:scale-110 active:scale-95"
-                style={{
-                  color: t.alarm_at ? '#F59E0B' : '#9CA3AF',
-                  background: t.alarm_at ? 'rgba(245,158,11,0.12)' : 'transparent',
-                  border: t.alarm_at ? '1px solid rgba(245,158,11,0.3)' : '1px solid transparent',
-                }}
-              ><AlarmIcon /></button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSwitchTab?.('calendar', { addEvent: t.title });
+              <RowActions
+                item={t}
+                onSetAlarm={(task) => setAlarmTask(task)}
+                onAddToCal={(task) => {
+                  onSwitchTab?.('calendar', { addEvent: task.title });
                   showToast('Opening calendar — add the details');
                 }}
-                aria-label={`Add ${t.title} to calendar`}
-                title="Add to calendar"
-                className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:scale-110 active:scale-95"
-                style={{ color: '#9CA3AF' }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = '#7EB0FF'; e.currentTarget.style.background = 'rgba(91,140,255,0.12)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = '#9CA3AF'; e.currentTarget.style.background = 'transparent'; }}
-              ><CalendarIcon /></button>
+              />
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setDeleteTaskId(t.id); }}
@@ -661,7 +562,8 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
       />
       <AlarmModal
         open={!!alarmTask}
-        task={alarmTask}
+        item={alarmTask}
+        kind="task"
         onClose={() => setAlarmTask(null)}
         onSaved={(ts) => setQuickTasks(xs => xs.map(x => x.id === alarmTask.id ? { ...x, alarm_at: ts } : x))}
       />
