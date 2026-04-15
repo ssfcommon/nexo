@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api, ASSET_ORIGIN } from '../api.js';
 import { Avatar } from '../components/ui.jsx';
 import HeaderActions from '../components/HeaderActions.jsx';
@@ -395,9 +395,34 @@ function BugDetailModal({ open, onClose, bug, users, onUpdated, meId }) {
 }
 
 // ── Filter popover (3 dimensions) ───────────────────────────────
-function FilterPopover({ open, onClose, apps, appFilter, setAppFilter, priorityFilter, setPriorityFilter, scope, setScope }) {
+// Positioning: `position: fixed` so we can clamp the popover inside the
+// viewport regardless of where the filter button sits. We measure the
+// trigger (the filter button) and compute a left/top that never clips
+// either edge on any screen width.
+function FilterPopover({ open, onClose, triggerRef, apps, appFilter, setAppFilter, priorityFilter, setPriorityFilter, scope, setScope }) {
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 280 });
+
+  useLayoutEffect(() => {
+    if (!open || !triggerRef?.current) return;
+    const computePos = () => {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const desired = 280;
+      const pad = 12;
+      const width = Math.min(desired, vw - pad * 2);
+      // Align the popover's right edge with the trigger's right edge by default,
+      // then clamp the left so the popover never leaves the viewport.
+      let left = rect.right - width;
+      left = Math.max(pad, Math.min(left, vw - width - pad));
+      setPos({ top: rect.bottom + 6, left, width });
+    };
+    computePos();
+    window.addEventListener('resize', computePos);
+    return () => window.removeEventListener('resize', computePos);
+  }, [open, triggerRef]);
+
   if (!open) return null;
-  // Short labels — full labels ("Assigned to me") overflow the popover on narrow screens.
+
   const scopes = [
     { id: 'all',      label: 'All' },
     { id: 'assigned', label: 'Assigned' },
@@ -418,8 +443,11 @@ function FilterPopover({ open, onClose, apps, appFilter, setAppFilter, priorityF
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
-        className="absolute right-0 top-[calc(100%+6px)] z-50 w-60 rounded-[12px] p-3 space-y-3 overflow-hidden"
+        className="fixed z-50 rounded-[12px] p-3 space-y-3 overflow-hidden"
         style={{
+          top: pos.top,
+          left: pos.left,
+          width: pos.width,
           background: 'linear-gradient(180deg, rgba(22,24,32,0.98) 0%, rgba(16,18,24,0.98) 100%)',
           border: '1px solid rgba(255,255,255,0.10)',
           borderTopColor: 'rgba(255,255,255,0.16)',
@@ -667,6 +695,7 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
   const [inlineBusy, setInlineBusy] = useState(false);
 
   const filterWrap = useRef(null);
+  const filterButtonRef = useRef(null);
   const moreWrap = useRef(null);
   const searchInputRef = useRef(null);
 
@@ -807,6 +836,7 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
         {/* Filter */}
         <div className="relative" ref={filterWrap}>
           <button
+            ref={filterButtonRef}
             onClick={() => { setFilterOpen(v => !v); setMoreOpen(false); }}
             className="h-10 px-3 rounded-[10px] text-[13px] font-medium text-ink-700 bg-white/5 border border-white/10 hover:bg-white/10 transition flex items-center gap-1.5"
             aria-label="Filter bugs"
@@ -817,6 +847,7 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
           <FilterPopover
             open={filterOpen}
             onClose={() => setFilterOpen(false)}
+            triggerRef={filterButtonRef}
             apps={apps}
             appFilter={appFilter}
             setAppFilter={setAppFilter}
