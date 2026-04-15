@@ -79,7 +79,10 @@ export default function FAB() {
   const isExpanded = open && !closing;
 
   // Fan geometry: anchor at FAB center, arc from straight-up (90°) to straight-left (180°)
-  const RADIUS = 110;
+  // Buttons sit on inner arc; labels sit on outer arc (radially outward), so a label
+  // never lands on top of a neighbor button.
+  const BTN_RADIUS = 100;
+  const LABEL_RADIUS = 168;
   const startAngle = 90;
   const endAngle = 180;
   const total = actions.length;
@@ -135,57 +138,68 @@ export default function FAB() {
           )}
         </button>
 
-        {/* Fan actions — anchored to FAB center via right/bottom = 4px (FAB_half 28 − circle_half 24) */}
+        {/* Fan actions — button on inner arc, label on outer arc (radially aligned) */}
         {open && actions.map((a, i) => {
           const t = total === 1 ? 0 : i / (total - 1);
           const angle = startAngle + (endAngle - startAngle) * t;
           const rad = (angle * Math.PI) / 180;
-          const dx = Math.cos(rad) * RADIUS;   // negative as angle → 180
-          const dy = -Math.sin(rad) * RADIUS;  // negative (upward) since sin(90..180) > 0
+          const bdx = Math.cos(rad) * BTN_RADIUS;
+          const bdy = -Math.sin(rad) * BTN_RADIUS;
+          const ldx = Math.cos(rad) * LABEL_RADIUS;
+          const ldy = -Math.sin(rad) * LABEL_RADIUS;
           const delay = isExpanded ? i * 45 : (total - 1 - i) * 25;
 
           return (
-            <div
-              key={a.id}
-              className="absolute flex items-center gap-3 flex-row-reverse"
-              style={{
-                right: 4,
-                bottom: 4,
-                transformOrigin: '100% 100%',
-                transform: isExpanded
-                  ? `translate(${dx}px, ${dy}px) scale(1)`
-                  : 'translate(0px, 0px) scale(0.4)',
-                opacity: isExpanded ? 1 : 0,
-                transition: `transform 350ms cubic-bezier(0.34, 1.56, 0.64, 1) ${delay}ms, opacity 220ms ease ${delay}ms`,
-                pointerEvents: isExpanded ? 'auto' : 'none',
-                willChange: 'transform, opacity',
-              }}
-            >
+            <React.Fragment key={a.id}>
+              {/* Action button — anchored so its centre sits at FAB centre when collapsed,
+                  then translates along the button arc when expanded */}
               <button
                 onClick={() => pickAction(a.id)}
                 aria-label={a.label}
-                className="w-12 h-12 rounded-full flex items-center justify-center text-white transition-all duration-150 hover:scale-110 active:scale-95"
+                className="absolute w-12 h-12 rounded-full flex items-center justify-center text-white hover:scale-110 active:scale-95"
                 style={{
+                  right: 4,
+                  bottom: 4,
                   background: `linear-gradient(135deg, ${a.color} 0%, ${a.color}cc 100%)`,
                   boxShadow: `0 6px 22px ${a.color}55, inset 0 1px 0 rgba(255,255,255,0.18), 0 0 0 1px rgba(255,255,255,0.08)`,
+                  transformOrigin: '50% 50%',
+                  transform: isExpanded
+                    ? `translate(${bdx}px, ${bdy}px) scale(1)`
+                    : 'translate(0px, 0px) scale(0.4)',
+                  opacity: isExpanded ? 1 : 0,
+                  transition: `transform 350ms cubic-bezier(0.34, 1.56, 0.64, 1) ${delay}ms, opacity 220ms ease ${delay}ms, background 150ms ease, box-shadow 150ms ease`,
+                  pointerEvents: isExpanded ? 'auto' : 'none',
+                  willChange: 'transform, opacity',
                 }}
               >
                 <a.Icon className="w-[22px] h-[22px]" />
               </button>
+
+              {/* Label — positioned on outer arc, radially outward from its button.
+                  top/left anchor it at FAB centre; translate(-50%,-50%) centres the bubble
+                  on that point; adding (ldx, ldy) moves the centre along the outer arc. */}
               <span
-                className="text-[12px] font-semibold px-2.5 py-1 rounded-lg whitespace-nowrap"
+                className="absolute text-[12px] font-semibold px-2.5 py-1 rounded-lg whitespace-nowrap pointer-events-none"
                 style={{
+                  top: 28,
+                  left: 28,
                   backgroundColor: 'rgba(17,24,39,0.85)',
                   color: '#E5E7EB',
                   border: '1px solid rgba(255,255,255,0.08)',
                   boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
                   backdropFilter: 'blur(8px)',
                   WebkitBackdropFilter: 'blur(8px)',
+                  transform: isExpanded
+                    ? `translate(calc(-50% + ${ldx}px), calc(-50% + ${ldy}px)) scale(1)`
+                    : 'translate(-50%, -50%) scale(0.4)',
+                  opacity: isExpanded ? 1 : 0,
+                  transition: `transform 350ms cubic-bezier(0.34, 1.56, 0.64, 1) ${delay + 40}ms, opacity 220ms ease ${delay + 40}ms`,
+                  willChange: 'transform, opacity',
                 }}
               >
                 {a.label}
               </span>
-            </div>
+            </React.Fragment>
           );
         })}
       </div>
