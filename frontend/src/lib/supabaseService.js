@@ -548,6 +548,70 @@ async function urgentTasks() {
   return ranked.slice(0, 5).map(({ _rank, ...rest }) => rest);
 }
 
+// Unified Home feed: quick tasks + project subtasks assigned to me,
+// restricted to a 7-day window (overdue items are always included).
+async function homeTasks({ windowDays = 7 } = {}) {
+  const today = todayStr();
+  const horizon = new Date();
+  horizon.setDate(horizon.getDate() + windowDays);
+  const horizonStr = horizon.toISOString().slice(0, 10);
+
+  const [tasksRes, subtasksRes] = await Promise.all([
+    supabase
+      .from('tasks')
+      .select('id, title, deadline, status, is_quick, project_id')
+      .eq('owner_id', uid())
+      .neq('status', 'done')
+      .not('deadline', 'is', null)
+      .lte('deadline', horizonStr)
+      .order('deadline', { ascending: true }),
+    supabase
+      .from('subtasks')
+      .select('id, title, deadline, status, project_id, project:projects(title)')
+      .eq('owner_id', uid())
+      .neq('status', 'done')
+      .neq('assignment_status', 'declined')
+      .not('deadline', 'is', null)
+      .lte('deadline', horizonStr)
+      .order('deadline', { ascending: true }),
+  ]);
+
+  const quick = (tasksRes.data || []).map(t => ({
+    id: t.id,
+    title: t.title,
+    deadline: t.deadline,
+    kind: 'task',
+    project_title: null,
+    project_id: t.project_id || null,
+  }));
+  const subs = (subtasksRes.data || []).map(s => ({
+    id: s.id,
+    title: s.title,
+    deadline: s.deadline,
+    kind: 'subtask',
+    project_title: s.project?.title || null,
+    project_id: s.project_id,
+  }));
+
+  const all = [...quick, ...subs];
+  // Rank: overdue → due today → upcoming; tiebreak on deadline then title
+  const ranked = all.map(x => ({
+    ...x,
+    _rank: x.deadline < today ? 0 : x.deadline === today ? 1 : 2,
+  }));
+  ranked.sort((a, b) =>
+    a._rank - b._rank ||
+    (a.deadline || '').localeCompare(b.deadline || '') ||
+    a.title.localeCompare(b.title)
+  );
+  return ranked.map(({ _rank, ...rest }) => rest);
+}
+
+async function completeHomeItem(item) {
+  if (item.kind === 'subtask') return updateSubtask(item.id, { status: 'done' });
+  return updateTask(item.id, { status: 'done' });
+}
+
 async function createTask(data) {
   const { title, projectId, deadline, priority, complexity, isQuick, recurrence, alarm_at, description, assignedTo } = data;
   return unwrap(await supabase.from('tasks').insert({
@@ -1820,6 +1884,8 @@ export const api = {
   projectMeetings,
   tasks,
   urgentTasks,
+  homeTasks,
+  completeHomeItem,
   createTask,
   updateTask,
   deleteTask,

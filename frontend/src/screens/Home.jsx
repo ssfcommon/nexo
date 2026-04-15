@@ -4,6 +4,7 @@ import { Avatar, SectionHeader } from '../components/ui.jsx';
 import HeaderActions from '../components/HeaderActions.jsx';
 import { SkeletonCard, EmptyState } from '../components/Skeleton.jsx';
 import useLiveUpdates from '../hooks/useLiveUpdates.js';
+import { useToast } from '../context/ToastContext.jsx';
 
 function greeting() {
   const h = new Date().getHours();
@@ -30,7 +31,7 @@ function relLabel(deadline) {
   return past ? `${pretty} ago` : `in ${pretty}`;
 }
 
-function TaskCard({ task }) {
+function TaskCard({ task, onComplete, completing }) {
   const today = new Date().toISOString().slice(0, 10);
   const overdue = task.deadline && task.deadline < today;
   const dueToday = task.deadline === today;
@@ -43,7 +44,7 @@ function TaskCard({ task }) {
 
   return (
     <div
-      className={'rounded-[14px] p-3.5 flex items-center gap-3 transition-all ' + (overdue ? 'overdue-pulse' : '')}
+      className={'rounded-[14px] p-3.5 flex items-center gap-3 transition-all ' + (overdue ? 'overdue-pulse' : '') + (completing ? ' opacity-50' : '')}
       style={{
         background: `linear-gradient(135deg, ${styles.bgFrom} 0%, ${styles.bgTo} 100%)`,
         border: `1px solid ${styles.border}`,
@@ -53,18 +54,90 @@ function TaskCard({ task }) {
         boxShadow: `0 4px 20px rgba(0,0,0,0.3), 0 0 16px ${styles.glow}, inset 0 1px 0 rgba(255,255,255,0.08)`,
       }}
     >
-      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: styles.dot, boxShadow: `0 0 8px ${styles.dot}60` }} />
+      {/* Complete button — circular checkbox */}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); if (!completing) onComplete(task); }}
+        aria-label={`Mark ${task.title} complete`}
+        disabled={completing}
+        className="flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all hover:scale-110 active:scale-95 group"
+        style={{
+          borderColor: styles.dot,
+          backgroundColor: 'transparent',
+        }}
+      >
+        {/* Check mark appears on hover */}
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={styles.dot}
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          <path d="M20 6L9 17l-5-5" />
+        </svg>
+      </button>
+
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold truncate" style={{ color: styles.text }}>
           {styles.label}: {task.title}
         </p>
+        {task.project_title && (
+          <p className="text-[11px] truncate mt-0.5 flex items-center gap-1" style={{ color: styles.text, opacity: 0.65 }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 flex-shrink-0">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            </svg>
+            <span className="truncate">{task.project_title}</span>
+          </p>
+        )}
       </div>
       <span className="text-xs font-medium flex-shrink-0 opacity-70" style={{ color: styles.text }}>{relLabel(task.deadline)}</span>
     </div>
   );
 }
 
+function AllClearCard({ onGoToTasks }) {
+  return (
+    <div
+      className="rounded-[16px] px-5 py-7 text-center"
+      style={{
+        background: 'linear-gradient(135deg, rgba(16,185,129,0.10) 0%, rgba(16,185,129,0.03) 100%)',
+        border: '1px solid rgba(16,185,129,0.18)',
+        borderTopColor: 'rgba(16,185,129,0.26)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.25), 0 0 20px rgba(16,185,129,0.08), inset 0 1px 0 rgba(255,255,255,0.08)',
+      }}
+    >
+      <div className="w-11 h-11 mx-auto rounded-full flex items-center justify-center mb-3" style={{ backgroundColor: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)' }}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+          <path d="M20 6L9 17l-5-5" />
+        </svg>
+      </div>
+      <p className="text-[15px] font-semibold text-ink-900">You're all clear for the week</p>
+      <p className="text-[12px] text-ink-500 mt-1">No tasks due in the next 7 days.</p>
+      <button
+        onClick={onGoToTasks}
+        className="mt-4 inline-flex items-center gap-1.5 h-8 px-3.5 rounded-lg text-[12px] font-semibold transition-all hover:scale-[1.02] active:scale-95"
+        style={{
+          backgroundColor: 'rgba(91,140,255,0.12)',
+          color: '#5B8CFF',
+          border: '1px solid rgba(91,140,255,0.25)',
+        }}
+      >
+        Go to All Tasks
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+          <path d="M5 12h14M13 5l7 7-7 7" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab }) {
+  const showToast = useToast();
   const [tasks, setTasks] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [activity, setActivity] = useState([]);
@@ -73,23 +146,41 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
   const [loading, setLoading] = useState(true);
   const [showAllActivity, setShowAllActivity] = useState(false);
   const [showAllUrgent, setShowAllUrgent] = useState(false);
+  const [completingIds, setCompletingIds] = useState(() => new Set());
 
-  const reloadUrgent = () => api.urgentTasks().then(setTasks);
+  const reloadTasks = () => api.homeTasks().then(setTasks);
   const reloadActivity = () => api.activity(8).then(setActivity);
   useLiveUpdates({
-    'subtask-updated': reloadActivity,
+    'subtask-updated': () => { reloadActivity(); reloadTasks(); },
     'comment-created': reloadActivity,
     'project-created': reloadActivity,
   });
 
   useEffect(() => {
     Promise.all([
-      api.urgentTasks().then(setTasks),
+      api.homeTasks().then(setTasks),
       api.leaves().then(setLeaves),
       api.activity(8).then(setActivity),
       api.myBugs().then(result => { setMyBugs(result.assigned || []); setBugsToConfirm(result.awaitingConfirm || []); }).catch(() => { setMyBugs([]); setBugsToConfirm([]); }),
     ]).finally(() => setLoading(false));
   }, []);
+
+  const handleComplete = async (item) => {
+    const key = `${item.kind}:${item.id}`;
+    setCompletingIds(prev => { const n = new Set(prev); n.add(key); return n; });
+    try {
+      await api.completeHomeItem(item);
+      // Optimistic: drop from list immediately
+      setTasks(prev => prev.filter(t => !(t.id === item.id && t.kind === item.kind)));
+      showToast(item.kind === 'subtask' ? 'Subtask completed' : 'Task completed');
+    } catch (e) {
+      showToast('Could not mark complete', 'error');
+      // Reload to recover truth
+      reloadTasks();
+    } finally {
+      setCompletingIds(prev => { const n = new Set(prev); n.delete(key); return n; });
+    }
+  };
 
   const upcomingLeave = leaves.find(l => l.user_id !== me?.id);
 
@@ -104,22 +195,29 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
             {me && <span>{me.name.split(' ')[0]}</span>}
           </h1>
           <p className="text-sm text-ink-500 mt-1.5">
-            {liveDate()} · <span className="text-ink-700 font-medium">{tasks.length} tasks</span> need attention
+            {liveDate()}{tasks.length > 0 ? (<> · <span className="text-ink-700 font-medium">{tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}</span> need attention</>) : ' · all clear for now'}
           </p>
         </div>
         <HeaderActions me={me} unreadCount={unreadCount} onOpenNotifications={onOpenNotifications} onOpenProfile={() => onSwitchTab?.('profile')} />
       </div>
 
-      {/* Urgent tasks */}
+      {/* This week */}
       <div>
-        <SectionHeader title="Urgent Tasks" action={tasks.length > 3 && !showAllUrgent ? 'View All' : null} onAction={() => setShowAllUrgent(true)} />
+        <SectionHeader title="This Week" action={tasks.length > 3 && !showAllUrgent ? 'View All' : null} onAction={() => setShowAllUrgent(true)} />
         <div className="space-y-2.5">
           {loading && tasks.length === 0 ? (
             <><SkeletonCard /><SkeletonCard /></>
           ) : tasks.length === 0 ? (
-            <EmptyState icon="🎉" title="All caught up" subtitle="No urgent tasks right now." />
+            <AllClearCard onGoToTasks={() => onSwitchTab?.('projects')} />
           ) : (
-            (showAllUrgent ? tasks : tasks.slice(0, 3)).map(t => <TaskCard key={t.id} task={t} />)
+            (showAllUrgent ? tasks : tasks.slice(0, 3)).map(t => (
+              <TaskCard
+                key={`${t.kind}:${t.id}`}
+                task={t}
+                onComplete={handleComplete}
+                completing={completingIds.has(`${t.kind}:${t.id}`)}
+              />
+            ))
           )}
           {showAllUrgent && tasks.length > 3 && (
             <button onClick={() => setShowAllUrgent(false)} className="text-xs text-brand-blue w-full text-center pt-1 font-medium">Show less</button>
