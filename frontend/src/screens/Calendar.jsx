@@ -911,73 +911,82 @@ function packEvents(events) {
   return sorted;
 }
 
-// ── Week view (tucked-away planning view — 7 columns, read-only) ─
+// ── Week view: density at a glance, no horizontal scroll ────────
+// All 7 days fit in the viewport. We trade event titles for event
+// density — each day's events render as thin colored bars (stacked),
+// leaves show as a red strip. This serves the real use case
+// (vacation planning / gap spotting) better than tiny truncated text
+// and removes the need for horizontal scrolling on mobile.
 function WeekView({ date, allEvents, leaves, onDayClick }) {
   const weekStart = startOfWeek(date);
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const today = isoDate(new Date());
+  const shortDay = (d) => d.toLocaleDateString('en-US', { weekday: 'short' }); // Mon, Tue…
+
+  const MAX_BARS = 5;
 
   return (
-    <div className="overflow-x-auto -mx-1 pb-1">
-      <div className="flex gap-1.5 px-1" style={{ minWidth: 640 }}>
-        {days.map(d => {
-          const iso = isoDate(d);
-          const dayEvents = allEvents
-            .filter(e => eventLocalDate(e) === iso)
-            .sort((a, b) => a.start_time.localeCompare(b.start_time));
-          const dayLeaves = leavesOnDate(leaves, iso);
-          const isT = iso === today;
-          return (
-            <button
-              key={iso}
-              onClick={() => onDayClick(d)}
-              className="flex-1 min-w-[92px] text-left rounded-[12px] p-2 transition hover:bg-white/5"
-              style={{
-                background: 'rgba(255,255,255,0.03)',
-                border: `1px solid ${isT ? 'rgba(91,140,255,0.35)' : 'rgba(255,255,255,0.08)'}`,
-                boxShadow: isT ? '0 0 12px rgba(91,140,255,0.15)' : 'none',
-              }}
-            >
-              <div className="mb-2">
-                <p className="text-[10px] uppercase tracking-wide text-ink-400 font-semibold">
-                  {d.toLocaleDateString('en-IN', { weekday: 'short' })}
-                </p>
-                <p className={'text-[17px] font-bold mt-0.5 ' + (isT ? 'text-brand-blue' : 'text-ink-900')}>
-                  {d.getDate()}
-                </p>
-              </div>
-              <div className="space-y-1 min-h-[64px]">
-                {dayLeaves.slice(0, 1).map(l => (
-                  <div key={l.id} className="text-[9px] px-1.5 py-0.5 rounded truncate"
-                    style={{ background: 'rgba(239,68,68,0.15)', color: '#FCA5A5', border: '1px solid rgba(239,68,68,0.22)' }}>
-                    {l.initials} leave
-                  </div>
-                ))}
-                {dayEvents.slice(0, 3).map(ev => {
-                  const c = accentFor(ev);
-                  return (
-                    <div key={ev.id} className="text-[10px] px-1.5 py-0.5 rounded truncate"
-                      style={{
-                        background: `${c}22`,
-                        color: '#E5E7EB',
-                        borderLeft: `2px solid ${c}`,
-                        opacity: ev._isTeam ? 0.7 : 1,
-                      }}>
-                      {ev._isTeam && ev._busyOnly ? 'Busy' : ev.title}
-                    </div>
-                  );
-                })}
-                {dayEvents.length > 3 && (
-                  <p className="text-[9px] text-ink-400">+{dayEvents.length - 3} more</p>
-                )}
-                {dayEvents.length === 0 && dayLeaves.length === 0 && (
-                  <p className="text-[9px] text-ink-400/60">—</p>
-                )}
-              </div>
-            </button>
-          );
-        })}
-      </div>
+    <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
+      {days.map(d => {
+        const iso = isoDate(d);
+        const dayEvents = allEvents.filter(e => eventLocalDate(e) === iso);
+        const dayLeaves = leavesOnDate(leaves, iso);
+        const isT = iso === today;
+        const hidden = Math.max(0, dayEvents.length - MAX_BARS);
+        const leaveTitle = dayLeaves.length > 0
+          ? dayLeaves.map(l => `${l.name || l.initials} · ${l.type}`).join(', ')
+          : undefined;
+
+        return (
+          <button
+            key={iso}
+            onClick={() => onDayClick(d)}
+            className="text-center rounded-[10px] px-1 py-2 transition hover:bg-white/5 flex flex-col items-center"
+            style={{
+              minHeight: 124,
+              background: 'rgba(255,255,255,0.03)',
+              border: `1px solid ${isT ? 'rgba(91,140,255,0.35)' : 'rgba(255,255,255,0.08)'}`,
+              boxShadow: isT ? '0 0 12px rgba(91,140,255,0.12)' : 'none',
+            }}
+            aria-label={`${shortDay(d)} ${d.getDate()} — ${dayEvents.length} event${dayEvents.length !== 1 ? 's' : ''}${dayLeaves.length > 0 ? ', leave marked' : ''}`}
+          >
+            <p className="text-[9px] uppercase tracking-wide text-ink-400 font-semibold leading-none">
+              {shortDay(d)}
+            </p>
+            <p className={'text-[16px] font-bold mt-1 leading-none tabular-nums ' + (isT ? 'text-brand-blue' : 'text-ink-900')}>
+              {d.getDate()}
+            </p>
+
+            {/* Leave indicator — one red strip spans the column */}
+            {dayLeaves.length > 0 && (
+              <div
+                className="w-full h-[3px] rounded-full mt-2"
+                style={{ background: 'rgba(239,68,68,0.7)' }}
+                title={leaveTitle}
+              />
+            )}
+
+            {/* Event density bars */}
+            <div className="flex-1 flex flex-col gap-[3px] w-full mt-1.5 items-stretch">
+              {dayEvents.slice(0, MAX_BARS).map(ev => {
+                const c = accentFor(ev);
+                const label = ev._isTeam && ev._busyOnly ? 'Busy' : ev.title;
+                return (
+                  <div
+                    key={ev.id}
+                    className="h-[5px] rounded-full"
+                    style={{ background: c, opacity: ev._isTeam ? 0.5 : 1 }}
+                    title={`${fmtTime(ev.start_time)} · ${label}`}
+                  />
+                );
+              })}
+              {hidden > 0 && (
+                <p className="text-[9px] text-ink-400 leading-none mt-0.5 tabular-nums">+{hidden}</p>
+              )}
+            </div>
+          </button>
+        );
+      })}
     </div>
   );
 }
