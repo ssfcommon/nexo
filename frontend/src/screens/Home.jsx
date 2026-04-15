@@ -86,12 +86,21 @@ function TaskCard({ task, onComplete, completing, onSetAlarm, onAddToCal }) {
         <p className="text-sm font-semibold truncate" style={{ color: styles.text }}>
           {styles.label}: {task.title}
         </p>
-        {task.project_title && (
+        {(task.project_title || (task.creator_name && task.assigned_by && task.assigned_by !== task.owner_id)) && (
           <p className="text-[11px] truncate mt-0.5 flex items-center gap-1" style={{ color: styles.text, opacity: 0.65 }}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 flex-shrink-0">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-            </svg>
-            <span className="truncate">{task.project_title}</span>
+            {task.project_title && (
+              <>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 flex-shrink-0">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                </svg>
+                <span className="truncate">{task.project_title}</span>
+              </>
+            )}
+            {task.creator_name && task.assigned_by && task.assigned_by !== task.owner_id && (
+              <span className="truncate" title={`Assigned by ${task.creator_name}`}>
+                {task.project_title ? '· ' : ''}by {task.creator_name.split(' ')[0]}
+              </span>
+            )}
           </p>
         )}
       </div>

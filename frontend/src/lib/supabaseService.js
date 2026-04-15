@@ -535,12 +535,17 @@ async function deleteSubtask(id) {
 // ── Tasks ────────────────────────────────────────────────
 
 async function tasks(params = {}) {
-  let q = supabase.from('tasks').select('*');
+  let q = supabase.from('tasks').select('*, creator:users!assigned_by(name)');
   if (params.quick === '1' || params.quick === 1) q = q.eq('is_quick', true);
   if (params.quick === '0' || params.quick === 0) q = q.eq('is_quick', false);
   if (params.owner === 'me') q = q.eq('owner_id', uid());
   q = q.order('deadline', { ascending: true, nullsFirst: false });
-  return unwrap(await q);
+  const rows = unwrap(await q);
+  return (rows || []).map(t => ({
+    ...t,
+    creator_name: t.creator?.name || null,
+    creator: undefined,
+  }));
 }
 
 async function urgentTasks() {
@@ -573,7 +578,7 @@ async function homeTasks({ windowDays = 7 } = {}) {
   const [tasksRes, subtasksRes] = await Promise.all([
     supabase
       .from('tasks')
-      .select('id, title, deadline, status, is_quick, project_id, alarm_at')
+      .select('id, title, deadline, status, is_quick, project_id, alarm_at, owner_id, assigned_by, creator:users!assigned_by(name)')
       .eq('owner_id', uid())
       .neq('status', 'done')
       .not('deadline', 'is', null)
@@ -581,7 +586,7 @@ async function homeTasks({ windowDays = 7 } = {}) {
       .order('deadline', { ascending: true }),
     supabase
       .from('subtasks')
-      .select('id, title, deadline, status, project_id, alarm_at, project:projects(title)')
+      .select('id, title, deadline, status, project_id, alarm_at, owner_id, assigned_by, project:projects(title), creator:users!assigned_by(name)')
       .eq('owner_id', uid())
       .neq('status', 'done')
       .neq('assignment_status', 'declined')
@@ -598,6 +603,9 @@ async function homeTasks({ windowDays = 7 } = {}) {
     kind: 'task',
     project_title: null,
     project_id: t.project_id || null,
+    owner_id: t.owner_id,
+    assigned_by: t.assigned_by || null,
+    creator_name: t.creator?.name || null,
   }));
   const subs = (subtasksRes.data || []).map(s => ({
     id: s.id,
@@ -607,6 +615,9 @@ async function homeTasks({ windowDays = 7 } = {}) {
     kind: 'subtask',
     project_title: s.project?.title || null,
     project_id: s.project_id,
+    owner_id: s.owner_id,
+    assigned_by: s.assigned_by || null,
+    creator_name: s.creator?.name || null,
   }));
 
   const all = [...quick, ...subs];
@@ -630,9 +641,14 @@ async function completeHomeItem(item) {
 
 async function createTask(data) {
   const { title, projectId, deadline, priority, complexity, isQuick, recurrence, alarm_at, description, assignedTo } = data;
+  const me = uid();
+  // Only record assigned_by when cross-assigning, so self-created tasks don't
+  // render a redundant "by You" attribution.
+  const crossAssigned = assignedTo && assignedTo !== me;
   return unwrap(await supabase.from('tasks').insert({
     title, description: description || null,
-    project_id: projectId || null, owner_id: assignedTo || uid(),
+    project_id: projectId || null, owner_id: assignedTo || me,
+    assigned_by: crossAssigned ? me : null,
     deadline: deadline || null,
     status: 'pending',
     is_quick: isQuick ? true : false,

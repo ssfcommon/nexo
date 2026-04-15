@@ -515,9 +515,16 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
               >
                 {t.status === 'done' && <span className="text-white text-xs">✓</span>}
               </button>
-              <span className={'flex-1 text-[14px] flex items-center gap-2 ' + (t.status === 'done' ? 'line-through text-ink-300' : 'text-ink-900')}>
-                <span>{t.title}</span>
-                {t.recurrence && <span className="text-[11px] text-ink-500" title={`Repeats ${t.recurrence}`}>🔁</span>}
+              <span className={'flex-1 min-w-0 text-[14px] flex flex-col ' + (t.status === 'done' ? 'line-through text-ink-300' : 'text-ink-900')}>
+                <span className="flex items-center gap-2 truncate">
+                  <span className="truncate">{t.title}</span>
+                  {t.recurrence && <span className="text-[11px] text-ink-500 flex-shrink-0" title={`Repeats ${t.recurrence}`}>🔁</span>}
+                </span>
+                {t.creator_name && t.assigned_by && t.assigned_by !== t.owner_id && (
+                  <span className="text-[11px] text-ink-500 truncate" title={`Assigned by ${t.creator_name}`}>
+                    by {t.creator_name.split(' ')[0]}
+                  </span>
+                )}
               </span>
               <RowActions
                 item={t}
