@@ -175,8 +175,6 @@ export default function App() {
                       <t.Icon style={active ? { stroke: 'url(#nav-icon-grad)', strokeWidth: 2 } : { stroke: '#4B5563', strokeWidth: 1.5 }} />
                     </div>
                     <span className="relative z-10 text-[10px] font-semibold transition-colors duration-300" style={{ color: active ? '#7EB0FF' : '#4B5563' }}>{t.label}</span>
-                    {/* Active indicator dot */}
-                    {active && <div className="absolute bottom-1 w-1 h-1 rounded-full z-10" style={{ background: '#5B8CFF', boxShadow: '0 0 6px rgba(91,140,255,0.8)' }} />}
                   </button>
                 );
               })}
