@@ -376,12 +376,12 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
                 key={b.id}
                 bug={b}
                 intent={bugSeg === 'confirm' ? 'confirm' : 'open'}
-                onClick={() => onSwitchTab?.('projects', { kind: 'bugs' })}
+                onClick={() => onSwitchTab?.('bugs')}
               />
             ))}
             {bugList.length > 3 && (
               <button
-                onClick={() => onSwitchTab?.('projects', { kind: 'bugs' })}
+                onClick={() => onSwitchTab?.('bugs')}
                 className="text-[12px] text-brand-blue w-full text-center pt-1 font-medium"
               >
                 View all {bugList.length}

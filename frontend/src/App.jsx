@@ -3,6 +3,7 @@ import { useAuth } from './context/AuthContext.jsx';
 import { api } from './api.js';
 import Home from './screens/Home.jsx';
 import Projects from './screens/Projects.jsx';
+import Bugs from './screens/Bugs.jsx';
 import Calendar from './screens/Calendar.jsx';
 import Profile from './screens/Profile.jsx';
 import Login from './screens/Login.jsx';
@@ -13,13 +14,14 @@ import ErrorBoundary from './components/ErrorBoundary.jsx';
 import OnboardingTour from './components/OnboardingTour.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
 import useAlarms from './hooks/useAlarms.js';
-import { HomeIcon, FolderIcon, CalendarIcon, UserIcon } from './components/Icons.jsx';
+import { HomeIcon, FolderIcon, CalendarIcon, UserIcon, BugIcon } from './components/Icons.jsx';
 import FAB from './components/FAB.jsx';
 import { Avatar } from './components/ui.jsx';
 
 const tabs = [
   { id: 'home',    label: 'Home',     Icon: HomeIcon,     component: Home },
   { id: 'projects',label: 'Projects', Icon: FolderIcon,   component: Projects },
+  { id: 'bugs',    label: 'Bugs',     Icon: BugIcon,      component: Bugs },
   { id: 'calendar',label: 'Calendar', Icon: CalendarIcon, component: Calendar },
   { id: 'profile', label: 'Profile',  Icon: UserIcon,     component: Profile },
 ];

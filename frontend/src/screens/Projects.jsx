@@ -1,438 +1,247 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
-import { AvatarStack, PriorityTag, ProgressBar, Pill, deptDotColor } from '../components/ui.jsx';
+import { AvatarStack, ProgressBar, deptDotColor } from '../components/ui.jsx';
 import HeaderActions from '../components/HeaderActions.jsx';
 import ProjectDetail from './ProjectDetail.jsx';
 import { fireConfetti } from '../components/Confetti.jsx';
-import Modal, { Field, inputCls } from '../components/Modal.jsx';
 import ConfirmModal from '../components/ConfirmModal.jsx';
 import AlarmModal from '../components/AlarmModal.jsx';
 import RowActions from '../components/RowActions.jsx';
+import GlassCard from '../components/GlassCard.jsx';
+import FilterChip from '../components/FilterChip.jsx';
+import { NewProjectModal, QuickTaskModal } from '../components/QuickActions.jsx';
 import { useToast } from '../context/ToastContext.jsx';
-import { ASSET_ORIGIN } from '../api.js';
-import { Avatar, COMPLEXITIES } from '../components/ui.jsx';
-import { ReportBugModal } from '../components/QuickActions.jsx';
+import {
+  SearchIcon,
+  FilterIcon,
+  PlusIcon,
+  FolderIcon,
+  TrashIcon,
+  RepeatIcon,
+} from '../components/Icons.jsx';
 
-// ── Bug Detail Modal ──
-const BUG_STAGES = [
-  { id: 'open', label: 'Open', color: '#EF4444' },
-  { id: 'in_progress', label: 'In Progress', color: '#F59E0B' },
-  { id: 'resolved', label: 'Resolved', color: '#22C55E' },
-  { id: 'confirmed', label: 'Confirmed', color: '#3B82F6' },
+// ── Priority → accent bar ────────────────────────────────────
+
+const PRIORITY_ACCENT = {
+  'Urgent & Important':        'red',
+  'Urgent & Not Important':    'amber',
+  'Not Urgent but Important':  'blue',
+  'Not Urgent, Not Important': 'none',
+};
+
+const PRIORITY_OPTIONS = [
+  'Urgent & Important',
+  'Urgent & Not Important',
+  'Not Urgent but Important',
+  'Not Urgent, Not Important',
 ];
 
-function BugDetailModal({ open, onClose, bug, users, onUpdated, meId }) {
-  const showToast = useToast();
-  const [status, setStatus] = useState('');
-  const [resolution, setResolution] = useState('');
-  const [reopenComment, setReopenComment] = useState('');
-  const [assignedTo, setAssignedTo] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [showReopen, setShowReopen] = useState(false);
+// ── Quick-task helpers ───────────────────────────────────────
 
-  useEffect(() => {
-    if (open && bug) {
-      setStatus(bug.status);
-      setResolution(bug.metadata?.resolution || '');
-      setAssignedTo(bug.assigned_to || '');
-      setReopenComment('');
-      setShowReopen(false);
-    }
-  }, [open, bug]);
+function dueLabel(d) {
+  if (!d) return '';
+  const today = new Date().toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  if (d === today) return 'Today';
+  if (d === tomorrow) return 'Tomorrow';
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 
-  if (!bug) return null;
+function dueColor(d) {
+  if (!d) return '#9CA3AF';
+  const today = new Date().toISOString().slice(0, 10);
+  if (d <= today) return '#EF4444';
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  if (d === tomorrow) return '#F59E0B';
+  return '#9CA3AF';
+}
 
-  const isReporter = bug.reported_by === meId;
-  const isAssignee = bug.assigned_to === meId;
-  const currentStage = BUG_STAGES.find(s => s.id === bug.status) || BUG_STAGES[0];
+// ── Filter popover ───────────────────────────────────────────
 
-  // Allowed status transitions based on role
-  const allowedStatuses = (() => {
-    if (bug.status === 'confirmed') return []; // final state
-    if (bug.status === 'resolved' && isReporter) return []; // reporter uses confirm/reopen buttons instead
-    // Assignee/admin can move through open → in_progress → resolved
-    const stages = ['open', 'in_progress', 'resolved'];
-    return stages;
-  })();
-
-  const save = async () => {
-    setBusy(true);
-    try {
-      const patch = { status };
-      if (resolution.trim()) patch.resolution = resolution.trim();
-      if (assignedTo !== (bug.assigned_to || '')) patch.assignedTo = assignedTo || null;
-      await api.updateBug(bug.id, patch);
-      showToast(status === 'resolved' ? 'Bug resolved — awaiting reporter confirmation' : 'Bug updated');
-      onUpdated?.();
-      onClose();
-    } catch (err) { showToast(err.message || 'Failed to update bug', 'error'); } finally { setBusy(false); }
-  };
-
-  const confirmBug = async () => {
-    setBusy(true);
-    try {
-      await api.updateBug(bug.id, { status: 'confirmed' });
-      showToast('Bug confirmed as fixed ✓');
-      onUpdated?.();
-      onClose();
-    } catch (err) { showToast(err.message || 'Failed to confirm', 'error'); } finally { setBusy(false); }
-  };
-
-  const reopenBug = async () => {
-    if (!reopenComment.trim()) return;
-    setBusy(true);
-    try {
-      await api.updateBug(bug.id, { status: 'in_progress', reopenComment: reopenComment.trim() });
-      showToast('Bug reopened → back to assignee');
-      onUpdated?.();
-      onClose();
-    } catch (err) { showToast(err.message || 'Failed to reopen', 'error'); } finally { setBusy(false); }
-  };
-
+function FilterPopover({ open, onClose, scope, setScope, departments, department, setDepartment, priority, setPriority }) {
+  if (!open) return null;
   return (
-    <Modal open={open} onClose={onClose} title="Bug Details">
-      <div className="space-y-4">
-        {/* Header info */}
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: currentStage.color }} />
-          <span className="text-[12px] font-bold uppercase text-ink-400">{bug.app_name}</span>
-          <span className="ml-auto text-[11px] text-ink-300">Reported by {bug.reporter_name?.split(' ')[0] || '—'}</span>
-        </div>
-
-        {/* Stage progress bar */}
-        <div className="flex items-center gap-1">
-          {BUG_STAGES.map((stage, i) => {
-            const stageIdx = BUG_STAGES.findIndex(s => s.id === bug.status);
-            const isPast = i <= stageIdx;
-            return (
-              <React.Fragment key={stage.id}>
-                <div className="flex flex-col items-center gap-1 flex-1">
-                  <div className="w-full h-1.5 rounded-full transition-all" style={{ background: isPast ? stage.color : 'rgba(255,255,255,0.08)' }} />
-                  <span className="text-[9px] font-semibold" style={{ color: isPast ? stage.color : '#4B5563' }}>{stage.label}</span>
-                </div>
-              </React.Fragment>
-            );
-          })}
-        </div>
-
-        {/* Issue */}
-        <p className="text-[15px] text-ink-900 leading-relaxed">{bug.issue}</p>
-
-        {/* Screenshots */}
-        {(() => {
-          const allUrls = [bug.screenshot_url, ...(bug.metadata?.extra_screenshots || [])].filter(Boolean);
-          if (!allUrls.length) return null;
-          return (
-            <div className="flex gap-2 flex-wrap">
-              {allUrls.map((url, i) => (
-                <a key={i} href={url.startsWith('http') ? url : ASSET_ORIGIN + url} target="_blank" rel="noreferrer">
-                  <img src={url.startsWith('http') ? url : ASSET_ORIGIN + url} alt={`screenshot ${i + 1}`}
-                    className={allUrls.length === 1 ? 'w-full max-h-48 rounded-[10px] object-cover border border-line-light' : 'w-24 h-24 rounded-[8px] object-cover border border-line-light'} />
-                </a>
-              ))}
-            </div>
-          );
-        })()}
-
-        {/* Meta row */}
-        <div className="flex items-center gap-4 text-[12px] text-ink-500">
-          {bug.deadline && <span>📅 Due {bug.deadline}</span>}
-          <span>🕒 {new Date(bug.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-        </div>
-
-        {/* Resolution display */}
-        {bug.metadata?.resolution && (
-          <div className="rounded-[10px] p-3 text-[13px]" style={{ backgroundColor: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.12)' }}>
-            <p className="text-[11px] font-semibold uppercase mb-1" style={{ color: '#6B7280' }}>Resolution</p>
-            <p style={{ color: '#D1D5DB' }}>{bug.metadata.resolution}</p>
-          </div>
-        )}
-
-        {/* Reopen history */}
-        {bug.metadata?.reopen_comments?.length > 0 && (
-          <div className="space-y-2">
-            {bug.metadata.reopen_comments.map((c, i) => (
-              <div key={i} className="rounded-[10px] p-3 text-[13px]" style={{ backgroundColor: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.12)' }}>
-                <p className="text-[11px] font-semibold uppercase mb-1" style={{ color: '#6B7280' }}>Reopened</p>
-                <p style={{ color: '#D1D5DB' }}>{c.text}</p>
-              </div>
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div
+        className="absolute right-0 top-[calc(100%+6px)] z-50 w-64 rounded-[12px] p-3 space-y-3"
+        style={{
+          background: 'linear-gradient(180deg, rgba(22,24,32,0.98) 0%, rgba(16,18,24,0.98) 100%)',
+          border: '1px solid rgba(255,255,255,0.10)',
+          borderTopColor: 'rgba(255,255,255,0.16)',
+          boxShadow: '0 10px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)',
+        }}
+      >
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-ink-400 mb-1.5">Scope</p>
+          <div className="flex gap-1.5">
+            {[{ id: 'mine', label: 'Mine' }, { id: 'all', label: 'All' }].map(s => (
+              <button
+                key={s.id}
+                onClick={() => setScope(s.id)}
+                className="flex-1 h-8 rounded-md text-[12px] font-semibold transition"
+                style={{
+                  background: scope === s.id ? 'rgba(91,140,255,0.15)' : 'rgba(255,255,255,0.04)',
+                  color: scope === s.id ? '#A8C4FF' : '#9CA3AF',
+                  border: scope === s.id ? '1px solid rgba(91,140,255,0.30)' : '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                {s.label}
+              </button>
             ))}
           </div>
-        )}
+        </div>
 
-        <hr style={{ borderColor: 'rgba(255,255,255,0.08)' }} />
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-ink-400 mb-1.5">Department</p>
+          <select
+            value={department}
+            onChange={e => setDepartment(e.target.value)}
+            className="w-full h-9 px-2.5 rounded-[8px] text-[13px] bg-white/5 text-ink-900 border border-white/10 focus:outline-none focus:border-brand-blue/50"
+          >
+            <option value="">All departments</option>
+            {departments.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </div>
 
-        {/* ── Reporter confirmation mode (when bug is "resolved") ── */}
-        {bug.status === 'resolved' && isReporter && (
-          <div className="space-y-3">
-            <p className="text-[13px] font-medium" style={{ color: '#D1D5DB' }}>
-              The assignee marked this as resolved. Is the fix working?
-            </p>
-            {!showReopen ? (
-              <div className="flex gap-2">
-                <button onClick={confirmBug} disabled={busy}
-                  className="flex-1 h-11 rounded-[10px] text-white font-semibold disabled:opacity-60 transition-all flex items-center justify-center gap-2"
-                  style={{ background: '#22C55E' }}>
-                  {busy ? 'Confirming…' : '✓ Yes, Confirmed'}
-                </button>
-                <button onClick={() => setShowReopen(true)}
-                  className="flex-1 h-11 rounded-[10px] font-semibold transition-all flex items-center justify-center gap-2"
-                  style={{ background: 'rgba(239,68,68,0.12)', color: '#F87171', border: '1px solid rgba(239,68,68,0.25)' }}>
-                  ↩ Not Fixed
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <textarea
-                  className={inputCls + ' !h-20 py-2'}
-                  value={reopenComment}
-                  onChange={e => setReopenComment(e.target.value)}
-                  placeholder="What's still wrong or missing?"
-                  autoFocus
-                />
-                <div className="flex gap-2">
-                  <button onClick={reopenBug} disabled={busy || !reopenComment.trim()}
-                    className="flex-1 h-10 rounded-[10px] font-semibold text-[13px] disabled:opacity-60 transition-all"
-                    style={{ background: 'rgba(239,68,68,0.15)', color: '#F87171' }}>
-                    {busy ? 'Reopening…' : 'Reopen Bug'}
-                  </button>
-                  <button onClick={() => setShowReopen(false)}
-                    className="h-10 px-4 rounded-[10px] text-[13px]" style={{ color: '#6B7280' }}>
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Normal edit mode (non-reporter, or open/in_progress bugs) ── */}
-        {!(bug.status === 'resolved' && isReporter) && bug.status !== 'confirmed' && (
-          <>
-            {/* Status selector */}
-            {allowedStatuses.length > 0 && (
-              <Field label="Status">
-                <div className="flex gap-2">
-                  {allowedStatuses.map(val => {
-                    const stage = BUG_STAGES.find(s => s.id === val);
-                    return (
-                      <button key={val} type="button" onClick={() => setStatus(val)}
-                        className="flex-1 h-10 rounded-[10px] text-[13px] font-semibold transition-all border-2"
-                        style={{
-                          borderColor: status === val ? stage.color : 'transparent',
-                          backgroundColor: status === val ? `${stage.color}15` : 'rgba(255,255,255,0.04)',
-                          color: status === val ? stage.color : '#6B7280',
-                        }}>
-                        {stage.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </Field>
-            )}
-
-            {/* Assign */}
-            <Field label="Assigned to">
-              <select className={inputCls} value={assignedTo} onChange={e => setAssignedTo(e.target.value)}>
-                <option value="">Unassigned</option>
-                {(users || []).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-              </select>
-            </Field>
-
-            {/* Resolution / Notes */}
-            <Field label={status === 'resolved' ? 'Resolution (required)' : 'Notes (optional)'}>
-              <textarea
-                className={inputCls + ' !h-20 py-2'}
-                value={resolution}
-                onChange={e => setResolution(e.target.value)}
-                placeholder={status === 'resolved' ? 'How was this bug fixed?' : 'Add notes about progress…'}
-              />
-            </Field>
-
-            <button
-              onClick={save}
-              disabled={busy || (status === 'resolved' && !resolution.trim())}
-              className="w-full h-11 rounded-[10px] text-white font-semibold disabled:opacity-60 transition-all"
-              style={{ background: status === 'resolved' ? '#22C55E' : '#4A6CF7' }}
-            >
-              {busy ? 'Saving…' : status === 'resolved' ? 'Mark as Resolved' : 'Update Bug'}
-            </button>
-          </>
-        )}
-
-        {/* Confirmed final state */}
-        {bug.status === 'confirmed' && (
-          <div className="text-center py-2">
-            <span className="text-[14px] font-semibold" style={{ color: '#3B82F6' }}>✓ Bug confirmed as fixed</span>
-          </div>
-        )}
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-ink-400 mb-1.5">Priority</p>
+          <select
+            value={priority}
+            onChange={e => setPriority(e.target.value)}
+            className="w-full h-9 px-2.5 rounded-[8px] text-[13px] bg-white/5 text-ink-900 border border-white/10 focus:outline-none focus:border-brand-blue/50"
+          >
+            <option value="">All priorities</option>
+            {PRIORITY_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
       </div>
-    </Modal>
+    </>
   );
 }
 
-// ── Bug Tracker ──
-function BugTracker({ me, users }) {
-  const showToast = useToast();
-  const [bugs, setBugs] = useState([]);
-  const [apps, setApps] = useState([]);
-  const [filter, setFilter] = useState('');
-  const [addOpen, setAddOpen] = useState(false);
-  const [showResolved, setShowResolved] = useState(false);
-  const [detailBug, setDetailBug] = useState(null);
+// ── Project card ─────────────────────────────────────────────
 
-  const load = () => {
-    api.bugs(filter || undefined).then(setBugs);
-    api.bugApps().then(setApps);
-  };
-  useEffect(() => { load(); }, [filter]);
-
-  const statusColor = (s) => s === 'open' ? '#EF4444' : s === 'in_progress' ? '#F59E0B' : s === 'resolved' ? '#22C55E' : '#3B82F6';
-  const statusLabel = (s) => s === 'open' ? 'Open' : s === 'in_progress' ? 'In Progress' : s === 'resolved' ? 'Resolved' : 'Confirmed';
-
+function ProjectCard({ project, onOpen }) {
+  const accent = PRIORITY_ACCENT[project.priority] || 'none';
   return (
-    <div className="space-y-4">
-      {/* Filter + actions */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <select value={filter} onChange={e => setFilter(e.target.value)} className="h-9 px-3 text-[13px] rounded-[10px] border border-line-light bg-white flex-1 min-w-[140px]">
-          <option value="">All Apps</option>
-          {apps.map(a => <option key={a} value={a}>{a}</option>)}
-        </select>
-        <button onClick={() => {
-          const rows = [['#','App','Issue','Status','Assigned','Deadline']];
-          bugs.forEach((b,i) => rows.push([i+1, b.app_name, `"${(b.issue||'').replace(/"/g,'""')}"`, b.status, b.assigned_name||'', b.deadline||'']));
-          const blob = new Blob([rows.map(r=>r.join(',')).join('\n')], {type:'text/csv'});
-          const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-          a.download = `bugs-${filter||'all'}-${new Date().toISOString().slice(0,10)}.csv`; a.click();
-        }} className="w-9 h-9 rounded-full border border-line-light flex items-center justify-center text-ink-500 hover:bg-[#F7F8FA]" title="Download CSV">
-          <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        </button>
-        <button onClick={() => setAddOpen(true)} className="pill pill-primary !h-9 !px-3 !text-[12px]">+ Bug</button>
+    <GlassCard as="button" accent={accent} onClick={onOpen} className="w-full text-left pl-4 pr-4 py-3.5 hover:bg-white/[0.02] transition">
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <h3 className="font-semibold text-[15px] text-ink-900 leading-snug">{project.title}</h3>
+        <AvatarStack users={project.members || []} max={2} />
+      </div>
+      <div className="flex items-center gap-2 mb-2.5">
+        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: deptDotColor(project.department) }} />
+        <span className="text-[12px] text-ink-500">{project.department}</span>
+      </div>
+      <ProgressBar percent={project.progress} />
+    </GlassCard>
+  );
+}
+
+// ── Quick-task row ───────────────────────────────────────────
+
+function QuickTaskRow({ task, isLast, onToggle, onSetAlarm, onAddToCal, onDelete }) {
+  const done = task.status === 'done';
+  return (
+    <div
+      className={'flex items-center gap-3 pl-4 pr-3 py-3 ' + (isLast ? '' : 'border-b')}
+      style={{ borderColor: 'rgba(255,255,255,0.06)' }}
+    >
+      <button
+        onClick={onToggle}
+        aria-label={done ? `Mark ${task.title} pending` : `Complete ${task.title}`}
+        className="flex-shrink-0 w-10 h-10 -ml-2 rounded-full flex items-center justify-center group transition-all active:scale-90"
+      >
+        <span
+          className="w-[22px] h-[22px] rounded-full flex items-center justify-center transition-all group-hover:scale-110"
+          style={{
+            border: `2px solid ${done ? '#22C55E' : 'rgba(255,255,255,0.35)'}`,
+            background: done ? '#22C55E' : 'transparent',
+          }}
+        >
+          {done ? (
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-[13px] h-[13px]">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-[13px] h-[13px] opacity-40 group-hover:opacity-100 transition-opacity">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+          )}
+        </span>
+      </button>
+
+      <div className={'flex-1 min-w-0 flex flex-col ' + (done ? 'line-through text-ink-400' : 'text-ink-900')}>
+        <span className="flex items-center gap-1.5 truncate text-[14px]">
+          <span className="truncate">{task.title}</span>
+          {task.recurrence && (
+            <span className="text-ink-500 flex-shrink-0" title={`Repeats ${task.recurrence}`}>
+              <RepeatIcon />
+            </span>
+          )}
+        </span>
+        {task.creator_name && task.assigned_by && task.assigned_by !== task.owner_id && (
+          <span className="text-[11px] text-ink-500 truncate mt-0.5" title={`Assigned by ${task.creator_name}`}>
+            by {task.creator_name.split(' ')[0]}
+          </span>
+        )}
       </div>
 
-      {/* Bug list */}
-      {(() => {
-        const openBugs = bugs.filter(b => b.status === 'open' || b.status === 'in_progress');
-        const resolvedBugs = bugs.filter(b => b.status === 'resolved');
-        const confirmedBugs = bugs.filter(b => b.status === 'confirmed');
-        // Show: open/in_progress first, then resolved, then optionally confirmed
-        const displayBugs = [...openBugs, ...resolvedBugs, ...(showResolved ? confirmedBugs : [])];
+      {!done && (
+        <RowActions
+          item={task}
+          onSetAlarm={onSetAlarm}
+          onAddToCal={onAddToCal}
+        />
+      )}
 
-        return (
-          <>
-            {displayBugs.length === 0 && !confirmedBugs.length && (
-              <div className="text-center py-8 text-ink-300 text-[13px]">No bugs reported{filter ? ` for ${filter}` : ''}.</div>
-            )}
-            {displayBugs.length === 0 && confirmedBugs.length > 0 && !showResolved && (
-              <div className="text-center py-8 text-ink-300 text-[13px]">All bugs confirmed fixed! 🎉</div>
-            )}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        aria-label={`Delete ${task.title}`}
+        title="Delete task"
+        className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-400 hover:text-[#F87171] hover:bg-[#EF4444]/12 transition"
+      >
+        <TrashIcon />
+      </button>
 
-            {/* Bug card renderer */}
-            {[
-              { label: null, items: openBugs },
-              ...(resolvedBugs.length > 0 ? [{ label: `AWAITING CONFIRMATION (${resolvedBugs.length})`, items: resolvedBugs }] : []),
-              ...(showResolved && confirmedBugs.length > 0 ? [{ label: `CONFIRMED (${confirmedBugs.length})`, items: confirmedBugs }] : []),
-            ].map((group, gi) => (
-              <React.Fragment key={gi}>
-                {group.label && group.items.length > 0 && (
-                  <p className="text-[11px] font-bold uppercase tracking-wide pt-3 pb-1" style={{ color: '#6B7280' }}>{group.label}</p>
-                )}
-                <div className="space-y-2">
-                  {group.items.map((b) => {
-                    const isResolved = b.status === 'resolved';
-                    const isConfirmed = b.status === 'confirmed';
-                    return (
-                      <button key={b.id} onClick={() => setDetailBug(b)} className={'card !p-3 transition-all w-full text-left hover:shadow-md ' + (isConfirmed ? 'opacity-40' : '')}>
-                        <div className="flex items-start gap-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: statusColor(b.status) }} />
-                              <span className={'text-[11px] font-semibold uppercase text-ink-300'}>{b.app_name}</span>
-                              <span className="ml-auto tag" style={{
-                                color: statusColor(b.status),
-                                backgroundColor: `${statusColor(b.status)}15`,
-                              }}>{statusLabel(b.status)}</span>
-                            </div>
-                            <p className={'text-[13px] ' + (isResolved || isConfirmed ? 'text-ink-400 line-through' : 'text-ink-900')}>{b.issue}</p>
-                            {b.metadata?.resolution && (isResolved || isConfirmed) && (
-                              <p className="text-[11px] text-ink-400 mt-1 italic truncate">✓ {b.metadata.resolution}</p>
-                            )}
-                            <div className="flex items-center gap-3 mt-2 text-[11px] text-ink-500">
-                              {b.assigned_name && <span className="flex items-center gap-1">
-                                <Avatar user={{ initials: b.assigned_initials, avatar_color: b.assigned_color, avatar_url: b.assigned_avatar }} size={16} />
-                                {b.assigned_name.split(' ')[0]}
-                              </span>}
-                              {b.deadline && <span>Due {b.deadline}</span>}
-                              <span>by {b.reporter_name?.split(' ')[0]}</span>
-                            </div>
-                          </div>
-                          {b.screenshot_url && (() => {
-                            const extraCount = (b.metadata?.extra_screenshots || []).length;
-                            const url = b.screenshot_url.startsWith('http') ? b.screenshot_url : ASSET_ORIGIN + b.screenshot_url;
-                            return (
-                              <div className="relative flex-shrink-0">
-                                <img src={url} alt="screenshot" className="w-16 h-16 rounded-[6px] object-cover border border-line-light" />
-                                {extraCount > 0 && (
-                                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-brand-blue text-white text-[9px] font-bold flex items-center justify-center shadow-sm">+{extraCount}</span>
-                                )}
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </React.Fragment>
-            ))}
-
-            {/* Confirmed toggle */}
-            {confirmedBugs.length > 0 && (
-              <button
-                onClick={() => setShowResolved(v => !v)}
-                className="w-full text-center text-[12px] font-medium text-ink-400 hover:text-ink-700 py-2 transition"
-              >
-                {showResolved ? 'Hide' : 'Show'} {confirmedBugs.length} confirmed bug{confirmedBugs.length !== 1 ? 's' : ''}
-              </button>
-            )}
-          </>
-        );
-      })()}
-
-      {/* Add Bug Modal (shared) */}
-      <ReportBugModal open={addOpen} onClose={() => setAddOpen(false)} onCreated={load} />
-
-      {/* Bug Detail Modal */}
-      <BugDetailModal open={!!detailBug} onClose={() => setDetailBug(null)} bug={detailBug} users={users} onUpdated={load} meId={me?.id} />
+      <span className="text-[12px] font-semibold tabular-nums min-w-[44px] text-right" style={{ color: dueColor(task.deadline) }}>
+        {dueLabel(task.deadline)}
+      </span>
     </div>
   );
 }
 
-// ── Main Projects ──
+// ── Main Projects screen ─────────────────────────────────────
+
 export default function Projects({ me, unreadCount, onOpenNotifications, deepLink, onSwitchTab }) {
   const showToast = useToast();
   const [scope, setScope] = useState('mine');
+  const [department, setDepartment] = useState('');
+  const [priority, setPriority] = useState('');
+  const [query, setQuery] = useState('');
+
   const [projects, setProjects] = useState([]);
   const [quickTasks, setQuickTasks] = useState([]);
   const [openId, setOpenId] = useState(null);
-  const [section, setSection] = useState('projects'); // 'projects' | 'bugs'
-  const [allUsers, setAllUsers] = useState([]);
+
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [addProjectOpen, setAddProjectOpen] = useState(false);
+  const [addTaskOpen, setAddTaskOpen] = useState(false);
   const [deleteTaskId, setDeleteTaskId] = useState(null);
   const [alarmTask, setAlarmTask] = useState(null);
-  useEffect(() => { api.users().then(setAllUsers); }, []);
+  const filterWrap = useRef(null);
 
   useEffect(() => {
     if (deepLink?.kind === 'project' && deepLink.id) setOpenId(deepLink.id);
-    if (deepLink?.kind === 'bugs') setSection('bugs');
   }, [deepLink]);
 
   const loadProjects = () => api.projects(scope).then(setProjects);
-
-  useEffect(() => {
-    api.tasks({ quick: '1', owner: 'me' }).then(setQuickTasks);
-  }, []);
+  const loadTasks = () => api.tasks({ quick: '1', owner: 'me' }).then(setQuickTasks);
 
   useEffect(() => { loadProjects(); }, [scope]);
+  useEffect(() => { loadTasks(); }, []);
 
   if (openId) {
     return <ProjectDetail projectId={openId} me={me} onBack={() => { setOpenId(null); loadProjects(); }} onSwitchTab={onSwitchTab} />;
@@ -447,116 +256,198 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
     } catch (err) { showToast(err.message || 'Failed to update task', 'error'); }
   };
 
+  // Client-side filter the fetched list. Project counts are small; DB-side
+  // filtering would be premature optimisation.
+  const departments = useMemo(
+    () => Array.from(new Set(projects.map(p => p.department).filter(Boolean))).sort(),
+    [projects]
+  );
+
+  const visibleProjects = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return projects.filter(p => {
+      if (q && !p.title.toLowerCase().includes(q)) return false;
+      if (department && p.department !== department) return false;
+      if (priority && p.priority !== priority) return false;
+      return true;
+    });
+  }, [projects, query, department, priority]);
+
+  const pendingTaskCount = quickTasks.filter(t => t.status !== 'done').length;
+
+  // Chips shown for non-default filters (Mine is default → no chip).
+  const chips = [];
+  if (scope !== 'mine') chips.push({ label: 'All projects', clear: () => setScope('mine') });
+  if (department) chips.push({ label: department, clear: () => setDepartment('') });
+  if (priority) chips.push({ label: priority, clear: () => setPriority('') });
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 pb-24">
       {/* Header */}
-      <div className="flex items-center justify-between pt-2">
-        <h1 className="text-2xl font-bold text-ink-900 tracking-tight">{section === 'bugs' ? 'Bug Tracker' : 'My Active Projects'}</h1>
-        <HeaderActions me={me} unreadCount={unreadCount} onOpenNotifications={onOpenNotifications} onOpenProfile={() => onSwitchTab?.('profile')} />
-      </div>
-
-      {/* Section toggle */}
-      <div className="flex gap-1 rounded-full p-0.5 mb-1" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%)' }}>
-        <button onClick={() => setSection('projects')} className={'flex-1 h-9 rounded-full text-sm font-semibold transition flex items-center justify-center ' + (section === 'projects' ? 'text-ink-900' : 'text-ink-500')}
-          style={section === 'projects' ? { background: 'linear-gradient(135deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.06) 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12)' } : {}}>Projects</button>
-        <button onClick={() => setSection('bugs')} className={'flex-1 h-9 rounded-full text-sm font-semibold transition flex items-center justify-center ' + (section === 'bugs' ? 'text-ink-900' : 'text-ink-500')}
-          style={section === 'bugs' ? { background: 'linear-gradient(135deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.06) 100%)', boxShadow: '0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.12)' } : {}}>Bug Tracker</button>
-      </div>
-
-      {section === 'bugs' ? (
-        <BugTracker me={me} users={allUsers} />
-      ) : <>
-
-      {/* Tabs */}
-      <div className="flex gap-2">
-        <Pill active={scope === 'mine'} onClick={() => setScope('mine')}>My Projects</Pill>
-        <Pill active={scope === 'all'} onClick={() => setScope('all')}>All Projects</Pill>
-      </div>
-
-      {/* Ongoing */}
-      <div>
-        <p className="section-label mb-3">Ongoing Projects</p>
-        <div className="space-y-3">
-          {projects.map(p => (
-            <button key={p.id} onClick={() => setOpenId(p.id)} className="card text-left w-full hover:shadow-md transition">
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <h3 className="font-semibold text-[16px] text-ink-900">{p.title}</h3>
-                <AvatarStack users={p.members || []} max={2} />
-              </div>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: deptDotColor(p.department) }} />
-                  <span className="text-[13px] text-ink-500">{p.department}</span>
-                </div>
-                <PriorityTag priority={p.priority} />
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="flex-1"><ProgressBar percent={p.progress} /></div>
-                <span className="text-[13px] font-semibold text-brand-blue">{p.progress}%</span>
-              </div>
-            </button>
-          ))}
+      <div className="flex items-center justify-between pt-2 gap-3">
+        <div className="min-w-0">
+          <h1 className="text-[26px] sm:text-3xl font-bold text-ink-900 tracking-tight leading-tight">Projects</h1>
+          <p className="text-[13px] text-ink-500 mt-1">
+            {visibleProjects.length} {visibleProjects.length === 1 ? 'project' : 'projects'}
+            {pendingTaskCount > 0 && <> · {pendingTaskCount} quick {pendingTaskCount === 1 ? 'task' : 'tasks'}</>}
+          </p>
         </div>
+        <HeaderActions
+          me={me}
+          unreadCount={unreadCount}
+          onOpenNotifications={onOpenNotifications}
+          onOpenProfile={() => onSwitchTab?.('profile')}
+        />
       </div>
 
-      {/* Quick tasks — only in "My Projects" view */}
-      {scope === 'mine' && <div>
-        <p className="section-label mb-2">Quick Tasks</p>
-        <div className="rounded-[14px]" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)', border: '1px solid rgba(255,255,255,0.10)', borderTopColor: 'rgba(255,255,255,0.16)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: '0 4px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
-          {quickTasks.map((t, i) => (
-            <div
-              key={t.id}
-              className={'flex items-center gap-3 px-4 py-3 ' + (i < quickTasks.length - 1 ? 'border-b border-[#F3F4F6]' : '')}
-            >
+      {/* Toolbar */}
+      <div className="flex items-center gap-2">
+        <div className="flex-1 relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none">
+            <SearchIcon width="16" height="16" />
+          </span>
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search projects…"
+            className="w-full h-10 pl-9 pr-3 rounded-[10px] text-[13px] bg-white/5 text-ink-900 placeholder:text-ink-400 border border-white/10 focus:outline-none focus:border-brand-blue/50 transition"
+          />
+        </div>
+
+        <div className="relative" ref={filterWrap}>
+          <button
+            onClick={() => setFilterOpen(v => !v)}
+            className="h-10 px-3 rounded-[10px] text-[13px] font-medium text-ink-700 bg-white/5 border border-white/10 hover:bg-white/10 transition flex items-center gap-1.5"
+            aria-label="Filter projects"
+          >
+            <FilterIcon />
+            {chips.length > 0 ? <span className="text-brand-blue">· {chips.length}</span> : null}
+          </button>
+          <FilterPopover
+            open={filterOpen}
+            onClose={() => setFilterOpen(false)}
+            scope={scope}
+            setScope={setScope}
+            departments={departments}
+            department={department}
+            setDepartment={setDepartment}
+            priority={priority}
+            setPriority={setPriority}
+          />
+        </div>
+
+        <button
+          onClick={() => setAddProjectOpen(true)}
+          className="h-10 px-3 rounded-[10px] text-[13px] font-semibold flex items-center gap-1.5 transition"
+          style={{
+            background: 'linear-gradient(135deg, rgba(91,140,255,0.22) 0%, rgba(91,140,255,0.10) 100%)',
+            color: '#A8C4FF',
+            border: '1px solid rgba(91,140,255,0.30)',
+            boxShadow: '0 0 10px rgba(91,140,255,0.10), inset 0 1px 0 rgba(255,255,255,0.08)',
+          }}
+        >
+          <PlusIcon width="14" height="14" /> Project
+        </button>
+      </div>
+
+      {/* Active filter chips */}
+      {chips.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {chips.map((c, i) => <FilterChip key={i} label={c.label} onRemove={c.clear} />)}
+        </div>
+      )}
+
+      {/* Ongoing Projects */}
+      <section>
+        <p className="section-label mb-3">Ongoing</p>
+        {visibleProjects.length === 0 ? (
+          <div className="py-12 flex flex-col items-center text-center">
+            <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)' }}>
+              <span className="text-ink-400"><FolderIcon /></span>
+            </div>
+            <p className="text-[15px] font-semibold text-ink-900">
+              {projects.length === 0 ? 'No projects yet' : 'No projects match'}
+            </p>
+            <p className="text-[12px] text-ink-500 mt-1">
+              {projects.length === 0 ? 'Create your first project to get started.' : 'Try a different search or adjust the filters.'}
+            </p>
+            {projects.length === 0 && (
               <button
-                onClick={() => toggleTask(t)}
-                className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
-                style={{ borderColor: t.status === 'done' ? '#22C55E' : '#D1D5DB', backgroundColor: t.status === 'done' ? '#22C55E' : 'transparent' }}
+                onClick={() => setAddProjectOpen(true)}
+                className="mt-4 h-9 px-4 rounded-lg text-[12px] font-semibold transition"
+                style={{ background: 'rgba(91,140,255,0.15)', color: '#A8C4FF', border: '1px solid rgba(91,140,255,0.30)' }}
               >
-                {t.status === 'done' && <span className="text-white text-xs">✓</span>}
+                + New project
               </button>
-              <span className={'flex-1 min-w-0 text-[14px] flex flex-col ' + (t.status === 'done' ? 'line-through text-ink-300' : 'text-ink-900')}>
-                <span className="flex items-center gap-2 truncate">
-                  <span className="truncate">{t.title}</span>
-                  {t.recurrence && <span className="text-[11px] text-ink-500 flex-shrink-0" title={`Repeats ${t.recurrence}`}>🔁</span>}
-                </span>
-                {t.creator_name && t.assigned_by && t.assigned_by !== t.owner_id && (
-                  <span className="text-[11px] text-ink-500 truncate" title={`Assigned by ${t.creator_name}`}>
-                    by {t.creator_name.split(' ')[0]}
-                  </span>
-                )}
-              </span>
-              <RowActions
-                item={t}
+            )}
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {visibleProjects.map(p => (
+              <ProjectCard key={p.id} project={p} onOpen={() => setOpenId(p.id)} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Quick Tasks */}
+      <section>
+        <div className="flex items-center justify-between mb-2">
+          <p className="section-label">Quick tasks</p>
+          <button
+            onClick={() => setAddTaskOpen(true)}
+            className="h-7 px-2.5 rounded-md text-[11px] font-semibold flex items-center gap-1 transition"
+            style={{
+              background: 'rgba(91,140,255,0.10)',
+              color: '#A8C4FF',
+              border: '1px solid rgba(91,140,255,0.22)',
+            }}
+          >
+            <PlusIcon width="12" height="12" /> Task
+          </button>
+        </div>
+
+        {quickTasks.length === 0 ? (
+          <GlassCard className="py-6 text-center">
+            <p className="text-[13px] text-ink-500">No quick tasks yet.</p>
+          </GlassCard>
+        ) : (
+          <GlassCard className="overflow-hidden">
+            {quickTasks.map((t, i) => (
+              <QuickTaskRow
+                key={t.id}
+                task={t}
+                isLast={i === quickTasks.length - 1}
+                onToggle={() => toggleTask(t)}
                 onSetAlarm={(task) => setAlarmTask(task)}
                 onAddToCal={(task) => {
                   onSwitchTab?.('calendar', { addEvent: task.title });
                   showToast('Opening calendar — add the details');
                 }}
+                onDelete={() => setDeleteTaskId(t.id)}
               />
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setDeleteTaskId(t.id); }}
-                aria-label={`Delete ${t.title}`}
-                title="Delete task"
-                className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:scale-110 active:scale-95"
-                style={{ color: '#9CA3AF' }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = '#F87171'; e.currentTarget.style.background = 'rgba(239,68,68,0.12)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = '#9CA3AF'; e.currentTarget.style.background = 'transparent'; }}
-              >
-                <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-              </button>
-              <span className="text-[13px]" style={{ color: dueColor(t.deadline) }}>{dueLabel(t.deadline)}</span>
-            </div>
-          ))}
-          {quickTasks.length === 0 && <p className="p-4 text-ink-300 text-sm">No quick tasks.</p>}
-        </div>
-      </div>}
-      </>}
+            ))}
+          </GlassCard>
+        )}
+      </section>
+
+      {/* Modals */}
+      <NewProjectModal
+        open={addProjectOpen}
+        onClose={() => setAddProjectOpen(false)}
+        onCreated={() => { showToast('Project created'); loadProjects(); setAddProjectOpen(false); }}
+      />
+
+      <QuickTaskModal
+        open={addTaskOpen}
+        onClose={() => setAddTaskOpen(false)}
+        onCreated={() => { showToast('Task added'); loadTasks(); setAddTaskOpen(false); }}
+      />
+
       <ConfirmModal
         open={!!deleteTaskId}
         onClose={() => setDeleteTaskId(null)}
-        title="Delete Task"
+        title="Delete task"
         message="Are you sure you want to delete this task?"
         onConfirm={async () => {
           try {
@@ -564,9 +455,13 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
             setQuickTasks(ts => ts.filter(t => t.id !== deleteTaskId));
             setDeleteTaskId(null);
             showToast('Task deleted');
-          } catch (err) { showToast(err.message || 'Failed to delete task', 'error'); setDeleteTaskId(null); }
+          } catch (err) {
+            showToast(err.message || 'Failed to delete task', 'error');
+            setDeleteTaskId(null);
+          }
         }}
       />
+
       <AlarmModal
         open={!!alarmTask}
         item={alarmTask}
@@ -576,21 +471,4 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
       />
     </div>
   );
-}
-
-function dueLabel(d) {
-  if (!d) return '';
-  const today = new Date().toISOString().slice(0, 10);
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-  if (d === today) return 'Today';
-  if (d === tomorrow) return 'Tomorrow';
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-function dueColor(d) {
-  if (!d) return '#9CA3AF';
-  const today = new Date().toISOString().slice(0, 10);
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-  if (d === today || d < today) return '#EF4444';
-  if (d === tomorrow) return '#F59E0B';
-  return '#6B7280';
 }
