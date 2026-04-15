@@ -46,7 +46,6 @@ export function HelpModal({ open, onClose }) {
           <p className="font-semibold mt-2 mb-1">Tips</p>
           <ul className="list-disc pl-5 space-y-1 text-ink-500">
             <li>When assigning a subtask with a deadline, Nexo warns you if the teammate is on leave.</li>
-            <li>The activity feed on Home shows what everyone has done recently.</li>
             <li>Reports → Me/Company toggle switches between personal and team stats.</li>
           </ul>
         </div>

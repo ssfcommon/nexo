@@ -39,9 +39,6 @@ export const AlarmIcon = (p) => (
 export const UmbrellaIcon = (p) => (
   <svg width="18" height="18" viewBox="0 0 24 24" {...s} {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
 );
-export const ActivityIcon = (p) => (
-  <svg width="20" height="20" viewBox="0 0 24 24" {...s} {...p}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-);
 export const BugIcon = (p) => (
   <svg width="18" height="18" viewBox="0 0 24 24" {...s} {...p}><rect x="8" y="6" width="8" height="14" rx="4"/><path d="M12 6V3"/><path d="M9 3l-2-1"/><path d="M15 3l2-1"/><path d="M8 10H4"/><path d="M16 10h4"/><path d="M8 14H3"/><path d="M16 14h5"/><path d="M8 18l-3 2"/><path d="M16 18l3 2"/></svg>
 );

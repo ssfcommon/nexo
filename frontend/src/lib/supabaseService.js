@@ -1621,86 +1621,6 @@ async function syncReminders() {
   }
 }
 
-// ── Activity Feed ────────────────────────────────────────
-
-async function activity(limit = 15) {
-  const items = [];
-  const today = todayStr();
-  const in7 = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
-
-  // Completed subtasks
-  const { data: completedSubs } = await supabase
-    .from('subtasks')
-    .select('id, title, project_id, status, projects(title), owner:users!owner_id(name, initials, avatar_color, avatar_url)')
-    .eq('status', 'done')
-    .order('updated_at', { ascending: false })
-    .limit(limit);
-  (completedSubs || []).forEach(r => items.push({
-    id: `sub-${r.id}`, kind: 'completed_subtask',
-    actor: r.owner?.name, initials: r.owner?.initials, color: r.owner?.avatar_color, avatar_url: r.owner?.avatar_url,
-    text: `completed "${r.title}"`, context: r.projects?.title,
-    ts: r.updated_at || new Date().toISOString(),
-  }));
-
-  // New projects
-  const { data: newProjects } = await supabase
-    .from('projects')
-    .select('id, title, department, created_at, owner:users!owner_id(name, initials, avatar_color, avatar_url)')
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  (newProjects || []).forEach(r => items.push({
-    id: `proj-${r.id}`, kind: 'new_project',
-    actor: r.owner?.name, initials: r.owner?.initials, color: r.owner?.avatar_color, avatar_url: r.owner?.avatar_url,
-    text: `created project "${r.title}"`, context: r.department,
-    ts: r.created_at,
-  }));
-
-  // Comments
-  const { data: recentComments } = await supabase
-    .from('comments')
-    .select('id, body, created_at, project_id, projects(title), author:users!author_id(name, initials, avatar_color, avatar_url)')
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  (recentComments || []).forEach(r => items.push({
-    id: `cmt-${r.id}`, kind: 'comment',
-    actor: r.author?.name, initials: r.author?.initials, color: r.author?.avatar_color, avatar_url: r.author?.avatar_url,
-    text: `commented on "${r.projects?.title}"`,
-    context: r.body?.length > 60 ? r.body.slice(0, 57) + '…' : r.body,
-    ts: r.created_at,
-  }));
-
-  // Streaks
-  const { data: activeStreaks } = await supabase
-    .from('streaks')
-    .select('id, name, current_count, last_logged, user:users(name, initials, avatar_color, avatar_url)')
-    .gt('current_count', 0)
-    .order('current_count', { ascending: false })
-    .limit(5);
-  (activeStreaks || []).forEach(r => items.push({
-    id: `streak-${r.id}`, kind: 'streak',
-    actor: r.user?.name, initials: r.user?.initials, color: r.user?.avatar_color, avatar_url: r.user?.avatar_url,
-    text: `is on a ${r.current_count}-day ${r.name} streak 🔥`,
-    context: null,
-    ts: r.last_logged || new Date().toISOString(),
-  }));
-
-  // Upcoming leaves
-  const { data: upcomingLeaves } = await supabase
-    .from('leaves')
-    .select('id, start_date, end_date, type, user:users(name, initials, avatar_color, avatar_url)')
-    .gte('start_date', today).lte('start_date', in7);
-  (upcomingLeaves || []).forEach(r => items.push({
-    id: `leave-${r.id}`, kind: 'leave',
-    actor: r.user?.name, initials: r.user?.initials, color: r.user?.avatar_color, avatar_url: r.user?.avatar_url,
-    text: `will be on leave ${r.start_date} → ${r.end_date} 🏖️`,
-    context: r.type,
-    ts: new Date().toISOString(),
-  }));
-
-  items.sort((a, b) => (b.ts > a.ts ? 1 : -1));
-  return items.slice(0, limit);
-}
-
 // ── Insights ─────────────────────────────────────────────
 
 async function insights() {
@@ -2002,7 +1922,6 @@ export const api = {
   addLeave,
   deleteLeave,
   checkLeave,
-  activity,
   insights,
   reportSummary,
   search,

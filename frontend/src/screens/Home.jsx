@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
-import { Avatar, SectionHeader } from '../components/ui.jsx';
+import { SectionHeader } from '../components/ui.jsx';
 import HeaderActions from '../components/HeaderActions.jsx';
 import { SkeletonCard } from '../components/Skeleton.jsx';
 import useLiveUpdates from '../hooks/useLiveUpdates.js';
@@ -8,8 +8,7 @@ import { useToast } from '../context/ToastContext.jsx';
 import AlarmModal from '../components/AlarmModal.jsx';
 import RowActions from '../components/RowActions.jsx';
 import GlassCard from '../components/GlassCard.jsx';
-import ActivitySheet from '../components/ActivitySheet.jsx';
-import { BugIcon, CheckDoubleIcon, UmbrellaIcon, CheckIcon, FolderIcon } from '../components/Icons.jsx';
+import { BugIcon, UmbrellaIcon, CheckIcon, FolderIcon } from '../components/Icons.jsx';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -241,23 +240,16 @@ function Segmented({ value, onChange, segments }) {
 
 // ── Home ─────────────────────────────────────────────────────
 
-const ACTIVITY_SEEN_KEY = 'nexo.activity.lastSeen';
-
 export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab }) {
   const showToast = useToast();
   const [tasks, setTasks] = useState([]);
   const [leaves, setLeaves] = useState([]);
-  const [activity, setActivity] = useState([]);
   const [myBugs, setMyBugs] = useState([]);
   const [bugsToConfirm, setBugsToConfirm] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAllUrgent, setShowAllUrgent] = useState(false);
   const [completingIds, setCompletingIds] = useState(() => new Set());
   const [alarmItem, setAlarmItem] = useState(null);
-  const [activityOpen, setActivityOpen] = useState(false);
-  const [activitySeenAt, setActivitySeenAt] = useState(() => {
-    try { return localStorage.getItem(ACTIVITY_SEEN_KEY) || ''; } catch { return ''; }
-  });
 
   // Bugs segmented state — default to whichever has items.
   const [bugSeg, setBugSeg] = useState('open');
@@ -267,18 +259,14 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
   }, [myBugs.length, bugsToConfirm.length]);
 
   const reloadTasks = () => api.homeTasks().then(setTasks);
-  const reloadActivity = () => api.activity(15).then(setActivity);
   useLiveUpdates({
-    'subtask-updated': () => { reloadActivity(); reloadTasks(); },
-    'comment-created': reloadActivity,
-    'project-created': reloadActivity,
+    'subtask-updated': reloadTasks,
   });
 
   useEffect(() => {
     Promise.all([
       api.homeTasks().then(setTasks),
       api.leaves().then(setLeaves),
-      api.activity(15).then(setActivity),
       api.myBugs().then(result => { setMyBugs(result.assigned || []); setBugsToConfirm(result.awaitingConfirm || []); }).catch(() => { setMyBugs([]); setBugsToConfirm([]); }),
     ]).finally(() => setLoading(false));
   }, []);
@@ -295,20 +283,6 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
       reloadTasks();
     } finally {
       setCompletingIds(prev => { const n = new Set(prev); n.delete(key); return n; });
-    }
-  };
-
-  const newestActivityTs = useMemo(
-    () => (activity[0]?.ts || ''),
-    [activity]
-  );
-  const activityHasUnread = !!newestActivityTs && newestActivityTs > activitySeenAt;
-
-  const openActivity = () => {
-    setActivityOpen(true);
-    if (newestActivityTs && newestActivityTs > activitySeenAt) {
-      try { localStorage.setItem(ACTIVITY_SEEN_KEY, newestActivityTs); } catch {}
-      setActivitySeenAt(newestActivityTs);
     }
   };
 
@@ -338,8 +312,6 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
           unreadCount={unreadCount}
           onOpenNotifications={onOpenNotifications}
           onOpenProfile={() => onSwitchTab?.('profile')}
-          onOpenActivity={openActivity}
-          activityHasUnread={activityHasUnread}
         />
       </div>
 
@@ -443,12 +415,6 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
         }}
       />
 
-      <ActivitySheet
-        open={activityOpen}
-        items={activity}
-        loading={loading}
-        onClose={() => setActivityOpen(false)}
-      />
     </div>
   );
 }
