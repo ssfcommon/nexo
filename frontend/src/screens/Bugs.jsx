@@ -397,16 +397,28 @@ function BugDetailModal({ open, onClose, bug, users, onUpdated, meId }) {
 // ── Filter popover (3 dimensions) ───────────────────────────────
 function FilterPopover({ open, onClose, apps, appFilter, setAppFilter, priorityFilter, setPriorityFilter, scope, setScope }) {
   if (!open) return null;
+  // Short labels — full labels ("Assigned to me") overflow the popover on narrow screens.
   const scopes = [
     { id: 'all',      label: 'All' },
-    { id: 'assigned', label: 'Assigned to me' },
-    { id: 'reported', label: 'Reported by me' },
+    { id: 'assigned', label: 'Assigned' },
+    { id: 'reported', label: 'Reported' },
   ];
+  const priorityChoices = [
+    { id: '',       label: 'All',  color: '#9CA3AF' },
+    { id: 'high',   label: 'High', color: '#EF4444' },
+    { id: 'medium', label: 'Med',  color: '#F59E0B' },
+    { id: 'low',    label: 'Low',  color: '#9CA3AF' },
+  ];
+
+  // Shared chip styles — min-w-0 + overflow-hidden let flex-1 actually
+  // shrink the buttons instead of letting the label push the popover wide.
+  const chipCls = 'flex-1 min-w-0 h-8 rounded-md text-[11px] font-semibold transition overflow-hidden text-ellipsis whitespace-nowrap px-1';
+
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
-        className="absolute right-0 top-[calc(100%+6px)] z-50 w-64 rounded-[12px] p-3 space-y-3"
+        className="absolute right-0 top-[calc(100%+6px)] z-50 w-60 rounded-[12px] p-3 space-y-3 overflow-hidden"
         style={{
           background: 'linear-gradient(180deg, rgba(22,24,32,0.98) 0%, rgba(16,18,24,0.98) 100%)',
           border: '1px solid rgba(255,255,255,0.10)',
@@ -421,7 +433,7 @@ function FilterPopover({ open, onClose, apps, appFilter, setAppFilter, priorityF
               const active = scope === s.id;
               return (
                 <button key={s.id} onClick={() => setScope(s.id)}
-                  className="flex-1 h-8 rounded-md text-[11px] font-semibold transition"
+                  className={chipCls}
                   style={{
                     background: active ? 'rgba(91,140,255,0.15)' : 'rgba(255,255,255,0.04)',
                     color: active ? '#A8C4FF' : '#9CA3AF',
@@ -449,16 +461,15 @@ function FilterPopover({ open, onClose, apps, appFilter, setAppFilter, priorityF
         <div>
           <p className="text-[10px] font-bold uppercase tracking-wide text-ink-400 mb-1.5">Priority</p>
           <div className="flex gap-1.5">
-            {[{ id: '', label: 'All' }, ...PRIORITIES].map(p => {
+            {priorityChoices.map(p => {
               const active = priorityFilter === p.id;
-              const color = p.color || '#9CA3AF';
               return (
                 <button key={p.id || 'all'} onClick={() => setPriorityFilter(p.id)}
-                  className="flex-1 h-8 rounded-md text-[11px] font-semibold transition"
+                  className={chipCls}
                   style={{
-                    background: active ? `${color}15` : 'rgba(255,255,255,0.04)',
-                    color: active ? color : '#9CA3AF',
-                    border: active ? `1px solid ${color}55` : '1px solid rgba(255,255,255,0.08)',
+                    background: active ? `${p.color}15` : 'rgba(255,255,255,0.04)',
+                    color: active ? p.color : '#9CA3AF',
+                    border: active ? `1px solid ${p.color}55` : '1px solid rgba(255,255,255,0.08)',
                   }}>
                   {p.label}
                 </button>
