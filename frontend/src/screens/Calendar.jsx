@@ -13,6 +13,7 @@ import {
 function isoDate(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
 function startOfWeek(d) { const r = new Date(d); const day = r.getDay(); r.setDate(r.getDate() - (day === 0 ? 6 : day - 1)); return r; }
+function startOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
 function daysInMonth(d) { return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); }
 function fmtTime(iso) {
   const d = new Date(iso);
@@ -188,6 +189,15 @@ function expandRecurrence(event, rangeStart, rangeEnd) {
 
 function getExpandRange(view, date) {
   if (view === 'today') return [isoDate(date), isoDate(date)];
+  if (view === 'week') {
+    const ws = startOfWeek(date);
+    return [isoDate(ws), isoDate(addDays(ws, 6))];
+  }
+  if (view === 'month') {
+    const ms = startOfMonth(date);
+    return [isoDate(ms), isoDate(new Date(date.getFullYear(), date.getMonth() + 1, 0))];
+  }
+  // 'upcoming' — 14 days from the selected date
   return [isoDate(date), isoDate(addDays(date, 13))];
 }
 
@@ -803,9 +813,19 @@ function TeamToggle({ users, selected, onToggle }) {
   );
 }
 
-// ── Overflow Menu (Add Leave + Jump to date) ────────────────────
-function OverflowMenu({ onAddLeave, onJumpToday }) {
+// ── Overflow Menu (rare actions: planning views, leave, jump) ───
+function OverflowMenu({ onAddLeave, onJumpToday, onShowWeek, onShowMonth }) {
   const [open, setOpen] = useState(false);
+  const MenuItem = ({ icon, label, hint, onClick }) => (
+    <button onClick={() => { onClick?.(); setOpen(false); }}
+      className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/5 transition text-left">
+      <span className="text-ink-400 flex-shrink-0">{icon}</span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-[13px] text-ink-900">{label}</span>
+        {hint && <span className="block text-[10px] text-ink-400">{hint}</span>}
+      </span>
+    </button>
+  );
   return (
     <div className="relative">
       <button onClick={() => setOpen(o => !o)}
@@ -817,21 +837,21 @@ function OverflowMenu({ onAddLeave, onJumpToday }) {
       {open && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute top-11 right-0 z-30 rounded-xl py-1.5 min-w-[180px]"
+          <div className="absolute top-11 right-0 z-30 rounded-xl py-1.5 min-w-[220px]"
             style={{
               background: 'rgba(17,24,39,0.95)',
               backdropFilter: 'blur(24px)',
               border: '1px solid rgba(255,255,255,0.12)',
               boxShadow: '0 12px 48px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08)',
             }}>
-            <button onClick={() => { onAddLeave?.(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/5 transition text-left">
-              <UmbrellaIcon width="14" height="14" className="text-ink-400" />
-              <span className="text-[13px] text-ink-900">Add leave</span>
-            </button>
-            <button onClick={() => { onJumpToday?.(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/5 transition text-left">
-              <CalendarIcon width="14" height="14" className="text-ink-400" />
-              <span className="text-[13px] text-ink-900">Jump to today</span>
-            </button>
+            <p className="px-3 py-1.5 text-[10px] text-ink-400 uppercase tracking-wide font-semibold">Planning views</p>
+            <MenuItem icon={<CalendarIcon width="14" height="14" />} label="Week view" hint="Scan the week at a glance" onClick={onShowWeek} />
+            <MenuItem icon={<CalendarIcon width="14" height="14" />} label="Month view" hint="Plan vacations, spot gaps" onClick={onShowMonth} />
+
+            <div className="my-1 mx-3 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+
+            <MenuItem icon={<UmbrellaIcon width="14" height="14" />} label="Add leave" onClick={onAddLeave} />
+            <MenuItem icon={<CalendarIcon width="14" height="14" />} label="Jump to today" onClick={onJumpToday} />
           </div>
         </>
       )}
@@ -889,6 +909,142 @@ function packEvents(events) {
   const total = maxCol + 1;
   sorted.forEach(ev => { ev._colTotal = total; });
   return sorted;
+}
+
+// ── Week view (tucked-away planning view — 7 columns, read-only) ─
+function WeekView({ date, allEvents, leaves, onDayClick }) {
+  const weekStart = startOfWeek(date);
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const today = isoDate(new Date());
+
+  return (
+    <div className="overflow-x-auto -mx-1 pb-1">
+      <div className="flex gap-1.5 px-1" style={{ minWidth: 640 }}>
+        {days.map(d => {
+          const iso = isoDate(d);
+          const dayEvents = allEvents
+            .filter(e => eventLocalDate(e) === iso)
+            .sort((a, b) => a.start_time.localeCompare(b.start_time));
+          const dayLeaves = leavesOnDate(leaves, iso);
+          const isT = iso === today;
+          return (
+            <button
+              key={iso}
+              onClick={() => onDayClick(d)}
+              className="flex-1 min-w-[92px] text-left rounded-[12px] p-2 transition hover:bg-white/5"
+              style={{
+                background: 'rgba(255,255,255,0.03)',
+                border: `1px solid ${isT ? 'rgba(91,140,255,0.35)' : 'rgba(255,255,255,0.08)'}`,
+                boxShadow: isT ? '0 0 12px rgba(91,140,255,0.15)' : 'none',
+              }}
+            >
+              <div className="mb-2">
+                <p className="text-[10px] uppercase tracking-wide text-ink-400 font-semibold">
+                  {d.toLocaleDateString('en-IN', { weekday: 'short' })}
+                </p>
+                <p className={'text-[17px] font-bold mt-0.5 ' + (isT ? 'text-brand-blue' : 'text-ink-900')}>
+                  {d.getDate()}
+                </p>
+              </div>
+              <div className="space-y-1 min-h-[64px]">
+                {dayLeaves.slice(0, 1).map(l => (
+                  <div key={l.id} className="text-[9px] px-1.5 py-0.5 rounded truncate"
+                    style={{ background: 'rgba(239,68,68,0.15)', color: '#FCA5A5', border: '1px solid rgba(239,68,68,0.22)' }}>
+                    {l.initials} leave
+                  </div>
+                ))}
+                {dayEvents.slice(0, 3).map(ev => {
+                  const c = accentFor(ev);
+                  return (
+                    <div key={ev.id} className="text-[10px] px-1.5 py-0.5 rounded truncate"
+                      style={{
+                        background: `${c}22`,
+                        color: '#E5E7EB',
+                        borderLeft: `2px solid ${c}`,
+                        opacity: ev._isTeam ? 0.7 : 1,
+                      }}>
+                      {ev._isTeam && ev._busyOnly ? 'Busy' : ev.title}
+                    </div>
+                  );
+                })}
+                {dayEvents.length > 3 && (
+                  <p className="text-[9px] text-ink-400">+{dayEvents.length - 3} more</p>
+                )}
+                {dayEvents.length === 0 && dayLeaves.length === 0 && (
+                  <p className="text-[9px] text-ink-400/60">—</p>
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Month view (tucked-away planning view — vacation scan) ──────
+function MonthView({ date, allEvents, leaves, onDayClick }) {
+  const monthStart = startOfMonth(date);
+  const total = daysInMonth(date);
+  const rawDay = monthStart.getDay();
+  const leadingBlanks = rawDay === 0 ? 6 : rawDay - 1;
+  const today = isoDate(new Date());
+  const cells = [];
+  for (let i = 0; i < leadingBlanks; i++) cells.push(null);
+  for (let d = 1; d <= total; d++) cells.push(new Date(date.getFullYear(), date.getMonth(), d));
+
+  return (
+    <div>
+      <div className="grid grid-cols-7 mb-1">
+        {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
+          <div key={d} className="text-center text-[10px] text-ink-400 py-1.5 font-semibold uppercase tracking-wide">{d}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-px rounded-xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+        {cells.map((d, i) => {
+          if (!d) return <div key={`b${i}`} className="min-h-[72px]" style={{ background: 'rgba(17,24,39,0.4)' }} />;
+          const iso = isoDate(d);
+          const dayEvents = allEvents.filter(e => eventLocalDate(e) === iso);
+          const dayLeaves = leavesOnDate(leaves, iso);
+          const isT = iso === today;
+          return (
+            <button
+              key={iso}
+              onClick={() => onDayClick(d)}
+              className="min-h-[72px] p-1.5 text-left align-top transition hover:bg-white/5 relative"
+              style={{
+                background: 'rgba(17,24,39,0.7)',
+                outline: isT ? '2px solid #5B8CFF' : 'none',
+                outlineOffset: isT ? '-2px' : 0,
+              }}
+            >
+              <p className={'text-[11px] font-semibold mb-1 ' + (isT ? 'text-brand-blue' : 'text-ink-900')}>
+                {d.getDate()}
+              </p>
+              {dayLeaves.length > 0 && (
+                <div className="h-[3px] w-full rounded-full mb-1" style={{ background: 'rgba(239,68,68,0.7)' }} title={dayLeaves.map(l => `${l.initials} (${l.type})`).join(', ')} />
+              )}
+              {dayEvents.slice(0, 2).map(ev => {
+                const c = accentFor(ev);
+                return (
+                  <div key={ev.id} className="text-[9px] rounded px-1 truncate leading-tight mb-0.5"
+                    style={{
+                      background: `${c}33`,
+                      color: '#E5E7EB',
+                      borderLeft: `2px solid ${c}`,
+                      opacity: ev._isTeam ? 0.7 : 1,
+                    }}>
+                    {ev._isTeam && ev._busyOnly ? 'Busy' : ev.title}
+                  </div>
+                );
+              })}
+              {dayEvents.length > 2 && <p className="text-[9px] text-ink-400">+{dayEvents.length - 2}</p>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 // ── Day view: time grid + now-line + simplified cards ───────────
@@ -1212,19 +1368,31 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
 
   const nav = (dir) => {
     if (view === 'today') setDate(d => addDays(d, dir));
-    else setDate(d => addDays(d, dir * 7));
+    else if (view === 'week') setDate(d => addDays(d, dir * 7));
+    else if (view === 'month') setDate(d => { const r = new Date(d); r.setMonth(r.getMonth() + dir); return r; });
+    else setDate(d => addDays(d, dir * 7)); // upcoming
   };
   const jumpToToday = () => setDate(new Date());
+  // Clicking a day in Week/Month drills into Today view for that day.
+  const switchToDay = (d) => { setDate(d); setView('today'); };
 
   const todayIso = isoDate(new Date());
   const isViewingToday = view === 'today' ? isoDate(date) === todayIso : isoDate(date) <= todayIso;
 
   const headerLabel = view === 'today'
     ? date.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })
-    : `Next 14 days`;
+    : view === 'week'
+      ? `Week of ${startOfWeek(date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}`
+      : view === 'month'
+        ? date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+        : 'Next 14 days';
   const headerSub = view === 'today'
     ? `${events.length} event${events.length !== 1 ? 's' : ''}${selectedTeam.length > 0 ? ` · ${selectedTeam.length} teammate${selectedTeam.length > 1 ? 's' : ''}` : ''}`
-    : `Starting ${date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}${selectedTeam.length > 0 ? ` · ${selectedTeam.length} teammate${selectedTeam.length > 1 ? 's' : ''}` : ''}`;
+    : view === 'week'
+      ? `Weekly overview${selectedTeam.length > 0 ? ` · ${selectedTeam.length} teammate${selectedTeam.length > 1 ? 's' : ''}` : ''}`
+      : view === 'month'
+        ? `Monthly planner${selectedTeam.length > 0 ? ` · ${selectedTeam.length} teammate${selectedTeam.length > 1 ? 's' : ''}` : ''}`
+        : `Starting ${date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}${selectedTeam.length > 0 ? ` · ${selectedTeam.length} teammate${selectedTeam.length > 1 ? 's' : ''}` : ''}`;
 
   const refresh = () => { loadDay(date); loadAll(); };
 
@@ -1292,6 +1460,8 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
     else if (e.key === 'a' || e.key === 'A') { e.preventDefault(); setAddOpen(true); }
     else if (e.key === 'd' || e.key === 'D') { e.preventDefault(); setView('today'); }
     else if (e.key === 'u' || e.key === 'U') { e.preventDefault(); setView('upcoming'); }
+    else if (e.key === 'w' || e.key === 'W') { e.preventDefault(); setView('week'); }
+    else if (e.key === 'm' || e.key === 'M') { e.preventDefault(); setView('month'); }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); nav(-1); }
     else if (e.key === 'ArrowRight') { e.preventDefault(); nav(1); }
   }, [view]);
@@ -1338,7 +1508,7 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
       </div>
 
       {/* Toolbar: view tabs + team + overflow + add */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         {/* Segmented view toggle */}
         <div className="inline-flex p-0.5 rounded-[10px]" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)' }}>
           {[{ id: 'today', label: 'Today' }, { id: 'upcoming', label: 'Upcoming' }].map(v => {
@@ -1358,10 +1528,36 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
           })}
         </div>
 
+        {/* Planning-mode chip — only visible when Week/Month is active */}
+        {(view === 'week' || view === 'month') && (
+          <span
+            className="inline-flex items-center gap-1 pl-2.5 pr-1 h-8 rounded-[10px] text-[11px] font-semibold"
+            style={{
+              background: 'rgba(168,139,250,0.14)',
+              color: '#C4B5FD',
+              border: '1px solid rgba(168,139,250,0.28)',
+            }}
+          >
+            {view === 'week' ? 'Week view' : 'Month view'}
+            <button
+              onClick={() => setView('today')}
+              aria-label={`Exit ${view} view`}
+              className="ml-0.5 w-5 h-5 rounded-full flex items-center justify-center hover:bg-white/10 transition"
+            >
+              <CloseIcon width="11" height="11" />
+            </button>
+          </span>
+        )}
+
         <div className="flex-1" />
 
         <TeamToggle users={teamUsers} selected={selectedTeam} onToggle={toggleTeamMember} />
-        <OverflowMenu onAddLeave={() => setLeaveOpen(true)} onJumpToday={jumpToToday} />
+        <OverflowMenu
+          onAddLeave={() => setLeaveOpen(true)}
+          onJumpToday={jumpToToday}
+          onShowWeek={() => setView('week')}
+          onShowMonth={() => setView('month')}
+        />
 
         <button
           onClick={() => setAddOpen(true)}
@@ -1397,6 +1593,12 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
           onDeleteLeave={deleteLeaveWithUndo}
           onQuickComplete={quickComplete}
         />
+      )}
+      {view === 'week' && (
+        <WeekView date={date} allEvents={allEvents} leaves={leaves} onDayClick={switchToDay} />
+      )}
+      {view === 'month' && (
+        <MonthView date={date} allEvents={allEvents} leaves={leaves} onDayClick={switchToDay} />
       )}
 
       {/* Modals */}
