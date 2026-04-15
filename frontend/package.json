@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "db:push": "cd .. && supabase db push",
+    "db:diff": "cd .. && supabase db diff"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",

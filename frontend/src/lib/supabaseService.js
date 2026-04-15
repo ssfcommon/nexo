@@ -65,6 +65,21 @@ function unwrap({ data, error }) {
   return data;
 }
 
+// True when Supabase/PostgREST complains about a column/relation that doesn't
+// exist. Happens when the frontend ships ahead of a DB migration. We detect
+// this and fall back to a baseline query so the UI degrades instead of going
+// blank. Codes per PostgreSQL: 42703 = undefined_column, 42P01 = undefined_table,
+// PGRST200 = relationship not found.
+function isMissingSchemaError(err) {
+  if (!err) return false;
+  const code = err.code || err.hint || '';
+  if (code === '42703' || code === '42P01' || code === 'PGRST200') return true;
+  const msg = String(err.message || err.details || '').toLowerCase();
+  return msg.includes('does not exist') ||
+         msg.includes('could not find the') ||
+         msg.includes('no relationship');
+}
+
 // Map frontend complexity/priority strings to DB values and back
 function mapComplexityToDB(val) {
   if (!val) return null;
@@ -535,12 +550,22 @@ async function deleteSubtask(id) {
 // ── Tasks ────────────────────────────────────────────────
 
 async function tasks(params = {}) {
-  let q = supabase.from('tasks').select('*, creator:users!assigned_by(name)');
-  if (params.quick === '1' || params.quick === 1) q = q.eq('is_quick', true);
-  if (params.quick === '0' || params.quick === 0) q = q.eq('is_quick', false);
-  if (params.owner === 'me') q = q.eq('owner_id', uid());
-  q = q.order('deadline', { ascending: true, nullsFirst: false });
-  const rows = unwrap(await q);
+  const buildQuery = (select) => {
+    let q = supabase.from('tasks').select(select);
+    if (params.quick === '1' || params.quick === 1) q = q.eq('is_quick', true);
+    if (params.quick === '0' || params.quick === 0) q = q.eq('is_quick', false);
+    if (params.owner === 'me') q = q.eq('owner_id', uid());
+    return q.order('deadline', { ascending: true, nullsFirst: false });
+  };
+
+  // Try the enriched query first (with creator join via assigned_by).
+  let res = await buildQuery('*, creator:users!assigned_by(name)');
+  if (res.error && isMissingSchemaError(res.error)) {
+    // Migration hasn't run yet — fall back to the plain select so the UI keeps working.
+    console.warn('[tasks] assigned_by column/join missing, falling back:', res.error.message);
+    res = await buildQuery('*');
+  }
+  const rows = unwrap(res);
   return (rows || []).map(t => ({
     ...t,
     creator_name: t.creator?.name || null,
@@ -575,25 +600,44 @@ async function homeTasks({ windowDays = 7 } = {}) {
   horizon.setDate(horizon.getDate() + windowDays);
   const horizonStr = horizon.toISOString().slice(0, 10);
 
-  const [tasksRes, subtasksRes] = await Promise.all([
-    supabase
-      .from('tasks')
-      .select('id, title, deadline, status, is_quick, project_id, alarm_at, owner_id, assigned_by, creator:users!assigned_by(name)')
-      .eq('owner_id', uid())
-      .neq('status', 'done')
-      .not('deadline', 'is', null)
-      .lte('deadline', horizonStr)
-      .order('deadline', { ascending: true }),
-    supabase
-      .from('subtasks')
-      .select('id, title, deadline, status, project_id, alarm_at, owner_id, assigned_by, project:projects(title), creator:users!assigned_by(name)')
-      .eq('owner_id', uid())
-      .neq('status', 'done')
-      .neq('assignment_status', 'declined')
-      .not('deadline', 'is', null)
-      .lte('deadline', horizonStr)
-      .order('deadline', { ascending: true }),
+  // Try enriched selects first; fall back to baseline fields if newer
+  // columns/joins (alarm_at, assigned_by) haven't been migrated yet.
+  const tasksQuery = (select) => supabase
+    .from('tasks')
+    .select(select)
+    .eq('owner_id', uid())
+    .neq('status', 'done')
+    .not('deadline', 'is', null)
+    .lte('deadline', horizonStr)
+    .order('deadline', { ascending: true });
+
+  const subtasksQuery = (select) => supabase
+    .from('subtasks')
+    .select(select)
+    .eq('owner_id', uid())
+    .neq('status', 'done')
+    .neq('assignment_status', 'declined')
+    .not('deadline', 'is', null)
+    .lte('deadline', horizonStr)
+    .order('deadline', { ascending: true });
+
+  let [tasksRes, subtasksRes] = await Promise.all([
+    tasksQuery('id, title, deadline, status, is_quick, project_id, alarm_at, owner_id, assigned_by, creator:users!assigned_by(name)'),
+    subtasksQuery('id, title, deadline, status, project_id, alarm_at, owner_id, assigned_by, project:projects(title), creator:users!assigned_by(name)'),
   ]);
+
+  if (tasksRes.error && isMissingSchemaError(tasksRes.error)) {
+    console.warn('[homeTasks] tasks enriched select failed, falling back:', tasksRes.error.message);
+    tasksRes = await tasksQuery('id, title, deadline, status, is_quick, project_id, owner_id');
+  }
+  if (subtasksRes.error && isMissingSchemaError(subtasksRes.error)) {
+    console.warn('[homeTasks] subtasks enriched select failed, falling back:', subtasksRes.error.message);
+    subtasksRes = await subtasksQuery('id, title, deadline, status, project_id, owner_id, assigned_by, project:projects(title), creator:users!assigned_by(name)');
+    // If even the subtask fallback trips (e.g. assigned_by join missing), drop that too.
+    if (subtasksRes.error && isMissingSchemaError(subtasksRes.error)) {
+      subtasksRes = await subtasksQuery('id, title, deadline, status, project_id, owner_id, project:projects(title)');
+    }
+  }
 
   const quick = (tasksRes.data || []).map(t => ({
     id: t.id,
