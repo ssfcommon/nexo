@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { api, ASSET_ORIGIN } from '../api.js';
 import { useToast } from '../context/ToastContext.jsx';
-import ConfirmModal from '../components/ConfirmModal.jsx';
 import { Avatar, AvatarStack, Pill } from '../components/ui.jsx';
 import HeaderActions from '../components/HeaderActions.jsx';
 import Modal, { Field, inputCls } from '../components/Modal.jsx';
@@ -702,7 +701,7 @@ function EventActionSheet({ open, onClose, event, onAction, onChanged }) {
   );
 }
 
-function EditEventModal({ open, onClose, event, onUpdated, onDeleted }) {
+function EditEventModal({ open, onClose, event, onUpdated, onRequestDelete }) {
   const showToast = useToast();
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
@@ -710,7 +709,6 @@ function EditEventModal({ open, onClose, event, onUpdated, onDeleted }) {
   const [duration, setDuration] = useState(60);
   const [recurrence, setRecurrence] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const realEvent = event?._originalId ? { ...event, id: event._originalId } : event;
 
@@ -722,7 +720,6 @@ function EditEventModal({ open, onClose, event, onUpdated, onDeleted }) {
       setTime(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
       setDuration(event.duration_min || 60);
       setRecurrence(event.metadata?.recurrence || null);
-      setConfirmDelete(false);
     }
   }, [open, event]);
 
@@ -737,13 +734,6 @@ function EditEventModal({ open, onClose, event, onUpdated, onDeleted }) {
       });
       onUpdated?.(); onClose();
     } catch (err) { showToast(err.message || 'Failed to update event', 'error'); } finally { setBusy(false); }
-  };
-
-  const doDelete = async () => {
-    setBusy(true);
-    try { await api.deleteEvent(realEvent.id); onDeleted?.(); onClose(); }
-    catch (err) { showToast(err.message || 'Failed to delete event', 'error'); }
-    finally { setBusy(false); }
   };
 
   if (!event) return null;
@@ -764,16 +754,12 @@ function EditEventModal({ open, onClose, event, onUpdated, onDeleted }) {
         )}
         <button disabled={busy} type="submit" className="w-full h-11 rounded-[10px] bg-brand-blue text-white font-semibold disabled:opacity-60 mb-2">{busy ? 'Saving…' : 'Save Changes'}</button>
       </form>
-      {!confirmDelete ? (
-        <button onClick={() => setConfirmDelete(true)} className="w-full h-10 rounded-[10px] text-[13px] text-danger font-medium hover:bg-[#FEF2F2]">Delete Event</button>
-      ) : (
-        <div className="flex gap-2">
-          <button onClick={() => setConfirmDelete(false)} className="flex-1 h-10 rounded-[10px] border border-line-light text-[13px] text-ink-500">Cancel</button>
-          <button onClick={doDelete} disabled={busy} className="flex-1 h-10 rounded-[10px] bg-danger text-white text-[13px] font-semibold disabled:opacity-60">
-            {event.metadata?.recurrence ? 'Delete All Occurrences' : 'Confirm Delete'}
-          </button>
-        </div>
-      )}
+      <button
+        onClick={() => { onRequestDelete?.(realEvent); onClose(); }}
+        className="w-full h-10 rounded-[10px] text-[13px] text-danger font-medium hover:bg-[#FEF2F2]"
+      >
+        Delete Event
+      </button>
     </Modal>
   );
 }
@@ -1096,7 +1082,6 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [editEvent, setEditEvent] = useState(null);
   const [actionEvent, setActionEvent] = useState(null);
-  const [deleteLeaveId, setDeleteLeaveId] = useState(null);
   const [prevView, setPrevView] = useState(null);
   const [prefillTitle, setPrefillTitle] = useState('');
   const [datePickerOpen, setDatePickerOpen] = useState(false);
@@ -1199,6 +1184,41 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
     } catch (err) { showToast(err.message || 'Failed to complete event', 'error'); }
   };
 
+  // Undo-pattern deletes: hide locally, schedule real delete, let the user reverse it.
+  const deleteLeaveWithUndo = (leaveId) => {
+    const prevLeaves = leaves;
+    setLeaves(ls => ls.filter(l => l.id !== leaveId));
+    showToast('Leave removed', {
+      action: { label: 'Undo', onClick: () => setLeaves(prevLeaves) },
+      onExpire: async () => {
+        try { await api.deleteLeave(leaveId); }
+        catch (err) { setLeaves(prevLeaves); showToast(err.message || 'Failed to remove leave', 'error'); }
+      },
+    });
+  };
+
+  const deleteEventWithUndo = (ev) => {
+    const id = ev._originalId || ev.id;
+    const prevRaw = rawEvents;
+    const prevAll = allRawEvents;
+    setRawEvents(es => es.filter(e => e.id !== id));
+    setAllRawEvents(es => es.filter(e => e.id !== id));
+    const isRecurring = !!ev.metadata?.recurrence;
+    showToast(isRecurring ? 'Event series deleted' : 'Event deleted', {
+      action: {
+        label: 'Undo',
+        onClick: () => { setRawEvents(prevRaw); setAllRawEvents(prevAll); },
+      },
+      onExpire: async () => {
+        try { await api.deleteEvent(id); }
+        catch (err) {
+          setRawEvents(prevRaw); setAllRawEvents(prevAll);
+          showToast(err.message || 'Failed to delete event', 'error');
+        }
+      },
+    });
+  };
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -1241,27 +1261,13 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
       </div>
 
       {/* View body */}
-      {view === 'Day' && <DayView events={[...events, ...allEvents.filter(e => e._isTeam && eventLocalDate(e) === isoDate(date))].sort((a,b) => a.start_time.localeCompare(b.start_time))} leaves={leaves} date={date} onEventClick={setActionEvent} onDeleteLeave={setDeleteLeaveId} onQuickComplete={quickComplete} />}
+      {view === 'Day' && <DayView events={[...events, ...allEvents.filter(e => e._isTeam && eventLocalDate(e) === isoDate(date))].sort((a,b) => a.start_time.localeCompare(b.start_time))} leaves={leaves} date={date} onEventClick={setActionEvent} onDeleteLeave={deleteLeaveWithUndo} onQuickComplete={quickComplete} />}
       {view === 'Week' && <WeekView date={date} allEvents={allEvents} leaves={leaves} onDayClick={switchToDay} />}
       {view === 'Month' && <MonthView date={date} allEvents={allEvents} leaves={leaves} onDayClick={switchToDay} />}
       {view === 'Schedule' && <ScheduleView allEvents={allEvents} leaves={leaves} date={date} onEventClick={setActionEvent} onQuickComplete={quickComplete} />}
 
       <AddEventModal open={addOpen} onClose={() => { setAddOpen(false); setPrefillTitle(''); }} onCreated={() => { refresh(); showToast('Event created'); }} date={isoDate(date)} prefillTitle={prefillTitle} />
       <AddLeaveModal open={leaveOpen} onClose={() => setLeaveOpen(false)} onCreated={() => { loadLeaves(); showToast('Leave added'); }} date={isoDate(date)} />
-      <ConfirmModal
-        open={!!deleteLeaveId}
-        onClose={() => setDeleteLeaveId(null)}
-        title="Remove Leave"
-        message="Are you sure you want to remove this leave entry?"
-        onConfirm={async () => {
-          try {
-            await api.deleteLeave(deleteLeaveId);
-            setDeleteLeaveId(null);
-            loadLeaves();
-            showToast('Leave removed');
-          } catch (err) { showToast(err.message || 'Failed to remove leave', 'error'); setDeleteLeaveId(null); }
-        }}
-      />
       <EventActionSheet
         open={!!actionEvent}
         onClose={() => setActionEvent(null)}
@@ -1269,9 +1275,12 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
         onAction={(kind) => { if (kind === 'edit') { setEditEvent(actionEvent); setActionEvent(null); } }}
         onChanged={() => { refresh(); }}
       />
-      <EditEventModal open={!!editEvent} onClose={() => setEditEvent(null)} event={editEvent}
+      <EditEventModal
+        open={!!editEvent}
+        onClose={() => setEditEvent(null)}
+        event={editEvent}
         onUpdated={() => { refresh(); showToast('Event updated'); }}
-        onDeleted={() => { refresh(); showToast('Event deleted'); }}
+        onRequestDelete={deleteEventWithUndo}
       />
     </div>
   );

@@ -4,7 +4,6 @@ import { AvatarStack, ProgressBar, deptDotColor } from '../components/ui.jsx';
 import HeaderActions from '../components/HeaderActions.jsx';
 import ProjectDetail from './ProjectDetail.jsx';
 import { fireConfetti } from '../components/Confetti.jsx';
-import ConfirmModal from '../components/ConfirmModal.jsx';
 import AlarmModal from '../components/AlarmModal.jsx';
 import RowActions from '../components/RowActions.jsx';
 import GlassCard from '../components/GlassCard.jsx';
@@ -19,6 +18,20 @@ import {
   TrashIcon,
   RepeatIcon,
 } from '../components/Icons.jsx';
+
+// Initial visible row caps — the rest is one click away.
+const PROJECT_LIMIT = 6;
+const TASK_LIMIT = 5;
+
+// Deadline ASC with nulls last. Past dates bubble to the top on their own.
+const byDeadline = (a, b) => {
+  const da = a?.deadline || null;
+  const db = b?.deadline || null;
+  if (!da && !db) return 0;
+  if (!da) return 1;
+  if (!db) return -1;
+  return da.localeCompare(db);
+};
 
 // ── Priority → accent bar ────────────────────────────────────
 
@@ -229,8 +242,9 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
   const [filterOpen, setFilterOpen] = useState(false);
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const [addTaskOpen, setAddTaskOpen] = useState(false);
-  const [deleteTaskId, setDeleteTaskId] = useState(null);
   const [alarmTask, setAlarmTask] = useState(null);
+  const [showAllProjects, setShowAllProjects] = useState(false);
+  const [showAllTasks, setShowAllTasks] = useState(false);
   const filterWrap = useRef(null);
 
   useEffect(() => {
@@ -257,13 +271,25 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
 
   const visibleProjects = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return projects.filter(p => {
+    const filtered = projects.filter(p => {
       if (q && !p.title.toLowerCase().includes(q)) return false;
       if (department && p.department !== department) return false;
       if (priority && p.priority !== priority) return false;
       return true;
     });
+    // Deadline-urgency ASC; no-deadline last. Tight deadlines surface to the top.
+    return [...filtered].sort(byDeadline);
   }, [projects, query, department, priority]);
+
+  // Pending tasks first, then done, each group sorted by deadline ASC (nulls last).
+  const sortedTasks = useMemo(() => {
+    const pending = [];
+    const done = [];
+    quickTasks.forEach(t => (t.status === 'done' ? done : pending).push(t));
+    pending.sort(byDeadline);
+    done.sort(byDeadline);
+    return [...pending, ...done];
+  }, [quickTasks]);
 
   if (openId) {
     return <ProjectDetail projectId={openId} me={me} onBack={() => { setOpenId(null); loadProjects(); }} onSwitchTab={onSwitchTab} />;
@@ -276,6 +302,25 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
       if (next === 'done') fireConfetti();
       setQuickTasks(ts => ts.map(x => x.id === t.id ? { ...x, status: next } : x));
     } catch (err) { showToast(err.message || 'Failed to update task', 'error'); }
+  };
+
+  // Low-risk delete → optimistic removal + 5s undo toast. DB delete fires on expire.
+  const deleteTask = (task) => {
+    const prev = quickTasks;
+    setQuickTasks(ts => ts.filter(t => t.id !== task.id));
+    showToast('Task deleted', {
+      action: {
+        label: 'Undo',
+        onClick: () => setQuickTasks(prev),
+      },
+      onExpire: async () => {
+        try { await api.deleteTask(task.id); }
+        catch (err) {
+          setQuickTasks(prev);
+          showToast(err.message || 'Failed to delete task', 'error');
+        }
+      },
+    });
   };
 
   const pendingTaskCount = quickTasks.filter(t => t.status !== 'done').length;
@@ -388,9 +433,17 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
           </div>
         ) : (
           <div className="space-y-2.5">
-            {visibleProjects.map(p => (
+            {(showAllProjects ? visibleProjects : visibleProjects.slice(0, PROJECT_LIMIT)).map(p => (
               <ProjectCard key={p.id} project={p} onOpen={() => setOpenId(p.id)} />
             ))}
+            {visibleProjects.length > PROJECT_LIMIT && (
+              <button
+                onClick={() => setShowAllProjects(v => !v)}
+                className="w-full text-[12px] text-brand-blue text-center pt-1 font-medium hover:underline"
+              >
+                {showAllProjects ? 'Show less' : `Show all ${visibleProjects.length}`}
+              </button>
+            )}
           </div>
         )}
       </section>
@@ -412,28 +465,41 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
           </button>
         </div>
 
-        {quickTasks.length === 0 ? (
+        {sortedTasks.length === 0 ? (
           <GlassCard className="py-6 text-center">
             <p className="text-[13px] text-ink-500">No quick tasks yet.</p>
           </GlassCard>
-        ) : (
-          <GlassCard className="overflow-hidden">
-            {quickTasks.map((t, i) => (
-              <QuickTaskRow
-                key={t.id}
-                task={t}
-                isLast={i === quickTasks.length - 1}
-                onToggle={() => toggleTask(t)}
-                onSetAlarm={(task) => setAlarmTask(task)}
-                onAddToCal={(task) => {
-                  onSwitchTab?.('calendar', { addEvent: task.title });
-                  showToast('Opening calendar — add the details');
-                }}
-                onDelete={() => setDeleteTaskId(t.id)}
-              />
-            ))}
-          </GlassCard>
-        )}
+        ) : (() => {
+          const displayed = showAllTasks ? sortedTasks : sortedTasks.slice(0, TASK_LIMIT);
+          return (
+            <>
+              <GlassCard className="overflow-hidden">
+                {displayed.map((t, i) => (
+                  <QuickTaskRow
+                    key={t.id}
+                    task={t}
+                    isLast={i === displayed.length - 1}
+                    onToggle={() => toggleTask(t)}
+                    onSetAlarm={(task) => setAlarmTask(task)}
+                    onAddToCal={(task) => {
+                      onSwitchTab?.('calendar', { addEvent: task.title });
+                      showToast('Opening calendar — add the details');
+                    }}
+                    onDelete={() => deleteTask(t)}
+                  />
+                ))}
+              </GlassCard>
+              {sortedTasks.length > TASK_LIMIT && (
+                <button
+                  onClick={() => setShowAllTasks(v => !v)}
+                  className="w-full text-[12px] text-brand-blue text-center pt-2 font-medium hover:underline"
+                >
+                  {showAllTasks ? 'Show less' : `Show all ${sortedTasks.length}`}
+                </button>
+              )}
+            </>
+          );
+        })()}
       </section>
 
       {/* Modals */}
@@ -447,24 +513,6 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
         open={addTaskOpen}
         onClose={() => setAddTaskOpen(false)}
         onCreated={() => { showToast('Task added'); loadTasks(); setAddTaskOpen(false); }}
-      />
-
-      <ConfirmModal
-        open={!!deleteTaskId}
-        onClose={() => setDeleteTaskId(null)}
-        title="Delete task"
-        message="Are you sure you want to delete this task?"
-        onConfirm={async () => {
-          try {
-            await api.deleteTask(deleteTaskId);
-            setQuickTasks(ts => ts.filter(t => t.id !== deleteTaskId));
-            setDeleteTaskId(null);
-            showToast('Task deleted');
-          } catch (err) {
-            showToast(err.message || 'Failed to delete task', 'error');
-            setDeleteTaskId(null);
-          }
-        }}
       />
 
       <AlarmModal

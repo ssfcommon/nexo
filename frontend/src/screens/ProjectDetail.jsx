@@ -549,14 +549,16 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
     }
   };
 
+  // Projects still use ConfirmModal — their delete cascades to subtasks/comments
+  // and kicks the user back to the list. Subtask/comment deletes use the undo-toast
+  // pattern (see `deleteSubtask` / `deleteComment` below).
   const handleConfirmDelete = async () => {
     if (!confirmDelete) return;
-    const { type, id } = confirmDelete;
+    const { id } = confirmDelete;
     try {
-      if (type === 'project') { await api.deleteProject(id); showToast('Project deleted'); onBack(); return; }
-      if (type === 'subtask') { await api.deleteSubtask(id); showToast('Subtask deleted'); }
-      if (type === 'comment') { await api.deleteComment(id); showToast('Comment deleted'); }
-      load();
+      await api.deleteProject(id);
+      showToast('Project deleted');
+      onBack();
     } catch { showToast('Delete failed', 'error'); }
     setConfirmDelete(null);
   };
@@ -584,9 +586,20 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
       load();
     } catch (err) { showToast(err.message || 'Failed to edit subtask', 'error'); }
   };
+  // Optimistic removal + 5s undo. On expire we commit the DB delete.
   const deleteSubtask = (id) => {
-    const s = p.subtasks.find(st => st.id === id);
-    setConfirmDelete({ type: 'subtask', id, title: s?.title || 'this subtask' });
+    const prev = p;
+    setP(prevP => prevP ? { ...prevP, subtasks: prevP.subtasks.filter(s => s.id !== id) } : prevP);
+    showToast('Subtask deleted', {
+      action: {
+        label: 'Undo',
+        onClick: () => setP(prev),
+      },
+      onExpire: async () => {
+        try { await api.deleteSubtask(id); load(); }
+        catch (err) { setP(prev); showToast(err.message || 'Failed to delete subtask', 'error'); }
+      },
+    });
   };
   const reorderSubtask = async (draggedId, targetId) => {
     try {
@@ -617,7 +630,18 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
   };
 
   const deleteComment = (id) => {
-    setConfirmDelete({ type: 'comment', id, title: 'this comment' });
+    const prev = p;
+    setP(prevP => prevP ? { ...prevP, comments: prevP.comments.filter(c => c.id !== id) } : prevP);
+    showToast('Comment deleted', {
+      action: {
+        label: 'Undo',
+        onClick: () => setP(prev),
+      },
+      onExpire: async () => {
+        try { await api.deleteComment(id); load(); }
+        catch (err) { setP(prev); showToast(err.message || 'Failed to delete comment', 'error'); }
+      },
+    });
   };
   const submitComment = async (e) => {
     e?.preventDefault?.();
@@ -802,8 +826,9 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
         open={!!confirmDelete}
         onClose={() => setConfirmDelete(null)}
         onConfirm={handleConfirmDelete}
-        title={confirmDelete?.type === 'project' ? 'Delete Project' : confirmDelete?.type === 'subtask' ? 'Delete Subtask' : 'Delete Comment'}
-        message={`Are you sure you want to delete "${confirmDelete?.title}"? This cannot be undone.`}
+        title="Delete project"
+        message={`Deleting "${confirmDelete?.title}" also removes its subtasks and comments. This cannot be undone.`}
+        confirmLabel="Delete project"
       />
 
       {/* Comments */}
