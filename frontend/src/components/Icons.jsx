@@ -39,3 +39,21 @@ export const AlarmIcon = (p) => (
 export const UmbrellaIcon = (p) => (
   <svg width="18" height="18" viewBox="0 0 24 24" {...s} {...p}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
 );
+export const ActivityIcon = (p) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" {...s} {...p}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+);
+export const BugIcon = (p) => (
+  <svg width="18" height="18" viewBox="0 0 24 24" {...s} {...p}><rect x="8" y="6" width="8" height="14" rx="4"/><path d="M12 6V3"/><path d="M9 3l-2-1"/><path d="M15 3l2-1"/><path d="M8 10H4"/><path d="M16 10h4"/><path d="M8 14H3"/><path d="M16 14h5"/><path d="M8 18l-3 2"/><path d="M16 18l3 2"/></svg>
+);
+export const CheckDoubleIcon = (p) => (
+  <svg width="18" height="18" viewBox="0 0 24 24" {...s} {...p}><polyline points="2 12 7 17 12 12"/><polyline points="8 12 13 17 22 7"/></svg>
+);
+export const CheckIcon = (p) => (
+  <svg width="18" height="18" viewBox="0 0 24 24" {...s} {...p}><polyline points="20 6 9 17 4 12"/></svg>
+);
+export const CloseIcon = (p) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" {...s} {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+);
+export const InboxIcon = (p) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" {...s} {...p}><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+);
