@@ -1,15 +1,18 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { api, ASSET_ORIGIN } from '../api.js';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { api } from '../api.js';
 import { useToast } from '../context/ToastContext.jsx';
-import { Avatar, AvatarStack, Pill } from '../components/ui.jsx';
+import { Avatar, Pill } from '../components/ui.jsx';
 import HeaderActions from '../components/HeaderActions.jsx';
 import Modal, { Field, inputCls } from '../components/Modal.jsx';
-import { ChevronLeft, ChevronRight, ArrowLeft } from '../components/Icons.jsx';
+import {
+  ChevronLeft, ChevronRight, ArrowLeft, PlusIcon, RepeatIcon, LockIcon,
+  UmbrellaIcon, CheckIcon, CloseIcon, MoreIcon, CalendarIcon, ClockIcon, UsersIcon,
+} from '../components/Icons.jsx';
 
+// ── Date helpers ────────────────────────────────────────────────
 function isoDate(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
 function startOfWeek(d) { const r = new Date(d); const day = r.getDay(); r.setDate(r.getDate() - (day === 0 ? 6 : day - 1)); return r; }
-function startOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
 function daysInMonth(d) { return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); }
 function fmtTime(iso) {
   const d = new Date(iso);
@@ -19,11 +22,10 @@ function fmtTime(iso) {
   return `${h}:${m} ${ampm}`;
 }
 function fmtHour12(h24) { const ampm = h24 >= 12 ? 'PM' : 'AM'; const h = h24 % 12 || 12; return `${h} ${ampm}`; }
-function parseHour(iso) { return new Date(iso).getHours(); }
 function eventLocalDate(ev) { return isoDate(new Date(ev.start_time)); }
 function leavesOnDate(leaves, iso) { return leaves.filter(l => l.start_date <= iso && l.end_date >= iso); }
 
-// Distinct palette for team member events (avoids confusion with own event colors)
+// Distinct palette for team member events
 const TEAM_COLORS = ['#F97316', '#8B5CF6', '#EC4899', '#14B8A6', '#EAB308', '#6366F1'];
 function teamColor(userId) { return TEAM_COLORS[(userId || 0) % TEAM_COLORS.length]; }
 
@@ -35,18 +37,7 @@ function accentFor(ev) {
   return '#4A6CF7';
 }
 
-// ── Recurrence helpers ──
-
-const RECURRENCE_OPTIONS = [
-  { value: '', label: 'Does not repeat' },
-  { value: 'daily', label: 'Every day' },
-  { value: 'weekly', label: 'Every week' },
-  { value: 'monthly', label: 'Every month' },
-  { value: 'yearly', label: 'Every year' },
-  { value: 'weekdays', label: 'Every weekday (Mon–Fri)' },
-  { value: 'custom', label: 'Custom…' },
-];
-
+// ── Recurrence helpers ──────────────────────────────────────────
 const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const DAY_LABELS = ['S','M','T','W','T','F','S'];
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -63,7 +54,7 @@ function nthWeekdayLabel(date) {
 function recurrenceLabel(rec) {
   if (!rec) return null;
   const freq = rec.freq || rec;
-  if (freq === 'daily') return rec.interval > 1 ? `Every ${rec.interval} days` : 'Daily';
+  if (freq === 'daily')   return rec.interval > 1 ? `Every ${rec.interval} days` : 'Daily';
   if (freq === 'weekly') {
     const prefix = rec.interval > 1 ? `Every ${rec.interval} weeks` : 'Weekly';
     return rec.days?.length ? `${prefix} on ${rec.days.join(', ')}` : prefix;
@@ -80,53 +71,7 @@ function recurrenceLabel(rec) {
     return prefix;
   }
   if (freq === 'weekdays') return 'Every weekday (Mon–Fri)';
-  if (rec.interval && rec.interval > 1) return `Every ${rec.interval} ${rec.freq}s`;
   return null;
-}
-
-// ── Date Jump Picker (click header to jump to any date) ──
-function DateJumpPicker({ date, onJump, onClose }) {
-  const [viewMonth, setViewMonth] = useState(new Date(date.getFullYear(), date.getMonth(), 1));
-  const total = daysInMonth(viewMonth);
-  const rawDay = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1).getDay();
-  const leadingBlanks = rawDay === 0 ? 6 : rawDay - 1;
-  const cells = [];
-  for (let i = 0; i < leadingBlanks; i++) cells.push(null);
-  for (let d = 1; d <= total; d++) cells.push(d);
-  const today = isoDate(new Date());
-  const selectedIso = isoDate(date);
-
-  return (
-    <>
-      <div className="fixed inset-0 z-30" onClick={onClose} />
-      <div className="absolute top-full left-0 mt-2 z-40 rounded-xl p-3 w-[280px]" style={{ background: 'rgba(17,24,39,0.92)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 12px 48px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
-        <div className="flex items-center justify-between mb-2">
-          <button onClick={() => setViewMonth(d => { const r = new Date(d); r.setMonth(r.getMonth() - 1); return r; })} className="w-7 h-7 rounded-full hover:bg-ink-100 flex items-center justify-center text-ink-500"><ChevronLeft /></button>
-          <span className="text-[13px] font-semibold text-ink-900">{viewMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</span>
-          <button onClick={() => setViewMonth(d => { const r = new Date(d); r.setMonth(r.getMonth() + 1); return r; })} className="w-7 h-7 rounded-full hover:bg-ink-100 flex items-center justify-center text-ink-500"><ChevronRight /></button>
-        </div>
-        <div className="grid grid-cols-7 mb-1">
-          {['M','T','W','T','F','S','S'].map((d, i) => <div key={i} className="text-center text-[10px] text-ink-300 font-semibold py-1">{d}</div>)}
-        </div>
-        <div className="grid grid-cols-7 gap-0.5">
-          {cells.map((d, i) => {
-            if (!d) return <div key={`b${i}`} />;
-            const iso = isoDate(new Date(viewMonth.getFullYear(), viewMonth.getMonth(), d));
-            const isToday = iso === today;
-            const isSelected = iso === selectedIso;
-            return (
-              <button key={d} onClick={() => { onJump(new Date(viewMonth.getFullYear(), viewMonth.getMonth(), d)); onClose(); }}
-                className={'h-8 rounded-lg text-[12px] font-medium transition ' +
-                  (isSelected ? 'bg-brand-blue text-white' : isToday ? 'bg-brand-blueLight text-brand-blue font-bold' : 'text-ink-700 hover:bg-ink-100')}>
-                {d}
-              </button>
-            );
-          })}
-        </div>
-        <button onClick={() => { onJump(new Date()); onClose(); }} className="w-full mt-2 h-8 rounded-lg text-[12px] text-brand-blue font-semibold hover:bg-brand-blueLight transition">Go to today</button>
-      </div>
-    </>
-  );
 }
 
 /** Expand a single event's recurrence into occurrences within a date range */
@@ -137,12 +82,11 @@ function expandRecurrence(event, rangeStart, rangeEnd) {
   const freq = typeof rec === 'string' ? rec : rec.freq;
   const interval = rec.interval || 1;
   const until = rec.until ? new Date(rec.until) : null;
-  const customDays = rec.days || []; // e.g., ['Mon', 'Wed', 'Fri']
-  const dayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const customDays = rec.days || [];
 
   const baseDate = new Date(event.start_time);
   const occurrences = [];
-  const maxOccurrences = 365; // safety limit
+  const maxOccurrences = 365;
   let count = 0;
 
   function addOccurrence(d) {
@@ -173,14 +117,11 @@ function expandRecurrence(event, rangeStart, rangeEnd) {
     const d = new Date(baseDate);
     while (count < maxOccurrences) {
       if (customDays.length > 0) {
-        // Custom weekly: specific days
         const weekStart = startOfWeek(d);
         for (let i = 0; i < 7; i++) {
           const wd = addDays(weekStart, i);
           const dayName = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i];
-          if (customDays.includes(dayName) && wd >= baseDate) {
-            addOccurrence(wd);
-          }
+          if (customDays.includes(dayName) && wd >= baseDate) addOccurrence(wd);
         }
         d.setDate(d.getDate() + 7 * interval);
       } else {
@@ -193,11 +134,9 @@ function expandRecurrence(event, rangeStart, rangeEnd) {
     }
   } else if (freq === 'monthly') {
     if (rec.monthMode === 'nthWeekday' && rec.nthWeekday && rec.nthWeekdayDay) {
-      // Repeat on nth weekday of month (e.g., "second Monday")
-      const targetDow = DAY_NAMES.indexOf(rec.nthWeekdayDay); // 0=Sun...6=Sat
+      const targetDow = DAY_NAMES.indexOf(rec.nthWeekdayDay);
       let m = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
       while (count < maxOccurrences) {
-        // Find the nth occurrence of targetDow in this month
         const firstDay = new Date(m.getFullYear(), m.getMonth(), 1);
         let dayOffset = (targetDow - firstDay.getDay() + 7) % 7;
         const nthDate = 1 + dayOffset + (rec.nthWeekday - 1) * 7;
@@ -248,25 +187,68 @@ function expandRecurrence(event, rangeStart, rangeEnd) {
 }
 
 function getExpandRange(view, date) {
-  if (view === 'Day') return [isoDate(date), isoDate(date)];
-  if (view === 'Week') {
-    const ws = startOfWeek(date);
-    return [isoDate(ws), isoDate(addDays(ws, 6))];
-  }
-  if (view === 'Month') {
-    const ms = startOfMonth(date);
-    return [isoDate(ms), isoDate(new Date(date.getFullYear(), date.getMonth() + 1, 0))];
-  }
-  // Schedule: 14 days
+  if (view === 'today') return [isoDate(date), isoDate(date)];
   return [isoDate(date), isoDate(addDays(date, 13))];
 }
 
-// ── Custom Recurrence Modal ──
+// ── Date Jump Picker ────────────────────────────────────────────
+function DateJumpPicker({ date, onJump, onClose }) {
+  const [viewMonth, setViewMonth] = useState(new Date(date.getFullYear(), date.getMonth(), 1));
+  const total = daysInMonth(viewMonth);
+  const rawDay = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1).getDay();
+  const leadingBlanks = rawDay === 0 ? 6 : rawDay - 1;
+  const cells = [];
+  for (let i = 0; i < leadingBlanks; i++) cells.push(null);
+  for (let d = 1; d <= total; d++) cells.push(d);
+  const today = isoDate(new Date());
+  const selectedIso = isoDate(date);
+
+  return (
+    <>
+      <div className="fixed inset-0 z-30" onClick={onClose} />
+      <div className="absolute top-full left-0 mt-2 z-40 rounded-xl p-3 w-[280px]"
+        style={{
+          background: 'rgba(17,24,39,0.95)',
+          backdropFilter: 'blur(24px)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          boxShadow: '0 12px 48px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08)',
+        }}>
+        <div className="flex items-center justify-between mb-2">
+          <button onClick={() => setViewMonth(d => { const r = new Date(d); r.setMonth(r.getMonth() - 1); return r; })} className="w-7 h-7 rounded-full hover:bg-white/8 flex items-center justify-center text-ink-500"><ChevronLeft /></button>
+          <span className="text-[13px] font-semibold text-ink-900">{viewMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</span>
+          <button onClick={() => setViewMonth(d => { const r = new Date(d); r.setMonth(r.getMonth() + 1); return r; })} className="w-7 h-7 rounded-full hover:bg-white/8 flex items-center justify-center text-ink-500"><ChevronRight /></button>
+        </div>
+        <div className="grid grid-cols-7 mb-1">
+          {['M','T','W','T','F','S','S'].map((d, i) => <div key={i} className="text-center text-[10px] text-ink-400 font-semibold py-1">{d}</div>)}
+        </div>
+        <div className="grid grid-cols-7 gap-0.5">
+          {cells.map((d, i) => {
+            if (!d) return <div key={`b${i}`} />;
+            const iso = isoDate(new Date(viewMonth.getFullYear(), viewMonth.getMonth(), d));
+            const isToday = iso === today;
+            const isSelected = iso === selectedIso;
+            return (
+              <button key={d} onClick={() => { onJump(new Date(viewMonth.getFullYear(), viewMonth.getMonth(), d)); onClose(); }}
+                className={'h-8 rounded-lg text-[12px] font-medium transition ' +
+                  (isSelected ? 'bg-brand-blue text-white' : isToday ? 'text-brand-blue font-bold' : 'text-ink-700 hover:bg-white/8')}
+                style={isToday && !isSelected ? { background: 'rgba(91,140,255,0.14)' } : {}}>
+                {d}
+              </button>
+            );
+          })}
+        </div>
+        <button onClick={() => { onJump(new Date()); onClose(); }} className="w-full mt-2 h-8 rounded-lg text-[12px] text-brand-blue font-semibold hover:bg-white/8 transition">Go to today</button>
+      </div>
+    </>
+  );
+}
+
+// ── Custom Recurrence Modal ─────────────────────────────────────
 function CustomRecurrenceModal({ open, onClose, onSave, eventDate }) {
   const [freq, setFreq] = useState('weekly');
   const [interval, setInterval] = useState(1);
   const [days, setDays] = useState([]);
-  const [monthMode, setMonthMode] = useState('date'); // 'date' | 'nthWeekday'
+  const [monthMode, setMonthMode] = useState('date');
   const [yearMonth, setYearMonth] = useState(0);
   const [yearDay, setYearDay] = useState(1);
   const [until, setUntil] = useState('');
@@ -302,13 +284,12 @@ function CustomRecurrenceModal({ open, onClose, onSave, eventDate }) {
           </div>
         </Field>
 
-        {/* Weekly: day-of-week toggles */}
         {freq === 'weekly' && (
           <Field label="Repeat on">
             <div className="flex gap-1.5">
               {DAY_NAMES.map((d, i) => (
                 <button key={d} type="button" onClick={() => toggleDay(d)}
-                  className={'h-9 w-9 rounded-full text-[12px] font-semibold transition ' + (days.includes(d) ? 'bg-brand-blue text-white shadow-sm' : 'bg-ink-100 text-ink-500 hover:bg-ink-200')}>
+                  className={'h-9 w-9 rounded-full text-[12px] font-semibold transition ' + (days.includes(d) ? 'bg-brand-blue text-white' : 'bg-white/8 text-ink-500 hover:bg-white/14')}>
                   {DAY_LABELS[i]}
                 </button>
               ))}
@@ -316,7 +297,6 @@ function CustomRecurrenceModal({ open, onClose, onSave, eventDate }) {
           </Field>
         )}
 
-        {/* Monthly: date vs nth weekday */}
         {freq === 'monthly' && (
           <Field label="Repeat on">
             <div className="space-y-2">
@@ -332,7 +312,6 @@ function CustomRecurrenceModal({ open, onClose, onSave, eventDate }) {
           </Field>
         )}
 
-        {/* Yearly: month + day */}
         {freq === 'yearly' && (
           <Field label="On date">
             <div className="flex gap-2">
@@ -346,7 +325,7 @@ function CustomRecurrenceModal({ open, onClose, onSave, eventDate }) {
 
         <Field label="Ends">
           <input type="date" className={inputCls} value={until} onChange={e => setUntil(e.target.value)} />
-          {!until && <p className="text-[11px] text-ink-300 mt-1">Leave blank to repeat forever</p>}
+          {!until && <p className="text-[11px] text-ink-400 mt-1">Leave blank to repeat forever</p>}
         </Field>
 
         <button type="button" onClick={() => {
@@ -367,23 +346,17 @@ function CustomRecurrenceModal({ open, onClose, onSave, eventDate }) {
   );
 }
 
-// ── Recurrence Picker (Google Calendar style — inline options per frequency) ──
+// ── Recurrence Picker ───────────────────────────────────────────
 function RecurrencePicker({ value, onChange, eventDate }) {
   const [customOpen, setCustomOpen] = useState(false);
-
-  // Determine current selection for the dropdown
   const current = (() => {
     if (!value) return '';
     if (typeof value === 'string') return value;
-    // It's a custom object
     return 'custom';
   })();
-
   const evDate = eventDate ? new Date(eventDate + 'T00:00:00') : new Date();
   const dayName = DAY_NAMES[evDate.getDay()];
-  const nthInfo = nthWeekdayLabel(evDate);
 
-  // Build context-aware options like Google Calendar
   const options = [
     { value: '', label: 'Does not repeat' },
     { value: 'daily', label: 'Daily' },
@@ -397,7 +370,6 @@ function RecurrencePicker({ value, onChange, eventDate }) {
   const handleChange = (v) => {
     if (v === 'custom') { setCustomOpen(true); return; }
     if (!v) { onChange(null); return; }
-    // Build smart default recurrence object
     if (v === 'daily') { onChange({ freq: 'daily', interval: 1 }); return; }
     if (v === 'weekly') { onChange({ freq: 'weekly', interval: 1, days: [dayName] }); return; }
     if (v === 'monthly') { onChange({ freq: 'monthly', interval: 1, monthMode: 'date', monthDay: evDate.getDate() }); return; }
@@ -411,16 +383,14 @@ function RecurrencePicker({ value, onChange, eventDate }) {
         <select className={inputCls} value={current} onChange={e => handleChange(e.target.value)}>
           {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        {/* Show summary for custom recurrence */}
         {value && typeof value === 'object' && current === 'custom' && (
           <p className="text-[11px] text-brand-blue mt-1 flex items-center gap-1">
-            <span>🔁</span>
+            <RepeatIcon width="11" height="11" />
             {recurrenceLabel(value)}{value.until ? ` · until ${value.until}` : ''}
           </p>
         )}
       </Field>
 
-      {/* Inline day-of-week toggles when weekly is selected */}
       {value && typeof value === 'object' && (value.freq === 'weekly') && current !== 'custom' && (
         <div className="-mt-2 mb-3">
           <p className="text-[11px] text-ink-400 mb-1.5">Repeat on</p>
@@ -429,11 +399,11 @@ function RecurrencePicker({ value, onChange, eventDate }) {
               <button key={d} type="button" onClick={() => {
                 const cur = value.days || [];
                 const next = cur.includes(d) ? cur.filter(x => x !== d) : [...cur, d];
-                if (next.length === 0) return; // must have at least one day
+                if (next.length === 0) return;
                 onChange({ ...value, days: next });
               }}
                 className={'h-8 w-8 rounded-full text-[11px] font-semibold transition ' +
-                  ((value.days || []).includes(d) ? 'bg-brand-blue text-white shadow-sm' : 'bg-ink-100 text-ink-500 hover:bg-ink-200')}>
+                  ((value.days || []).includes(d) ? 'bg-brand-blue text-white' : 'bg-white/8 text-ink-500 hover:bg-white/14')}>
                 {DAY_LABELS[i]}
               </button>
             ))}
@@ -446,7 +416,7 @@ function RecurrencePicker({ value, onChange, eventDate }) {
   );
 }
 
-// ── Modals ──
+// ── Add Event / Add Leave Modals ────────────────────────────────
 function AddEventModal({ open, onClose, onCreated, date, prefillTitle = '' }) {
   const showToast = useToast();
   const [title, setTitle] = useState('');
@@ -455,6 +425,7 @@ function AddEventModal({ open, onClose, onCreated, date, prefillTitle = '' }) {
   const [duration, setDuration] = useState(60);
   const [recurrence, setRecurrence] = useState(null);
   const [busy, setBusy] = useState(false);
+
   useEffect(() => {
     if (open) {
       setTitle(prefillTitle || '');
@@ -468,6 +439,7 @@ function AddEventModal({ open, onClose, onCreated, date, prefillTitle = '' }) {
       setDuration(60);
     }
   }, [open, prefillTitle, date]);
+
   const submit = async (e) => {
     e.preventDefault(); if (!title.trim()) return; setBusy(true);
     try {
@@ -479,10 +451,10 @@ function AddEventModal({ open, onClose, onCreated, date, prefillTitle = '' }) {
         recurrence: recurrence || undefined,
       });
       onCreated?.(); onClose();
-    }
-    catch (err) { showToast(err.message || 'Failed to create event', 'error'); }
+    } catch (err) { showToast(err.message || 'Failed to create event', 'error'); }
     finally { setBusy(false); }
   };
+
   return (
     <Modal open={open} onClose={onClose} title="Add to Calendar">
       <form onSubmit={submit}>
@@ -507,18 +479,24 @@ function AddLeaveModal({ open, onClose, onCreated, date }) {
   const [type, setType] = useState('PL');
   const [users, setUsers] = useState([]);
   const [busy, setBusy] = useState(false);
+
   useEffect(() => { if (open) { setStartDate(date); setEndDate(date); setType('PL'); setUserId(''); api.users().then(setUsers); } }, [open, date]);
+
   const submit = async (e) => {
     e.preventDefault(); if (!startDate || !endDate) return; setBusy(true);
     try { await api.addLeave({ userId: userId ? Number(userId) : undefined, startDate, endDate, type }); onCreated?.(); onClose(); }
     catch (err) { showToast(err.message || 'Failed to add leave', 'error'); }
     finally { setBusy(false); }
   };
+
   return (
     <Modal open={open} onClose={onClose} title="Add Leave">
       <form onSubmit={submit}>
         <Field label="Member">
-          <select className={inputCls} value={userId} onChange={e => setUserId(e.target.value)}><option value="">Myself</option>{users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
+          <select className={inputCls} value={userId} onChange={e => setUserId(e.target.value)}>
+            <option value="">Myself</option>
+            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="From"><input type="date" className={inputCls} value={startDate} onChange={e => setStartDate(e.target.value)} required /></Field>
@@ -526,7 +504,10 @@ function AddLeaveModal({ open, onClose, onCreated, date }) {
         </div>
         <Field label="Type">
           <select className={inputCls} value={type} onChange={e => setType(e.target.value)}>
-            <option value="PL">Privilege Leave (PL)</option><option value="SL">Sick Leave (SL)</option><option value="CL">Casual Leave (CL)</option><option value="FL">Flexi Leave (FL)</option>
+            <option value="PL">Privilege Leave (PL)</option>
+            <option value="SL">Sick Leave (SL)</option>
+            <option value="CL">Casual Leave (CL)</option>
+            <option value="FL">Flexi Leave (FL)</option>
           </select>
         </Field>
         <button disabled={busy} type="submit" className="w-full h-11 rounded-[10px] bg-brand-blue text-white font-semibold disabled:opacity-60">{busy ? 'Adding…' : 'Add Leave'}</button>
@@ -535,11 +516,53 @@ function AddLeaveModal({ open, onClose, onCreated, date }) {
   );
 }
 
-// ── Edit Event Modal ──
-// ── Event Action Sheet: Complete / Reschedule / Continue later / Edit ──
-function EventActionSheet({ open, onClose, event, onAction, onChanged }) {
+// ── Recurrence Scope Dialog (edit/delete scope chooser) ─────────
+function RecurrenceScopeDialog({ open, onClose, onChoose, action }) {
+  if (!open) return null;
+  const verb = action === 'delete' ? 'Delete' : 'Save changes';
+  return (
+    <div className="fixed inset-0 z-[55] flex items-center justify-center p-5" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-[4px]" />
+      <div className="relative rounded-card w-full max-w-[340px] p-5 space-y-3"
+        style={{
+          background: 'rgba(17,24,39,0.92)',
+          backdropFilter: 'blur(24px)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          boxShadow: '0 24px 80px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06)',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <h2 className="text-lg font-bold text-ink-900">{verb} recurring event</h2>
+        <p className="text-sm text-ink-500 leading-relaxed">Which occurrences should this apply to?</p>
+        <div className="space-y-2 pt-1">
+          {[
+            { id: 'this',    label: 'This event only',       desc: 'Only the selected occurrence' },
+            { id: 'future',  label: 'This and future',       desc: 'Keep past occurrences, change from this one forward' },
+            { id: 'all',     label: 'All events in series',  desc: 'Apply to every occurrence, past and future' },
+          ].map(opt => (
+            <button key={opt.id} onClick={() => onChoose(opt.id)}
+              className="w-full text-left p-3 rounded-[10px] transition hover:bg-white/8"
+              style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
+              <p className="text-[13px] font-semibold text-ink-900">{opt.label}</p>
+              <p className="text-[11px] text-ink-400 mt-0.5">{opt.desc}</p>
+            </button>
+          ))}
+          <button onClick={onClose} className="w-full h-10 rounded-[10px] text-[13px] text-ink-400 border border-white/10 mt-2">Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Unified Event Modal (edit + complete + reschedule + follow-up + delete) ─
+function EventModal({ open, onClose, event, onUpdated, onChanged, onRequestDelete }) {
   const showToast = useToast();
-  const [step, setStep] = useState('menu'); // menu | complete | reschedule | partial
+  const [step, setStep] = useState('view'); // view | edit | complete | reschedule | partial
+  const [title, setTitle] = useState('');
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('09:00');
+  const [duration, setDuration] = useState(60);
+  const [recurrence, setRecurrence] = useState(null);
   const [busy, setBusy] = useState(false);
   const [linkSubtaskId, setLinkSubtaskId] = useState('');
   const [pendingSubs, setPendingSubs] = useState([]);
@@ -550,23 +573,38 @@ function EventActionSheet({ open, onClose, event, onAction, onChanged }) {
   const realEvent = event?._originalId ? { ...event, id: event._originalId } : event;
   const isCompleted = event?.status === 'completed';
   const isPartial = event?.status === 'partial';
+  const isRecurring = !!event?.metadata?.recurrence;
 
   useEffect(() => {
     if (open && event) {
-      setStep('menu');
+      setStep('view');
+      setTitle(event.title || '');
+      const d = new Date(event.start_time);
+      setDate(isoDate(d));
+      setTime(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
+      setDuration(event.duration_min || 60);
+      setRecurrence(event.metadata?.recurrence || null);
       setLinkSubtaskId('');
-      // Default "continue later" to next day same time
-      const orig = new Date(event.start_time);
-      const next = new Date(orig); next.setDate(next.getDate() + 1);
+      const next = new Date(d); next.setDate(next.getDate() + 1);
       setNewDate(isoDate(next));
-      setNewTime(`${String(orig.getHours()).padStart(2, '0')}:${String(orig.getMinutes()).padStart(2, '0')}`);
+      setNewTime(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
       setNewDuration(event.duration_min || 60);
-      // Fetch pending subtasks lazily when user opens Complete step
     }
   }, [open, event]);
 
-  const loadSubs = async () => {
-    try { setPendingSubs(await api.myPendingSubtasks()); } catch {}
+  const loadSubs = async () => { try { setPendingSubs(await api.myPendingSubtasks()); } catch {} };
+
+  const saveEdit = async (e) => {
+    e?.preventDefault?.(); if (!title.trim() || !realEvent) return; setBusy(true);
+    try {
+      await api.updateEvent(realEvent.id, {
+        title: title.trim(),
+        startTime: new Date(`${date}T${time}:00`).toISOString(),
+        durationMin: Number(duration),
+        recurrence: recurrence || null,
+      });
+      onUpdated?.(); onClose();
+    } catch (err) { showToast(err.message || 'Failed to update event', 'error'); } finally { setBusy(false); }
   };
 
   const doComplete = async () => {
@@ -594,11 +632,7 @@ function EventActionSheet({ open, onClose, event, onAction, onChanged }) {
     if (!realEvent) return; setBusy(true);
     try {
       const iso = new Date(`${newDate}T${newTime}:00`).toISOString();
-      await api.partialEvent(realEvent.id, {
-        startTime: iso,
-        durationMin: Number(newDuration),
-        title: realEvent.title,
-      });
+      await api.partialEvent(realEvent.id, { startTime: iso, durationMin: Number(newDuration), title: realEvent.title });
       showToast('Follow-up session scheduled');
       onChanged?.(); onClose();
     } catch (err) { showToast(err.message || 'Failed to create follow-up', 'error'); }
@@ -607,60 +641,84 @@ function EventActionSheet({ open, onClose, event, onAction, onChanged }) {
 
   if (!event) return null;
 
-  const actionBtn = (icon, label, desc, color, onClick) => (
+  const ActionRow = ({ icon, label, desc, color, onClick, danger }) => (
     <button onClick={onClick} disabled={busy}
-      className="w-full flex items-start gap-3 p-3 rounded-[12px] border transition text-left hover:bg-white/5 disabled:opacity-50"
-      style={{ borderColor: 'rgba(255,255,255,0.10)', background: 'rgba(255,255,255,0.03)' }}>
-      <span className="text-[22px] flex-shrink-0" style={{ filter: `drop-shadow(0 0 6px ${color}60)` }}>{icon}</span>
+      className="w-full flex items-center gap-3 p-3 rounded-[12px] transition text-left hover:bg-white/5 disabled:opacity-50"
+      style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.02)' }}>
+      <span className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center" style={{ background: `${color}22`, color, border: `1px solid ${color}44` }}>
+        {icon}
+      </span>
       <div className="flex-1 min-w-0">
-        <p className="font-semibold text-[14px]" style={{ color: '#E5E7EB' }}>{label}</p>
-        <p className="text-[12px] mt-0.5" style={{ color: '#9CA3AF' }}>{desc}</p>
+        <p className={'font-semibold text-[14px] ' + (danger ? 'text-danger' : 'text-ink-900')}>{label}</p>
+        <p className="text-[11px] text-ink-400 mt-0.5">{desc}</p>
       </div>
     </button>
   );
 
   return (
-    <Modal open={open} onClose={onClose} title={event.title || 'Event'}>
-      {isCompleted && (
-        <div className="mb-3 px-3 py-2 rounded-[10px] text-[12px] font-medium" style={{ background: 'rgba(34,197,94,0.12)', color: '#86EFAC', border: '1px solid rgba(34,197,94,0.3)' }}>
-          ✓ Completed successfully
+    <Modal open={open} onClose={onClose} title={step === 'edit' ? 'Edit event' : (event.title || 'Event')}>
+      {isCompleted && step === 'view' && (
+        <div className="mb-3 px-3 py-2 rounded-[10px] text-[12px] font-medium flex items-center gap-1.5" style={{ background: 'rgba(34,197,94,0.12)', color: '#86EFAC', border: '1px solid rgba(34,197,94,0.3)' }}>
+          <CheckIcon width="12" height="12" /> Completed
         </div>
       )}
-      {isPartial && (
+      {isPartial && step === 'view' && (
         <div className="mb-3 px-3 py-2 rounded-[10px] text-[12px] font-medium" style={{ background: 'rgba(245,158,11,0.12)', color: '#FBBF24', border: '1px solid rgba(245,158,11,0.3)' }}>
-          ⏭️ Partial — follow-up scheduled
+          Partial — follow-up scheduled
         </div>
       )}
-      {!isCompleted && !isPartial && event.linked_subtask?.status === 'done' && (
-        <div className="mb-3 px-3 py-2 rounded-[10px] text-[12px] font-medium" style={{ background: 'rgba(34,197,94,0.1)', color: '#86EFAC', border: '1px solid rgba(34,197,94,0.25)' }}>
-          ✓ Linked task <span className="font-semibold">"{event.linked_subtask.title}"</span> already done — you can mark this event complete.
+      {step === 'view' && event.linked_subtask?.status === 'done' && !isCompleted && !isPartial && (
+        <div className="mb-3 px-3 py-2 rounded-[10px] text-[12px] font-medium flex items-center gap-1.5" style={{ background: 'rgba(34,197,94,0.1)', color: '#86EFAC', border: '1px solid rgba(34,197,94,0.25)' }}>
+          <CheckIcon width="12" height="12" /> Linked task <span className="font-semibold">"{event.linked_subtask.title}"</span> already done
         </div>
       )}
 
-      {step === 'menu' && (
-        <div className="space-y-2">
-          {!isCompleted && actionBtn('✅', 'Complete', 'Mark this event as done', '#22C55E', () => { loadSubs(); setStep('complete'); })}
-          {!isCompleted && actionBtn('📅', 'Reschedule', 'Move to a different date or time', '#5B8CFF', () => setStep('reschedule'))}
-          {!isCompleted && actionBtn('⏭️', 'Continue later', 'Did some work — schedule a follow-up session', '#F59E0B', () => setStep('partial'))}
-          {actionBtn('✏️', 'Edit details', 'Change title, duration, or delete', '#A78BFA', () => { onAction?.('edit'); })}
+      {step === 'view' && (
+        <div className="space-y-3">
+          {/* Meta */}
+          <div className="flex items-center gap-2 text-[12px] text-ink-400 pb-1">
+            <ClockIcon width="13" height="13" />
+            <span>{fmtTime(event.start_time)} · {event.duration_min} min</span>
+            {isRecurring && <span className="flex items-center gap-1 ml-2"><RepeatIcon width="11" height="11" /> {recurrenceLabel(event.metadata.recurrence)}</span>}
+          </div>
+
+          {/* Actions */}
+          <div className="space-y-2">
+            {!isCompleted && <ActionRow icon={<CheckIcon width="16" height="16" />} label="Mark complete" desc="Done for this session" color="#22C55E" onClick={() => { loadSubs(); setStep('complete'); }} />}
+            {!isCompleted && <ActionRow icon={<CalendarIcon width="16" height="16" />} label="Reschedule" desc="Move to another date or time" color="#5B8CFF" onClick={() => setStep('reschedule')} />}
+            {!isCompleted && <ActionRow icon={<ClockIcon width="16" height="16" />} label="Continue later" desc="Mark partial + schedule a follow-up" color="#F59E0B" onClick={() => setStep('partial')} />}
+            <ActionRow icon={<MoreIcon width="16" height="16" />} label="Edit details" desc="Title, time, duration, recurrence" color="#A78BFA" onClick={() => setStep('edit')} />
+            <ActionRow icon={<CloseIcon width="16" height="16" />} label="Delete" desc={isRecurring ? 'Remove occurrence or series' : 'Remove this event'} color="#EF4444" danger onClick={() => { onRequestDelete?.(realEvent); onClose(); }} />
+          </div>
         </div>
+      )}
+
+      {step === 'edit' && (
+        <form onSubmit={saveEdit}>
+          <Field label="Title"><input className={inputCls} value={title} onChange={e => setTitle(e.target.value)} autoFocus required /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Date"><input type="date" className={inputCls} value={date} onChange={e => setDate(e.target.value)} required /></Field>
+            <Field label="Time"><input type="time" className={inputCls} value={time} onChange={e => setTime(e.target.value)} required /></Field>
+          </div>
+          <Field label="Duration (min)"><input type="number" min="15" step="15" className={inputCls} value={duration} onChange={e => setDuration(e.target.value)} /></Field>
+          <RecurrencePicker value={recurrence} onChange={setRecurrence} eventDate={date} />
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setStep('view')} className="flex-1 h-11 rounded-[10px] border border-white/10 text-[13px]" style={{ color: '#9CA3AF' }}>Back</button>
+            <button disabled={busy} type="submit" className="flex-1 h-11 rounded-[10px] bg-brand-blue text-white font-semibold disabled:opacity-60">{busy ? 'Saving…' : 'Save'}</button>
+          </div>
+        </form>
       )}
 
       {step === 'complete' && (
         <div className="space-y-3">
-          <p className="text-[13px]" style={{ color: '#9CA3AF' }}>Also mark a task as done? (optional)</p>
+          <p className="text-[13px] text-ink-400">Also mark a task as done? (optional)</p>
           <select value={linkSubtaskId} onChange={e => setLinkSubtaskId(e.target.value)} className={inputCls}>
             <option value="">— None —</option>
-            {pendingSubs.map(s => (
-              <option key={s.id} value={s.id}>{s.title}{s.project_title ? ` · ${s.project_title}` : ''}</option>
-            ))}
+            {pendingSubs.map(s => <option key={s.id} value={s.id}>{s.title}{s.project_title ? ` · ${s.project_title}` : ''}</option>)}
           </select>
           <div className="flex gap-2">
-            <button onClick={() => setStep('menu')} className="flex-1 h-11 rounded-[10px] border border-white/10 text-[13px]" style={{ color: '#9CA3AF' }}>Back</button>
-            <button onClick={doComplete} disabled={busy} className="flex-1 h-11 rounded-[10px] text-white font-semibold disabled:opacity-60"
-              style={{ background: 'linear-gradient(135deg, #22C55E 0%, #16A34A 100%)' }}>
-              {busy ? 'Saving…' : 'Mark Complete'}
-            </button>
+            <button onClick={() => setStep('view')} className="flex-1 h-11 rounded-[10px] border border-white/10 text-[13px]" style={{ color: '#9CA3AF' }}>Back</button>
+            <button onClick={doComplete} disabled={busy} className="flex-1 h-11 rounded-[10px] text-white font-semibold disabled:opacity-60" style={{ background: 'linear-gradient(135deg, #22C55E 0%, #16A34A 100%)' }}>{busy ? 'Saving…' : 'Mark complete'}</button>
           </div>
         </div>
       )}
@@ -672,28 +730,23 @@ function EventActionSheet({ open, onClose, event, onAction, onChanged }) {
             <Field label="New time"><input type="time" className={inputCls} value={newTime} onChange={e => setNewTime(e.target.value)} /></Field>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setStep('menu')} className="flex-1 h-11 rounded-[10px] border border-white/10 text-[13px]" style={{ color: '#9CA3AF' }}>Back</button>
-            <button onClick={doReschedule} disabled={busy} className="flex-1 h-11 rounded-[10px] bg-brand-blue text-white font-semibold disabled:opacity-60">
-              {busy ? 'Saving…' : 'Reschedule'}
-            </button>
+            <button onClick={() => setStep('view')} className="flex-1 h-11 rounded-[10px] border border-white/10 text-[13px]" style={{ color: '#9CA3AF' }}>Back</button>
+            <button onClick={doReschedule} disabled={busy} className="flex-1 h-11 rounded-[10px] bg-brand-blue text-white font-semibold disabled:opacity-60">{busy ? 'Saving…' : 'Reschedule'}</button>
           </div>
         </div>
       )}
 
       {step === 'partial' && (
         <div className="space-y-3">
-          <p className="text-[13px]" style={{ color: '#9CA3AF' }}>Schedule a follow-up session to continue this work.</p>
+          <p className="text-[13px] text-ink-400">Schedule a follow-up session to continue this work.</p>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Date"><input type="date" className={inputCls} value={newDate} onChange={e => setNewDate(e.target.value)} /></Field>
             <Field label="Time"><input type="time" className={inputCls} value={newTime} onChange={e => setNewTime(e.target.value)} /></Field>
           </div>
           <Field label="Duration (min)"><input type="number" min="15" step="15" className={inputCls} value={newDuration} onChange={e => setNewDuration(e.target.value)} /></Field>
           <div className="flex gap-2">
-            <button onClick={() => setStep('menu')} className="flex-1 h-11 rounded-[10px] border border-white/10 text-[13px]" style={{ color: '#9CA3AF' }}>Back</button>
-            <button onClick={doPartial} disabled={busy} className="flex-1 h-11 rounded-[10px] text-white font-semibold disabled:opacity-60"
-              style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)' }}>
-              {busy ? 'Saving…' : 'Create Follow-up'}
-            </button>
+            <button onClick={() => setStep('view')} className="flex-1 h-11 rounded-[10px] border border-white/10 text-[13px]" style={{ color: '#9CA3AF' }}>Back</button>
+            <button onClick={doPartial} disabled={busy} className="flex-1 h-11 rounded-[10px] text-white font-semibold disabled:opacity-60" style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)' }}>{busy ? 'Saving…' : 'Create follow-up'}</button>
           </div>
         </div>
       )}
@@ -701,70 +754,7 @@ function EventActionSheet({ open, onClose, event, onAction, onChanged }) {
   );
 }
 
-function EditEventModal({ open, onClose, event, onUpdated, onRequestDelete }) {
-  const showToast = useToast();
-  const [title, setTitle] = useState('');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('09:00');
-  const [duration, setDuration] = useState(60);
-  const [recurrence, setRecurrence] = useState(null);
-  const [busy, setBusy] = useState(false);
-
-  const realEvent = event?._originalId ? { ...event, id: event._originalId } : event;
-
-  useEffect(() => {
-    if (open && event) {
-      setTitle(event.title || '');
-      const d = new Date(event.start_time);
-      setDate(isoDate(d));
-      setTime(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`);
-      setDuration(event.duration_min || 60);
-      setRecurrence(event.metadata?.recurrence || null);
-    }
-  }, [open, event]);
-
-  const submit = async (e) => {
-    e.preventDefault(); if (!title.trim() || !realEvent) return; setBusy(true);
-    try {
-      await api.updateEvent(realEvent.id, {
-        title: title.trim(),
-        startTime: new Date(`${date}T${time}:00`).toISOString(),
-        durationMin: Number(duration),
-        recurrence: recurrence || null,
-      });
-      onUpdated?.(); onClose();
-    } catch (err) { showToast(err.message || 'Failed to update event', 'error'); } finally { setBusy(false); }
-  };
-
-  if (!event) return null;
-  return (
-    <Modal open={open} onClose={onClose} title="Edit Event">
-      <form onSubmit={submit}>
-        <Field label="Title"><input className={inputCls} value={title} onChange={e => setTitle(e.target.value)} autoFocus required /></Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Date"><input type="date" className={inputCls} value={date} onChange={e => setDate(e.target.value)} required /></Field>
-          <Field label="Time"><input type="time" className={inputCls} value={time} onChange={e => setTime(e.target.value)} required /></Field>
-        </div>
-        <Field label="Duration (min)"><input type="number" min="15" step="15" className={inputCls} value={duration} onChange={e => setDuration(e.target.value)} /></Field>
-        <RecurrencePicker value={recurrence} onChange={setRecurrence} eventDate={date} />
-        {event.metadata?.recurrence && (
-          <p className="text-[11px] text-ink-400 -mt-2 mb-3 flex items-center gap-1">
-            <span>🔁</span> Changes apply to all occurrences of this event
-          </p>
-        )}
-        <button disabled={busy} type="submit" className="w-full h-11 rounded-[10px] bg-brand-blue text-white font-semibold disabled:opacity-60 mb-2">{busy ? 'Saving…' : 'Save Changes'}</button>
-      </form>
-      <button
-        onClick={() => { onRequestDelete?.(realEvent); onClose(); }}
-        className="w-full h-10 rounded-[10px] text-[13px] text-danger font-medium hover:bg-[#FEF2F2]"
-      >
-        Delete Event
-      </button>
-    </Modal>
-  );
-}
-
-// ── Compact team calendar toggle ──
+// ── Team Toggle (dark glass) ────────────────────────────────────
 function TeamToggle({ users, selected, onToggle }) {
   const [open, setOpen] = useState(false);
   if (!users || users.length === 0) return null;
@@ -772,26 +762,36 @@ function TeamToggle({ users, selected, onToggle }) {
   return (
     <div className="relative">
       <button onClick={() => setOpen(o => !o)}
-        className={'flex items-center gap-1.5 h-9 px-3 rounded-full text-[12px] font-medium transition border ' +
-          (activeCount > 0 ? 'bg-brand-blue/10 border-brand-blue/30 text-brand-blue' : 'bg-white border-line-light text-ink-500 hover:bg-ink-50')}>
-        <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        <span>Team{activeCount > 0 ? ` (${activeCount})` : ''}</span>
-        <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className={'transition ' + (open ? 'rotate-180' : '')}><polyline points="6 9 12 15 18 9"/></svg>
+        className="h-9 px-3 rounded-[10px] text-[12px] font-medium transition flex items-center gap-1.5"
+        style={{
+          background: activeCount > 0 ? 'rgba(91,140,255,0.15)' : 'rgba(255,255,255,0.05)',
+          color: activeCount > 0 ? '#A8C4FF' : '#9CA3AF',
+          border: `1px solid ${activeCount > 0 ? 'rgba(91,140,255,0.30)' : 'rgba(255,255,255,0.10)'}`,
+        }}
+        aria-label="Team overlay">
+        <UsersIcon width="14" height="14" />
+        {activeCount > 0 && <span className="tabular-nums">{activeCount}</span>}
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute top-11 left-0 z-30 bg-white rounded-xl border border-line-light shadow-lg py-1.5 min-w-[200px]">
-            <p className="px-3 py-1.5 text-[10px] text-ink-300 uppercase tracking-wide font-semibold">View teammate's calendar</p>
+          <div className="absolute top-11 right-0 z-30 rounded-xl py-1.5 min-w-[220px]"
+            style={{
+              background: 'rgba(17,24,39,0.95)',
+              backdropFilter: 'blur(24px)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              boxShadow: '0 12px 48px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08)',
+            }}>
+            <p className="px-3 py-1.5 text-[10px] text-ink-400 uppercase tracking-wide font-semibold">View teammates</p>
             {users.map(u => {
               const active = selected.includes(u.id);
               return (
                 <button key={u.id} onClick={() => onToggle(u.id)}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-ink-50 transition text-left">
+                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/5 transition text-left">
                   <Avatar user={u} size={24} />
                   <span className="flex-1 text-[13px] text-ink-900">{u.name}</span>
-                  <div className={'w-4 h-4 rounded border-2 flex items-center justify-center transition ' + (active ? 'bg-brand-blue border-brand-blue' : 'border-ink-200')}>
-                    {active && <svg width="10" height="10" fill="none" stroke="white" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>}
+                  <div className={'w-4 h-4 rounded border-2 flex items-center justify-center transition ' + (active ? 'bg-brand-blue border-brand-blue' : 'border-white/20')}>
+                    {active && <CheckIcon width="10" height="10" style={{ color: 'white' }} />}
                   </div>
                 </button>
               );
@@ -803,264 +803,329 @@ function TeamToggle({ users, selected, onToggle }) {
   );
 }
 
-// Helper: stale event whose linked subtask is already done
+// ── Overflow Menu (Add Leave + Jump to date) ────────────────────
+function OverflowMenu({ onAddLeave, onJumpToday }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(o => !o)}
+        className="h-9 w-9 rounded-[10px] flex items-center justify-center transition"
+        style={{ background: 'rgba(255,255,255,0.05)', color: '#9CA3AF', border: '1px solid rgba(255,255,255,0.10)' }}
+        aria-label="More options">
+        <MoreIcon width="16" height="16" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div className="absolute top-11 right-0 z-30 rounded-xl py-1.5 min-w-[180px]"
+            style={{
+              background: 'rgba(17,24,39,0.95)',
+              backdropFilter: 'blur(24px)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              boxShadow: '0 12px 48px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08)',
+            }}>
+            <button onClick={() => { onAddLeave?.(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/5 transition text-left">
+              <UmbrellaIcon width="14" height="14" className="text-ink-400" />
+              <span className="text-[13px] text-ink-900">Add leave</span>
+            </button>
+            <button onClick={() => { onJumpToday?.(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/5 transition text-left">
+              <CalendarIcon width="14" height="14" className="text-ink-400" />
+              <span className="text-[13px] text-ink-900">Jump to today</span>
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Leave banner — single unified treatment ─────────────────────
+function LeaveBanner({ leave, onRemove }) {
+  return (
+    <div className="rounded-[12px] pl-3 pr-2 py-2 flex items-center gap-2.5"
+      style={{
+        background: 'linear-gradient(90deg, rgba(239,68,68,0.12) 0%, rgba(239,68,68,0.04) 100%)',
+        border: '1px solid rgba(239,68,68,0.25)',
+        borderLeft: '3px solid #EF4444',
+      }}>
+      <span className="flex-shrink-0 text-[#F87171]"><UmbrellaIcon width="14" height="14" /></span>
+      <span className="text-[12px] text-ink-900 flex-1 min-w-0 truncate">
+        <span className="font-semibold">{leave.name}</span>
+        <span className="text-ink-400"> · on leave ({leave.type})</span>
+      </span>
+      {onRemove && (
+        <button onClick={onRemove} className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-ink-400 hover:text-[#F87171] hover:bg-white/5 transition" aria-label="Remove leave">
+          <CloseIcon width="12" height="12" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Helper: stale linked task hint ─────────────────────────────
 function hasStaleLink(ev) {
   return ev?.status === 'scheduled' && ev?.linked_subtask?.status === 'done';
 }
 
-// ── Day view ──
+// ── Pack overlapping events into columns for side-by-side rendering ─
+function packEvents(events) {
+  const sorted = [...events].sort((a, b) => a.start_time.localeCompare(b.start_time));
+  const occupied = []; // [{ endTime: Date, col: number }]
+  let maxCol = 0;
+  sorted.forEach(ev => {
+    const start = new Date(ev.start_time);
+    const end = new Date(start.getTime() + (ev.duration_min || 60) * 60000);
+    // free up columns whose events have ended
+    for (let i = occupied.length - 1; i >= 0; i--) {
+      if (occupied[i].endTime <= start) occupied.splice(i, 1);
+    }
+    const used = new Set(occupied.map(o => o.col));
+    let col = 0;
+    while (used.has(col)) col++;
+    occupied.push({ endTime: end, col });
+    ev._col = col;
+    if (col > maxCol) maxCol = col;
+  });
+  const total = maxCol + 1;
+  sorted.forEach(ev => { ev._colTotal = total; });
+  return sorted;
+}
+
+// ── Day view: time grid + now-line + simplified cards ───────────
+const GRID_START_HOUR = 7;
+const GRID_END_HOUR = 22;
+const HOUR_HEIGHT = 56;
+const TIME_COL_WIDTH = 52;
+
 function DayView({ events, leaves, date, onEventClick, onDeleteLeave, onQuickComplete }) {
   const iso = isoDate(date);
+  const isTodayView = iso === isoDate(new Date());
   const onLeave = leavesOnDate(leaves, iso);
+
+  // Events that fall inside the grid vs outside (early morning / late night)
+  const { inGrid, outOfGrid } = useMemo(() => {
+    const inG = [], outG = [];
+    events.forEach(ev => {
+      const h = new Date(ev.start_time).getHours();
+      if (h >= GRID_START_HOUR && h < GRID_END_HOUR) inG.push(ev);
+      else outG.push(ev);
+    });
+    return { inGrid: packEvents(inG), outOfGrid: outG.sort((a, b) => a.start_time.localeCompare(b.start_time)) };
+  }, [events]);
+
+  // Live "now" indicator — only visible when viewing today
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    if (!isTodayView) return;
+    const id = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(id);
+  }, [isTodayView]);
+
+  const nowMinsFromGridStart = (now.getHours() + now.getMinutes() / 60 - GRID_START_HOUR) * 60;
+  const nowTop = (nowMinsFromGridStart / 60) * HOUR_HEIGHT;
+  const nowVisible = isTodayView && nowTop >= 0 && nowTop <= (GRID_END_HOUR - GRID_START_HOUR) * HOUR_HEIGHT;
+
+  const hours = Array.from({ length: GRID_END_HOUR - GRID_START_HOUR + 1 }, (_, i) => GRID_START_HOUR + i);
+  const gridHeight = (GRID_END_HOUR - GRID_START_HOUR) * HOUR_HEIGHT;
+
+  const empty = events.length === 0 && onLeave.length === 0;
+
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
+      {/* Leave banners — unified treatment */}
       {onLeave.map(l => (
-        <div key={l.id} className="flex items-center gap-2 rounded-[10px] px-3 py-2.5" style={{ backgroundColor: '#FEE2E2' }}>
-          <div className="w-6 h-6 rounded-full flex items-center justify-center text-white font-bold text-[10px]" style={{ backgroundColor: l.avatar_color }}>{l.initials}</div>
-          <span className="flex-1 text-[12px] text-ink-900">{l.name} — <span className="text-danger">On Leave ({l.type})</span></span>
-          <button onClick={() => onDeleteLeave?.(l.id)} className="text-ink-300 hover:text-danger text-[11px]" title="Remove leave">✕</button>
-        </div>
+        <LeaveBanner key={l.id} leave={l} onRemove={() => onDeleteLeave?.(l.id)} />
       ))}
-      {events.length === 0 && onLeave.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-[40px] mb-2">📅</p>
-          <p className="text-ink-300 text-sm">No events scheduled</p>
-          <p className="text-ink-300 text-[12px] mt-0.5">Tap "+ Event" to add one</p>
-        </div>
-      )}
-      {events.map(ev => (
-        <div key={ev.id} className={'flex gap-3 ' + (ev._isTeam ? '' : 'cursor-pointer')} onClick={() => !ev._isTeam && onEventClick?.(ev)}>
-          <div className="w-14 pt-3 text-[12px] text-ink-400 flex-shrink-0 text-right">{fmtTime(ev.start_time)}</div>
-          <div className={'flex-1 rounded-[12px] p-3.5 transition'}
-            style={{
-              background: ev._isTeam
-                ? 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)'
-                : 'linear-gradient(135deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.03) 100%)',
-              border: ev._isTeam ? '1px dashed rgba(255,255,255,0.12)' : '1px solid rgba(255,255,255,0.12)',
-              borderTopColor: ev._isTeam ? undefined : 'rgba(255,255,255,0.18)',
-              borderLeftWidth: 4, borderLeftStyle: 'solid', borderLeftColor: accentFor(ev),
-              backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
-              boxShadow: '0 2px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)',
-            }}>
-            <div className="flex items-center gap-2">
-              <p className="font-semibold text-[14px] text-ink-900 flex-1">
-                {ev.event_type === 'personal' ? '🔒 ' : ''}
-                {ev._isTeam && ev._busyOnly ? 'Busy' : ev.title}
-              </p>
-              {ev.metadata?.recurrence && <span className="text-ink-300 text-[11px]" title={recurrenceLabel(ev.metadata.recurrence)}>🔁</span>}
-              {ev.status === 'completed' && (
-                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(34,197,94,0.15)', color: '#86EFAC' }}>✓ Completed successfully</span>
-              )}
-              {ev.status === 'partial' && (
-                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(245,158,11,0.15)', color: '#FBBF24' }}>⏭️ Follow-up</span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 mt-1">
-              <p className="text-[11px] text-ink-500 flex-1">
-                {ev._isTeam ? ev._teamName : (ev.department || (ev.event_type === 'personal' ? 'Personal' : ''))}
-                {ev._isTeam ? '' : ` · ${ev.duration_min} min`}
-              </p>
-              {ev._isTeam && (
-                <div className="w-5 h-5 rounded-full flex items-center justify-center text-white font-bold text-[8px]" style={{ backgroundColor: ev._teamColor || '#9CA3AF' }}>
-                  {ev._teamInitials}
-                </div>
-              )}
-            </div>
-            {ev.meet_link && <a href={ev.meet_link} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="inline-block mt-2 pill bg-success text-white !h-7 !px-3 !text-[11px]">Join</a>}
-            {hasStaleLink(ev) && (
-              <div className="mt-2 flex items-center gap-2 px-2.5 py-1.5 rounded-[8px]" style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)' }}
-                onClick={e => e.stopPropagation()}>
-                <span className="text-[11px] flex-1" style={{ color: '#86EFAC' }}>
-                  ✓ Linked task <span className="font-semibold">{ev.linked_subtask.title}</span> is done
-                </span>
-                <button onClick={() => onQuickComplete?.(ev)}
-                  className="text-[11px] font-semibold px-2 py-0.5 rounded-[6px]"
-                  style={{ background: 'rgba(34,197,94,0.2)', color: '#86EFAC' }}>
-                  Mark event complete
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
 
-// ── Week view (Google Calendar style — time grid) ──
-function WeekView({ date, allEvents, leaves, onDayClick }) {
-  const weekStart = startOfWeek(date);
-  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  const today = isoDate(new Date());
-  const hours = Array.from({ length: 18 }, (_, i) => i + 6); // 6am–11pm
+      {empty && <EmptyDay />}
 
-  return (
-    <div className="overflow-x-auto -mx-1">
-      <div className="min-w-[700px]">
-        {/* Header */}
-        <div className="grid grid-cols-[48px_repeat(7,1fr)] border-b border-line-light sticky top-0 bg-page z-10">
-          <div />
-          {days.map(d => {
-            const iso = isoDate(d);
-            const isT = iso === today;
-            const dayLeaves = leavesOnDate(leaves, iso);
-            return (
-              <button key={iso} onClick={() => onDayClick(d)} className={'text-center py-2.5 border-l border-line-light transition hover:bg-ink-50 ' + (isT ? 'bg-brand-blueLight' : dayLeaves.length ? 'bg-[#FEE2E2]' : '')}>
-                <p className="text-[10px] text-ink-500 uppercase tracking-wide">{d.toLocaleDateString('en-IN', { weekday: 'short' })}</p>
-                <p className={'text-[18px] font-bold mt-0.5 ' + (isT ? 'text-brand-blue' : 'text-ink-900')}>{d.getDate()}</p>
-                {dayLeaves.length > 0 && <p className="text-[8px] text-danger mt-0.5">{dayLeaves.map(l => l.initials).join(', ')}</p>}
-              </button>
-            );
-          })}
-        </div>
-        {/* Time grid */}
-        <div className="relative">
-          {hours.map(h => (
-            <div key={h} className="grid grid-cols-[48px_repeat(7,1fr)] h-14 border-b border-[#F3F4F6]">
-              <div className="text-[10px] text-ink-300 pr-2 text-right pt-1">{fmtHour12(h)}</div>
-              {days.map(d => {
-                const iso = isoDate(d);
-                const eventsInHour = allEvents.filter(e => eventLocalDate(e) === iso && parseHour(e.start_time) === h);
-                return (
-                  <div key={iso} className="border-l border-[#F3F4F6] relative px-0.5">
-                    {eventsInHour.map(ev => (
-                      <div key={ev.id} className="absolute inset-x-0.5 rounded-[4px] px-1.5 py-0.5 text-[10px] text-white truncate z-[1]"
-                        style={{ backgroundColor: accentFor(ev), top: 1, minHeight: Math.max(20, (ev.duration_min / 60) * 56 - 4), opacity: ev._isTeam ? 0.7 : 1 }}>
-                        {ev._isTeam && ev._busyOnly ? 'Busy' : ev.title}
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
+      {/* Out-of-grid events (before 7am / after 10pm) */}
+      {outOfGrid.length > 0 && (
+        <div className="space-y-1.5">
+          {outOfGrid.map(ev => (
+            <DayEventRow key={ev.id} event={ev} onClick={() => !ev._isTeam && onEventClick?.(ev)} onQuickComplete={onQuickComplete} />
           ))}
         </div>
-      </div>
+      )}
+
+      {/* Time grid */}
+      {events.length > 0 && (
+        <div className="relative" style={{ height: gridHeight }}>
+          {/* Hour markers */}
+          {hours.map((h, i) => (
+            <div key={h} className="absolute left-0 right-0 flex items-start pointer-events-none" style={{ top: i * HOUR_HEIGHT }}>
+              <div style={{ width: TIME_COL_WIDTH }} className="pr-2 text-right text-[10px] text-ink-400 tabular-nums -mt-1.5">
+                {fmtHour12(h)}
+              </div>
+              <div className="flex-1 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }} />
+            </div>
+          ))}
+
+          {/* Now line */}
+          {nowVisible && (
+            <div className="absolute left-0 right-0 z-20 flex items-center pointer-events-none" style={{ top: nowTop }}>
+              <div style={{ width: TIME_COL_WIDTH }} className="pr-2 text-right text-[10px] font-bold tabular-nums -mt-1.5" aria-label="Current time">
+                <span className="px-1 rounded" style={{ color: '#EF4444' }}>{fmtTime(now.toISOString())}</span>
+              </div>
+              <div className="relative flex-1">
+                <div className="absolute left-0 w-2 h-2 rounded-full -translate-y-1/2" style={{ background: '#EF4444', boxShadow: '0 0 6px rgba(239,68,68,0.8)' }} />
+                <div className="h-[2px]" style={{ background: '#EF4444', boxShadow: '0 0 4px rgba(239,68,68,0.5)' }} />
+              </div>
+            </div>
+          )}
+
+          {/* Events positioned on the grid */}
+          <div className="absolute top-0 bottom-0" style={{ left: TIME_COL_WIDTH, right: 0 }}>
+            {inGrid.map(ev => (
+              <TimeGridEvent key={ev.id} event={ev} onClick={() => !ev._isTeam && onEventClick?.(ev)} onQuickComplete={onQuickComplete} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// ── Month view (expanded, events visible) ──
-function MonthView({ date, allEvents, leaves, onDayClick }) {
-  const monthStart = startOfMonth(date);
-  const total = daysInMonth(date);
-  const rawDay = monthStart.getDay();
-  const leadingBlanks = rawDay === 0 ? 6 : rawDay - 1;
-  const today = isoDate(new Date());
-  const cells = [];
-  for (let i = 0; i < leadingBlanks; i++) cells.push(null);
-  for (let d = 1; d <= total; d++) cells.push(new Date(date.getFullYear(), date.getMonth(), d));
+function EmptyDay() {
+  return (
+    <div className="py-14 flex flex-col items-center text-center">
+      <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3"
+        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)' }}>
+        <span className="text-ink-400"><CalendarIcon width="20" height="20" /></span>
+      </div>
+      <p className="text-[14px] font-semibold text-ink-900">Nothing scheduled</p>
+      <p className="text-[12px] text-ink-400 mt-1">Tap “+” to add an event.</p>
+    </div>
+  );
+}
+
+// Compact row for out-of-grid events (early morning / late night)
+function DayEventRow({ event, onClick, onQuickComplete }) {
+  const ev = event;
+  const isTeam = !!ev._isTeam;
+  const title = isTeam && ev._busyOnly ? 'Busy' : ev.title;
+  return (
+    <button onClick={onClick} disabled={isTeam}
+      className={'w-full flex items-center gap-3 rounded-[10px] px-3 py-2 text-left transition ' + (isTeam ? '' : 'hover:bg-white/5')}
+      style={{
+        background: isTeam ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)',
+        border: isTeam ? '1px dashed rgba(255,255,255,0.12)' : '1px solid rgba(255,255,255,0.10)',
+        borderLeft: `3px solid ${accentFor(ev)}`,
+      }}>
+      <span className="text-[11px] text-ink-400 tabular-nums" style={{ width: 44 }}>{fmtTime(ev.start_time)}</span>
+      <div className="flex-1 min-w-0 flex items-center gap-1.5">
+        {ev.event_type === 'personal' && <span className="text-ink-400 flex-shrink-0"><LockIcon /></span>}
+        <span className="text-[13px] font-medium text-ink-900 truncate">{title}</span>
+        {ev.metadata?.recurrence && <span className="text-ink-400 flex-shrink-0"><RepeatIcon /></span>}
+      </div>
+      <span className="text-[10px] text-ink-400 flex-shrink-0">{ev.duration_min}m</span>
+    </button>
+  );
+}
+
+// Grid-positioned event block
+function TimeGridEvent({ event, onClick, onQuickComplete }) {
+  const ev = event;
+  const start = new Date(ev.start_time);
+  const offsetMin = (start.getHours() + start.getMinutes() / 60 - GRID_START_HOUR) * 60;
+  const duration = ev.duration_min || 60;
+  const top = (offsetMin / 60) * HOUR_HEIGHT;
+  const height = Math.max(28, (duration / 60) * HOUR_HEIGHT - 2);
+  const total = ev._colTotal || 1;
+  const col = ev._col || 0;
+  const widthPct = 100 / total;
+  const leftPct = col * widthPct;
+  const isTeam = !!ev._isTeam;
+  const isCompact = height < 48;
+  const title = isTeam && ev._busyOnly ? 'Busy' : ev.title;
+  const accent = accentFor(ev);
+  const stale = hasStaleLink(ev);
 
   return (
-    <div>
-      <div className="grid grid-cols-7 mb-1">
-        {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
-          <div key={d} className="text-center text-[10px] text-ink-400 py-1.5 font-semibold uppercase tracking-wide">{d}</div>
-        ))}
+    <button
+      onClick={onClick}
+      disabled={isTeam}
+      className={'absolute text-left rounded-[8px] transition overflow-hidden ' + (isTeam ? '' : 'hover:brightness-110 active:scale-[0.99]')}
+      style={{
+        top,
+        height,
+        left: `calc(${leftPct}% + 2px)`,
+        width: `calc(${widthPct}% - 4px)`,
+        background: isTeam
+          ? 'rgba(255,255,255,0.03)'
+          : `linear-gradient(180deg, ${accent}22 0%, ${accent}10 100%)`,
+        border: isTeam ? '1px dashed rgba(255,255,255,0.15)' : `1px solid ${accent}40`,
+        borderLeft: `3px solid ${accent}`,
+        backdropFilter: 'blur(8px)',
+        padding: isCompact ? '4px 8px' : '6px 8px',
+      }}
+    >
+      <div className="flex items-center gap-1 min-w-0">
+        {ev.event_type === 'personal' && <span className="text-ink-400 flex-shrink-0"><LockIcon /></span>}
+        <p className={'font-semibold text-ink-900 truncate ' + (isCompact ? 'text-[11px]' : 'text-[12px]')}>{title}</p>
+        {ev.metadata?.recurrence && <span className="text-ink-400 flex-shrink-0"><RepeatIcon /></span>}
+        {ev.status === 'completed' && <span className="flex-shrink-0" style={{ color: '#4ADE80' }}><CheckIcon width="11" height="11" /></span>}
       </div>
-      <div className="grid grid-cols-7 gap-px rounded-xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
-        {cells.map((d, i) => {
-          if (!d) return <div key={`blank-${i}`} className="bg-page min-h-[80px]" />;
-          const iso = isoDate(d);
-          const dayEvents = allEvents.filter(e => eventLocalDate(e) === iso);
-          const dayLeaves = leavesOnDate(leaves, iso);
-          const isToday = iso === today;
-          return (
-            <button key={iso} onClick={() => onDayClick(d)}
-              className={'min-h-[80px] p-1.5 text-left align-top transition ' + (isToday ? 'ring-2 ring-inset ring-brand-blue' : '')}
-              style={{ background: dayLeaves.length ? 'rgba(239,68,68,0.12)' : '#0E1322' }}>
-              <p className={'text-[12px] font-medium mb-0.5 ' + (isToday ? 'text-brand-blue font-bold' : 'text-ink-900')}>{d.getDate()}</p>
-              {dayLeaves.map(l => (
-                <div key={l.id} className="text-[9px] text-danger bg-[#FEE2E2] rounded px-1 py-px mb-0.5 truncate">{l.initials} {l.type}</div>
-              ))}
-              {dayEvents.slice(0, 2).map(ev => (
-                <div key={ev.id} className={'text-[9px] rounded px-1 py-px mb-0.5 truncate text-white ' + (ev._isTeam ? 'opacity-70' : '')} style={{ backgroundColor: accentFor(ev) }}>
-                  {fmtTime(ev.start_time)} {ev._isTeam && ev._busyOnly ? 'Busy' : ev.title}
-                </div>
-              ))}
-              {dayEvents.length > 2 && <p className="text-[9px] text-ink-300">+{dayEvents.length - 2} more</p>}
-            </button>
-          );
-        })}
-      </div>
-    </div>
+      {!isCompact && (
+        <p className="text-[10px] text-ink-400 mt-0.5 truncate">
+          {fmtTime(ev.start_time)} · {ev.duration_min}m
+          {isTeam ? ` · ${ev._teamName}` : ev.department ? ` · ${ev.department}` : ''}
+        </p>
+      )}
+      {stale && !isCompact && (
+        <button onClick={e => { e.stopPropagation(); onQuickComplete?.(ev); }}
+          className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded"
+          style={{ background: 'rgba(34,197,94,0.18)', color: '#4ADE80', border: '1px solid rgba(34,197,94,0.3)' }}>
+          <CheckIcon width="9" height="9" /> Complete
+        </button>
+      )}
+    </button>
   );
 }
 
-// ── Schedule (Agenda) view ──
-function ScheduleView({ allEvents, leaves, date, onEventClick, onQuickComplete }) {
+// ── Upcoming (Agenda) view — 14 days ────────────────────────────
+function UpcomingView({ allEvents, leaves, date, onEventClick, onDeleteLeave, onQuickComplete }) {
   const days = Array.from({ length: 14 }, (_, i) => addDays(date, i));
   const daysWithContent = days.filter(d => {
     const iso = isoDate(d);
     return allEvents.some(e => eventLocalDate(e) === iso) || leavesOnDate(leaves, iso).length > 0;
   });
 
-  if (daysWithContent.length === 0) return (
-    <div className="text-center py-12">
-      <p className="text-[40px] mb-2">📋</p>
-      <p className="text-ink-300 text-sm">No events in the next 14 days</p>
-    </div>
-  );
+  if (daysWithContent.length === 0) {
+    return (
+      <div className="py-14 flex flex-col items-center text-center">
+        <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3"
+          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)' }}>
+          <span className="text-ink-400"><CalendarIcon width="20" height="20" /></span>
+        </div>
+        <p className="text-[14px] font-semibold text-ink-900">Nothing in the next 14 days</p>
+        <p className="text-[12px] text-ink-400 mt-1">Clear skies ahead.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
       {daysWithContent.map(d => {
         const iso = isoDate(d);
-        const dayEvents = allEvents.filter(e => eventLocalDate(e) === iso);
+        const dayEvents = allEvents.filter(e => eventLocalDate(e) === iso).sort((a, b) => a.start_time.localeCompare(b.start_time));
         const dayLeaves = leavesOnDate(leaves, iso);
-        const isToday = iso === isoDate(new Date());
+        const isTodayHeader = iso === isoDate(new Date());
         return (
           <div key={iso}>
             <div className="flex items-center gap-2 mb-2.5">
-              {isToday && <span className="w-2 h-2 rounded-full bg-brand-blue animate-pulse" />}
-              <p className={'text-[13px] font-semibold ' + (isToday ? 'text-brand-blue' : 'text-ink-900')}>
+              {isTodayHeader && <span className="w-2 h-2 rounded-full bg-brand-blue animate-pulse" />}
+              <p className={'text-[13px] font-semibold ' + (isTodayHeader ? 'text-brand-blue' : 'text-ink-900')}>
                 {d.toLocaleDateString('en-IN', { weekday: 'long', month: 'short', day: 'numeric' })}
-                {isToday && <span className="text-[11px] font-normal text-brand-blue/60 ml-1.5">Today</span>}
+                {isTodayHeader && <span className="text-[11px] font-normal text-brand-blue/60 ml-1.5">Today</span>}
               </p>
             </div>
-            <div className="space-y-1.5 ml-4">
+            <div className="space-y-1.5">
               {dayLeaves.map(l => (
-                <div key={l.id} className="flex items-center gap-2 rounded-[8px] px-3 py-2.5" style={{ backgroundColor: '#FEE2E2' }}>
-                  <div className="w-5 h-5 rounded-full flex items-center justify-center text-white font-bold text-[8px]" style={{ backgroundColor: l.avatar_color }}>{l.initials}</div>
-                  <span className="text-[12px] text-ink-900">{l.name} — <span className="text-danger">{l.type}</span></span>
-                </div>
+                <LeaveBanner key={l.id} leave={l} onRemove={() => onDeleteLeave?.(l.id)} />
               ))}
               {dayEvents.map(ev => (
-                <div key={ev.id} onClick={() => !ev._isTeam && onEventClick?.(ev)}
-                  className={'flex items-center gap-3 rounded-[10px] px-3 py-2.5 transition ' + (ev._isTeam ? 'opacity-80' : 'cursor-pointer')}
-                  style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)', border: '1px solid rgba(255,255,255,0.10)', borderTopColor: 'rgba(255,255,255,0.16)', backdropFilter: 'blur(16px)', boxShadow: '0 2px 12px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08)' }}>
-                  <span className="w-1 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: accentFor(ev) }} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <p className="text-[13px] font-medium text-ink-900 truncate">{ev._isTeam && ev._busyOnly ? 'Busy' : ev.title}</p>
-                      {ev.metadata?.recurrence && <span className="text-[10px] text-ink-300">🔁</span>}
-                      {ev.status === 'completed' && (
-                        <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap" style={{ background: 'rgba(34,197,94,0.15)', color: '#86EFAC' }}>✓ Done</span>
-                      )}
-                      {ev.status === 'partial' && (
-                        <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap" style={{ background: 'rgba(245,158,11,0.15)', color: '#FBBF24' }}>⏭️ Partial</span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-ink-500">
-                      {fmtTime(ev.start_time)} · {ev.duration_min} min
-                      {ev._isTeam ? ` · ${ev._teamName}` : ev.department ? ` · ${ev.department}` : ''}
-                    </p>
-                  </div>
-                  {ev._isTeam && (
-                    <div className="w-5 h-5 rounded-full flex items-center justify-center text-white font-bold text-[8px]" style={{ backgroundColor: ev._teamColor || '#9CA3AF' }}>
-                      {ev._teamInitials}
-                    </div>
-                  )}
-                  {ev.meet_link && <a href={ev.meet_link} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-[11px] text-success font-semibold">Join</a>}
-                  {hasStaleLink(ev) && (
-                    <button onClick={e => { e.stopPropagation(); onQuickComplete?.(ev); }}
-                      className="text-[10px] font-semibold px-2 py-1 rounded-[6px] whitespace-nowrap"
-                      style={{ background: 'rgba(34,197,94,0.15)', color: '#86EFAC', border: '1px solid rgba(34,197,94,0.25)' }}
-                      title={`Linked task "${ev.linked_subtask.title}" is done`}>
-                      ✓ Complete
-                    </button>
-                  )}
-                </div>
+                <DayEventRow key={ev.id} event={ev} onClick={() => !ev._isTeam && onEventClick?.(ev)} onQuickComplete={onQuickComplete} />
               ))}
             </div>
           </div>
@@ -1070,23 +1135,24 @@ function ScheduleView({ allEvents, leaves, date, onEventClick, onQuickComplete }
   );
 }
 
-// ── Main Calendar ──
+// ── Main Calendar ───────────────────────────────────────────────
 export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitchTab, deepLink }) {
   const showToast = useToast();
-  const [view, setView] = useState('Day');
+  const [view, setView] = useState('today'); // 'today' | 'upcoming'
   const [date, setDate] = useState(new Date());
   const [rawEvents, setRawEvents] = useState([]);
   const [allRawEvents, setAllRawEvents] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [addOpen, setAddOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
-  const [editEvent, setEditEvent] = useState(null);
-  const [actionEvent, setActionEvent] = useState(null);
-  const [prevView, setPrevView] = useState(null);
+  const [selectedEvent, setSelectedEvent] = useState(null);
   const [prefillTitle, setPrefillTitle] = useState('');
   const [datePickerOpen, setDatePickerOpen] = useState(false);
 
-  // Team calendar state
+  // Recurrence scope choice state
+  const [recScope, setRecScope] = useState(null); // { action: 'delete'|'edit', event } | null
+
+  // Team overlay
   const [teamUsers, setTeamUsers] = useState([]);
   const [selectedTeam, setSelectedTeam] = useState([]);
   const [teamRawEvents, setTeamRawEvents] = useState([]);
@@ -1101,7 +1167,6 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
   }, []);
   useEffect(() => { loadDay(date); }, [date]);
 
-  // Load team events when team members are selected
   useEffect(() => {
     if (selectedTeam.length === 0) { setTeamRawEvents([]); return; }
     api.teamEvents().then(evts => {
@@ -1110,11 +1175,8 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
     });
   }, [selectedTeam, me?.id]);
 
-  const toggleTeamMember = (uid) => {
-    setSelectedTeam(prev => prev.includes(uid) ? prev.filter(x => x !== uid) : [...prev, uid]);
-  };
+  const toggleTeamMember = (uid) => setSelectedTeam(prev => prev.includes(uid) ? prev.filter(x => x !== uid) : [...prev, uid]);
 
-  // Expand recurring events
   const [rangeStart, rangeEnd] = getExpandRange(view, date);
 
   const events = useMemo(() => {
@@ -1124,7 +1186,6 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
 
   const allEvents = useMemo(() => {
     const ownExpanded = allRawEvents.flatMap(e => expandRecurrence(e, rangeStart, rangeEnd));
-    // Merge team events
     const teamExpanded = teamRawEvents.flatMap(e => {
       const vis = e.calendarVisibility || 'full';
       const expanded = expandRecurrence(e, rangeStart, rangeEnd);
@@ -1141,6 +1202,7 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
     return [...ownExpanded, ...teamExpanded].sort((a, b) => a.start_time.localeCompare(b.start_time));
   }, [allRawEvents, teamRawEvents, rangeStart, rangeEnd]);
 
+  // Deep link: "addEvent" from other screens
   const [handledDeepLink, setHandledDeepLink] = useState(null);
   useEffect(() => {
     if (deepLink?.kind === 'addEvent' && deepLink.title && deepLink.ts !== handledDeepLink) {
@@ -1149,29 +1211,20 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
   }, [deepLink, handledDeepLink]);
 
   const nav = (dir) => {
-    if (view === 'Day') setDate(d => addDays(d, dir));
-    else if (view === 'Week') setDate(d => addDays(d, dir * 7));
-    else if (view === 'Schedule') setDate(d => addDays(d, dir * 14));
-    else setDate(d => { const r = new Date(d); r.setMonth(r.getMonth() + dir); return r; });
+    if (view === 'today') setDate(d => addDays(d, dir));
+    else setDate(d => addDays(d, dir * 7));
   };
-  const switchToDay = (d) => { setPrevView(view); setDate(d); setView('Day'); };
+  const jumpToToday = () => setDate(new Date());
 
-  // View-aware "today" check — for week view, check if today falls within displayed week
   const todayIso = isoDate(new Date());
-  const isViewingToday = (() => {
-    if (view === 'Day') return isoDate(date) === todayIso;
-    if (view === 'Week') {
-      const ws = startOfWeek(date);
-      return todayIso >= isoDate(ws) && todayIso <= isoDate(addDays(ws, 6));
-    }
-    if (view === 'Month') return date.getFullYear() === new Date().getFullYear() && date.getMonth() === new Date().getMonth();
-    return isoDate(date) === todayIso; // Schedule
-  })();
+  const isViewingToday = view === 'today' ? isoDate(date) === todayIso : isoDate(date) <= todayIso;
 
-  const headerLabel = view === 'Month' ? date.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
-    : view === 'Week' ? `Week of ${addDays(startOfWeek(date), 0).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}`
-    : view === 'Schedule' ? 'Schedule'
-    : date.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+  const headerLabel = view === 'today'
+    ? date.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })
+    : `Next 14 days`;
+  const headerSub = view === 'today'
+    ? `${events.length} event${events.length !== 1 ? 's' : ''}${selectedTeam.length > 0 ? ` · ${selectedTeam.length} teammate${selectedTeam.length > 1 ? 's' : ''}` : ''}`
+    : `Starting ${date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}${selectedTeam.length > 0 ? ` · ${selectedTeam.length} teammate${selectedTeam.length > 1 ? 's' : ''}` : ''}`;
 
   const refresh = () => { loadDay(date); loadAll(); };
 
@@ -1184,20 +1237,20 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
     } catch (err) { showToast(err.message || 'Failed to complete event', 'error'); }
   };
 
-  // Undo-pattern deletes: hide locally, schedule real delete, let the user reverse it.
+  // ── Undo-pattern deletes ──
   const deleteLeaveWithUndo = (leaveId) => {
-    const prevLeaves = leaves;
+    const prev = leaves;
     setLeaves(ls => ls.filter(l => l.id !== leaveId));
     showToast('Leave removed', {
-      action: { label: 'Undo', onClick: () => setLeaves(prevLeaves) },
+      action: { label: 'Undo', onClick: () => setLeaves(prev) },
       onExpire: async () => {
         try { await api.deleteLeave(leaveId); }
-        catch (err) { setLeaves(prevLeaves); showToast(err.message || 'Failed to remove leave', 'error'); }
+        catch (err) { setLeaves(prev); showToast(err.message || 'Failed to remove leave', 'error'); }
       },
     });
   };
 
-  const deleteEventWithUndo = (ev) => {
+  const performEventDelete = (ev, _scope /* reserved for API once backend supports it */) => {
     const id = ev._originalId || ev.id;
     const prevRaw = rawEvents;
     const prevAll = allRawEvents;
@@ -1219,68 +1272,157 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
     });
   };
 
+  const deleteEventWithUndo = (ev) => {
+    if (ev?.metadata?.recurrence) {
+      // Ask scope before deleting
+      setRecScope({ action: 'delete', event: ev });
+      return;
+    }
+    performEventDelete(ev, 'this');
+  };
+
+  // ── Keyboard shortcuts (desktop) ──
+  const onKey = useCallback((e) => {
+    // Skip shortcuts when the user is typing in an input/textarea/contentEditable
+    const tag = e.target?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target?.isContentEditable) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if (e.key === 't' || e.key === 'T') { e.preventDefault(); setDate(new Date()); }
+    else if (e.key === 'a' || e.key === 'A') { e.preventDefault(); setAddOpen(true); }
+    else if (e.key === 'd' || e.key === 'D') { e.preventDefault(); setView('today'); }
+    else if (e.key === 'u' || e.key === 'U') { e.preventDefault(); setView('upcoming'); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); nav(-1); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); nav(1); }
+  }, [view]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onKey]);
+
+  // Combined events for DayView: own + team
+  const dayViewEvents = useMemo(() => (
+    [...events, ...allEvents.filter(e => e._isTeam && eventLocalDate(e) === isoDate(date))]
+      .sort((a, b) => a.start_time.localeCompare(b.start_time))
+  ), [events, allEvents, date]);
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-24">
       {/* Header */}
-      <div className="flex items-start justify-between pt-1">
-        <div>
-          <div className="flex items-center gap-2 relative">
-            {view === 'Day' && prevView && (
-              <button onClick={() => { setView(prevView); setPrevView(null); }} className="w-8 h-8 rounded-full border border-line-light flex items-center justify-center text-ink-500 hover:bg-[#F7F8FA] transition"><ArrowLeft /></button>
-            )}
-            <button onClick={() => nav(-1)} className="w-8 h-8 rounded-full border border-line-light flex items-center justify-center text-ink-500 hover:bg-[#F7F8FA] transition"><ChevronLeft /></button>
-            <button onClick={() => setDatePickerOpen(o => !o)} className="text-left hover:bg-ink-50 px-2 py-1 -mx-2 rounded-lg transition">
+      <div className="flex items-start justify-between pt-1 gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 relative">
+            <button onClick={() => nav(-1)} aria-label="Previous" className="w-8 h-8 rounded-full flex items-center justify-center text-ink-400 hover:text-ink-900 hover:bg-white/5 transition">
+              <ChevronLeft />
+            </button>
+            <button onClick={() => setDatePickerOpen(o => !o)} className="text-left hover:bg-white/5 px-2 py-1 rounded-lg transition">
               <h1 className="text-[20px] font-bold text-ink-900 tracking-tight flex items-center gap-1.5">
                 {headerLabel}
-                <svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="text-ink-300"><polyline points="6 9 12 15 18 9"/></svg>
+                <svg width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="text-ink-400"><polyline points="6 9 12 15 18 9"/></svg>
               </h1>
             </button>
-            <button onClick={() => nav(1)} className="w-8 h-8 rounded-full border border-line-light flex items-center justify-center text-ink-500 hover:bg-[#F7F8FA] transition"><ChevronRight /></button>
+            <button onClick={() => nav(1)} aria-label="Next" className="w-8 h-8 rounded-full flex items-center justify-center text-ink-400 hover:text-ink-900 hover:bg-white/5 transition">
+              <ChevronRight />
+            </button>
             {datePickerOpen && <DateJumpPicker date={date} onJump={(d) => setDate(d)} onClose={() => setDatePickerOpen(false)} />}
           </div>
           <p className="text-[12px] text-ink-400 mt-0.5 ml-0.5">
-            {events.length} event{events.length !== 1 ? 's' : ''}{view === 'Day' ? ' today' : ''}
-            {selectedTeam.length > 0 && <span className="text-brand-blue"> · {selectedTeam.length} teammate{selectedTeam.length > 1 ? 's' : ''}</span>}
+            {headerSub}
+            {!isViewingToday && view === 'today' && (
+              <button onClick={jumpToToday} className="text-brand-blue hover:underline ml-2">Jump to today</button>
+            )}
           </p>
         </div>
         <HeaderActions me={me} unreadCount={unreadCount} onOpenNotifications={onOpenNotifications} onOpenProfile={() => onSwitchTab?.('profile')} />
       </div>
 
-      {/* View toggle + actions */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {['Day', 'Week', 'Month', 'Schedule'].map(v => (
-          <Pill key={v} active={view === v} onClick={() => { setView(v); setPrevView(null); }}>{v}</Pill>
-        ))}
+      {/* Toolbar: view tabs + team + overflow + add */}
+      <div className="flex items-center gap-2">
+        {/* Segmented view toggle */}
+        <div className="inline-flex p-0.5 rounded-[10px]" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)' }}>
+          {[{ id: 'today', label: 'Today' }, { id: 'upcoming', label: 'Upcoming' }].map(v => {
+            const active = view === v.id;
+            return (
+              <button key={v.id} onClick={() => setView(v.id)}
+                className="px-3 h-8 rounded-md text-[12px] font-semibold transition"
+                style={{
+                  background: active ? 'rgba(255,255,255,0.10)' : 'transparent',
+                  color: active ? '#F3F4F6' : '#9CA3AF',
+                  border: active ? '1px solid rgba(255,255,255,0.14)' : '1px solid transparent',
+                  boxShadow: active ? 'inset 0 1px 0 rgba(255,255,255,0.08)' : 'none',
+                }}>
+                {v.label}
+              </button>
+            );
+          })}
+        </div>
+
         <div className="flex-1" />
-        {!isViewingToday && (
-          <button onClick={() => setDate(new Date())} className="pill pill-outline !h-9 !px-3 !text-[12px] !text-brand-blue !border-brand-blue/30 hover:!bg-brand-blueLight transition">Today</button>
-        )}
-        {teamUsers.length > 0 && <TeamToggle users={teamUsers} selected={selectedTeam} onToggle={toggleTeamMember} />}
-        <button onClick={() => setLeaveOpen(true)} className="pill pill-outline !h-9 !px-3 !text-[12px]">🏖️ Leave</button>
-        <button onClick={() => setAddOpen(true)} className="pill pill-primary !h-9 !px-3 !text-[12px]">+ Event</button>
+
+        <TeamToggle users={teamUsers} selected={selectedTeam} onToggle={toggleTeamMember} />
+        <OverflowMenu onAddLeave={() => setLeaveOpen(true)} onJumpToday={jumpToToday} />
+
+        <button
+          onClick={() => setAddOpen(true)}
+          className="h-9 px-3 rounded-[10px] text-[13px] font-semibold flex items-center gap-1.5 transition"
+          style={{
+            background: 'linear-gradient(135deg, rgba(91,140,255,0.22) 0%, rgba(91,140,255,0.10) 100%)',
+            color: '#A8C4FF',
+            border: '1px solid rgba(91,140,255,0.30)',
+            boxShadow: '0 0 10px rgba(91,140,255,0.10), inset 0 1px 0 rgba(255,255,255,0.08)',
+          }}
+          aria-label="Add event">
+          <PlusIcon width="14" height="14" /> Event
+        </button>
       </div>
 
       {/* View body */}
-      {view === 'Day' && <DayView events={[...events, ...allEvents.filter(e => e._isTeam && eventLocalDate(e) === isoDate(date))].sort((a,b) => a.start_time.localeCompare(b.start_time))} leaves={leaves} date={date} onEventClick={setActionEvent} onDeleteLeave={deleteLeaveWithUndo} onQuickComplete={quickComplete} />}
-      {view === 'Week' && <WeekView date={date} allEvents={allEvents} leaves={leaves} onDayClick={switchToDay} />}
-      {view === 'Month' && <MonthView date={date} allEvents={allEvents} leaves={leaves} onDayClick={switchToDay} />}
-      {view === 'Schedule' && <ScheduleView allEvents={allEvents} leaves={leaves} date={date} onEventClick={setActionEvent} onQuickComplete={quickComplete} />}
+      {view === 'today' && (
+        <DayView
+          events={dayViewEvents}
+          leaves={leaves}
+          date={date}
+          onEventClick={setSelectedEvent}
+          onDeleteLeave={deleteLeaveWithUndo}
+          onQuickComplete={quickComplete}
+        />
+      )}
+      {view === 'upcoming' && (
+        <UpcomingView
+          allEvents={allEvents}
+          leaves={leaves}
+          date={date}
+          onEventClick={setSelectedEvent}
+          onDeleteLeave={deleteLeaveWithUndo}
+          onQuickComplete={quickComplete}
+        />
+      )}
 
+      {/* Modals */}
       <AddEventModal open={addOpen} onClose={() => { setAddOpen(false); setPrefillTitle(''); }} onCreated={() => { refresh(); showToast('Event created'); }} date={isoDate(date)} prefillTitle={prefillTitle} />
       <AddLeaveModal open={leaveOpen} onClose={() => setLeaveOpen(false)} onCreated={() => { loadLeaves(); showToast('Leave added'); }} date={isoDate(date)} />
-      <EventActionSheet
-        open={!!actionEvent}
-        onClose={() => setActionEvent(null)}
-        event={actionEvent}
-        onAction={(kind) => { if (kind === 'edit') { setEditEvent(actionEvent); setActionEvent(null); } }}
-        onChanged={() => { refresh(); }}
-      />
-      <EditEventModal
-        open={!!editEvent}
-        onClose={() => setEditEvent(null)}
-        event={editEvent}
+
+      {/* Unified event view/edit/actions modal */}
+      <EventModal
+        open={!!selectedEvent}
+        onClose={() => setSelectedEvent(null)}
+        event={selectedEvent}
         onUpdated={() => { refresh(); showToast('Event updated'); }}
+        onChanged={() => { refresh(); }}
         onRequestDelete={deleteEventWithUndo}
+      />
+
+      {/* Recurrence scope chooser */}
+      <RecurrenceScopeDialog
+        open={!!recScope}
+        action={recScope?.action}
+        onClose={() => setRecScope(null)}
+        onChoose={(scope) => {
+          const { event, action } = recScope;
+          setRecScope(null);
+          if (action === 'delete') performEventDelete(event, scope);
+        }}
       />
     </div>
   );
