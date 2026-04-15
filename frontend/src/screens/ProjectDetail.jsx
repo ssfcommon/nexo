@@ -162,10 +162,13 @@ function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke
                       {s.complexity === 'High Complex' ? 'HC' : 'LC'}
                     </span>
                   )}
-                  {s.assignment_status === 'pending' && (
+                  {/* Assignment-acceptance chip. Only meaningful while work
+                      is outstanding — once the subtask is done, acceptance
+                      is moot, so hide the chip. */}
+                  {s.status !== 'done' && s.assignment_status === 'pending' && (
                     <span className="inline-flex items-center h-5 px-1.5 rounded text-[10px] font-semibold" style={{ color: '#FBBF24', backgroundColor: 'rgba(251,191,36,0.12)' }}>Pending</span>
                   )}
-                  {s.assignment_status === 'declined' && (
+                  {s.status !== 'done' && s.assignment_status === 'declined' && (
                     <span className="inline-flex items-center h-5 px-1.5 rounded text-[10px] font-semibold" style={{ color: '#F87171', backgroundColor: 'rgba(248,113,113,0.12)' }}>Declined</span>
                   )}
                   {s.deadline && (
