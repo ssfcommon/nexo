@@ -5,6 +5,8 @@ import HeaderActions from '../components/HeaderActions.jsx';
 import Modal, { Field, inputCls } from '../components/Modal.jsx';
 import { PrivacyModal, HelpModal } from '../components/InfoModals.jsx';
 import { resetOnboarding } from '../components/OnboardingTour.jsx';
+import ConfirmModal from '../components/ConfirmModal.jsx';
+import { CameraIcon, DownloadIcon } from '../components/Icons.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useOnRefresh } from '../hooks/usePullToRefresh.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -26,15 +28,40 @@ const icons = {
   logout:   <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
 };
 
-function Row({ icon, label, right, onClick, danger }) {
-  const Tag = onClick ? 'button' : 'div';
+function Row({ icon, label, right, onClick, danger, disabled }) {
+  const Tag = onClick && !disabled ? 'button' : 'div';
   const iconEl = typeof icon === 'string' ? icons[icon] || <span className="text-lg">{icon}</span> : icon;
   return (
-    <Tag onClick={onClick} className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-ink-100/60 transition">
+    <Tag onClick={disabled ? undefined : onClick}
+      className={'w-full flex items-center gap-3 px-4 py-3.5 text-left transition ' + (disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-ink-100/60')}
+    >
       <span className={'w-5 flex-shrink-0 ' + (danger ? 'text-danger' : 'text-ink-300')}>{iconEl}</span>
       <span className={'flex-1 text-[14px] ' + (danger ? 'text-danger' : 'text-ink-900')}>{label}</span>
       {right}
     </Tag>
+  );
+}
+
+function ComingSoon() {
+  return (
+    <span
+      className="text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wide"
+      style={{
+        color: '#A78BFA',
+        background: 'rgba(167,139,250,0.10)',
+        border: '1px solid rgba(167,139,250,0.22)',
+      }}
+    >
+      Soon
+    </span>
+  );
+}
+
+function Chevron() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-ink-400">
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
   );
 }
 
@@ -49,9 +76,13 @@ function Toggle({ on, onChange }) {
 }
 
 function roleColor(role) {
-  if (role === 'admin') return { bg: 'rgba(239,68,68,0.12)', fg: '#EF4444' };
-  if (role === 'manager') return { bg: 'rgba(74,108,247,0.12)', fg: '#4A6CF7' };
-  return { bg: 'rgba(107,114,128,0.12)', fg: '#6B7280' };
+  if (role === 'admin') return { bg: 'rgba(239,68,68,0.12)', fg: '#F87171', border: 'rgba(239,68,68,0.22)' };
+  if (role === 'manager') return { bg: 'rgba(91,140,255,0.12)', fg: '#A8C4FF', border: 'rgba(91,140,255,0.22)' };
+  return { bg: 'rgba(156,163,175,0.10)', fg: '#9CA3AF', border: 'rgba(156,163,175,0.18)' };
+}
+function roleLabel(role) {
+  if (!role) return 'Member';
+  return role.charAt(0).toUpperCase() + role.slice(1);
 }
 
 // ── Edit profile modal ──
@@ -147,7 +178,7 @@ function EditProfileModal({ open, onClose, user, onSaved, refreshUser }) {
       }
       onSaved?.(u);
       refreshUser?.();
-      showToast('Profile updated ✓');
+      showToast('Profile updated');
       onClose();
     } catch (err) { showToast(err.message || 'Failed to update profile', 'error'); } finally { setBusy(false); }
   };
@@ -222,8 +253,8 @@ function EditProfileModal({ open, onClose, user, onSaved, refreshUser }) {
                 {user?.initials}
               </div>
             )}
-            <div className="absolute inset-0 rounded-full flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition">
-              <span className="text-white text-lg">📷</span>
+            <div className="absolute inset-0 rounded-full flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition text-white">
+              <CameraIcon width="18" height="18" />
             </div>
             <input type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
           </label>
@@ -271,34 +302,29 @@ function ReportsSection() {
 
   return (
     <div className="space-y-4">
-      {/* Scope + download */}
+      {/* Scope + download. Stat cards removed — already visible on the Profile
+          header above the tab toggle. */}
       <div className="flex items-center gap-2">
         <Pill active={scope === 'me'} onClick={() => setScope('me')}>Me</Pill>
         <Pill active={scope === 'all'} onClick={() => setScope('all')}>Company</Pill>
         <div className="flex-1" />
-        {r && <button onClick={() => {
-          const rows = [['Metric','Value'],['Done',r.done],['Overdue',r.overdue],['On-time',r.onTimeRate+'%']];
-          (r.departments||[]).forEach(d => rows.push([d.name, d.done, d.overdue, d.efficiency+'%']));
-          const blob = new Blob([rows.map(r=>r.join(',')).join('\n')], {type:'text/csv'});
-          const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-          a.download = `nexo-report-${scope}-${new Date().toISOString().slice(0,10)}.csv`; a.click();
-        }} className="w-9 h-9 rounded-full border border-line-light flex items-center justify-center text-ink-500 hover:bg-ink-100/60" title="Download CSV">📄</button>}
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="card text-center py-3">
-          <p className="text-[22px] font-bold text-ink-900 leading-none">{r.done}</p>
-          <p className="text-[10px] text-ink-500 mt-1">Done</p>
-        </div>
-        <div className="card text-center py-3">
-          <p className="text-[22px] font-bold text-danger leading-none">{r.overdue}</p>
-          <p className="text-[10px] text-ink-500 mt-1">Overdue</p>
-        </div>
-        <div className="card text-center py-3">
-          <p className="text-[22px] font-bold text-success leading-none">{r.onTimeRate}%</p>
-          <p className="text-[10px] text-ink-500 mt-1">On-time</p>
-        </div>
+        {r && (
+          <button
+            onClick={() => {
+              const rows = [['Metric','Value'],['Done',r.done],['Overdue',r.overdue],['On-time',r.onTimeRate+'%']];
+              (r.departments||[]).forEach(d => rows.push([d.name, d.done, d.overdue, d.efficiency+'%']));
+              const blob = new Blob([rows.map(r=>r.join(',')).join('\n')], {type:'text/csv'});
+              const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+              a.download = `nexo-report-${scope}-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+            }}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-ink-400 hover:text-ink-700 hover:bg-white/5 transition"
+            style={{ border: '1px solid rgba(255,255,255,0.10)' }}
+            title="Download CSV"
+            aria-label="Download CSV"
+          >
+            <DownloadIcon />
+          </button>
+        )}
       </div>
 
       {/* Period */}
@@ -351,7 +377,7 @@ function ReportsSection() {
 
 export default function Profile({ me, unreadCount, onOpenNotifications }) {
   const showToast = useToast();
-  const { refreshUser } = useAuth();
+  const { refreshUser, signOut } = useAuth();
   const [streaks, setStreaks] = useState([]);
   const [summary, setSummary] = useState(null);
   const [prefs, setPrefs] = useState(null);
@@ -359,9 +385,8 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
   const [editOpen, setEditOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [resetBusy, setResetBusy] = useState(false);
-  const [resetToast, setResetToast] = useState(null);
-  const [digest, setDigest] = useState(null);
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const [logoutBusy, setLogoutBusy] = useState(false);
   const [localUser, setLocalUser] = useState(me);
   const [section, setSection] = useState('profile'); // 'profile' | 'reports'
 
@@ -390,11 +415,17 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
     finally { setSaving(false); }
   };
 
-  const doReset = async () => {
-    if (!confirm('Reset the demo database? This will wipe your changes and restore the seed data.')) return;
-    setResetBusy(true);
-    try { await api.resetSeed(); setResetToast('Database reseeded — reloading…'); setTimeout(() => location.reload(), 900); }
-    catch (e) { setResetToast('Reset failed: ' + (e.message || e)); setResetBusy(false); setTimeout(() => setResetToast(null), 3000); }
+  const doLogout = async () => {
+    setLogoutBusy(true);
+    try {
+      await signOut();
+      // AuthContext flips isAuthenticated → App renders Login.
+      // No toast needed; screen change is the feedback.
+    } catch (err) {
+      showToast(err.message || 'Failed to log out', 'error');
+      setLogoutBusy(false);
+      setLogoutOpen(false);
+    }
   };
 
   const role = localUser?.role || 'member';
@@ -410,21 +441,38 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
       {/* Identity card — tap to edit */}
       {localUser && (
         <button onClick={() => setEditOpen(true)} className="card card-hover flex items-center gap-4 w-full text-left">
-          <div className="relative group">
+          <div className="relative">
             <Avatar user={localUser} size={64} />
-            <div className="absolute inset-0 rounded-full flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition">
-              <span className="text-white text-sm">📷</span>
-            </div>
+            {/* Persistent camera badge — communicates "tap to edit photo" on mobile without relying on hover */}
+            <span
+              className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full flex items-center justify-center"
+              style={{
+                background: 'rgba(17,24,39,0.95)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                color: '#9CA3AF',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
+              }}
+              aria-hidden
+            >
+              <CameraIcon width="11" height="11" />
+            </span>
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="text-[18px] font-bold text-ink-900">{localUser.name}</p>
-              <span className="tag" style={{ color: rc.fg, backgroundColor: rc.bg }}>{role.toUpperCase()}</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-[18px] font-bold text-ink-900 truncate">{localUser.name}</p>
+              <span
+                className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                style={{ color: rc.fg, background: rc.bg, border: `1px solid ${rc.border}` }}
+              >
+                {roleLabel(role)}
+              </span>
             </div>
-            <p className="text-[13px] text-ink-500">{localUser.department}</p>
-            <p className="text-[12px] text-ink-300">{localUser.email}</p>
+            <p className="text-[13px] text-ink-500 truncate">{localUser.department}</p>
+            <p className="text-[12px] text-ink-400 truncate">{localUser.email}</p>
           </div>
-          <span className="text-ink-300 text-lg">›</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-ink-400 flex-shrink-0">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
         </button>
       )}
 
@@ -468,14 +516,15 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
           <div>
             <p className="section-label mb-2">Preferences {saving && <span className="text-ink-300 normal-case font-normal">· saving…</span>}</p>
             <div className="card !p-0 overflow-hidden divide-y divide-line-light">
-              <Row icon="moon" label="Dark mode" right={<Toggle on={true} onChange={() => {}} />} />
+              {/* Real, wired preferences first */}
               <Row icon="bell" label="Notifications" right={<Toggle on={!!prefs?.notifications} onChange={v => update({ notifications: v })} />} />
-              <Row icon="calendar" label="Calendar sync"
-                right={<select value={prefs?.calendarSync || 'Google'} onChange={e => update({ calendarSync: e.target.value })} className="inline-control text-[13px] text-ink-500 outline-none"><option>Google</option><option>Outlook</option><option>None</option></select>} />
-              <Row icon="clock" label="Mood check-in time"
-                right={<input type="time" value={prefs?.moodTime || '09:00'} onChange={e => update({ moodTime: e.target.value })} className="inline-control text-[13px] text-ink-500 outline-none" />} />
               <Row icon="calendar" label="Calendar visibility"
                 right={<select value={prefs?.calendarVisibility || 'full'} onChange={e => update({ calendarVisibility: e.target.value })} className="inline-control text-[13px] text-ink-500 outline-none"><option value="full">Show details</option><option value="busy">Show as Busy</option></select>} />
+
+              {/* Not-yet-wired preferences — visible but clearly marked. No interactive widgets. */}
+              <Row icon="moon"     label="Dark mode"           disabled right={<ComingSoon />} />
+              <Row icon="calendar" label="Calendar sync"       disabled right={<ComingSoon />} />
+              <Row icon="clock"    label="Mood check-in time"  disabled right={<ComingSoon />} />
             </div>
           </div>
 
@@ -483,30 +532,11 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
           <div>
             <p className="section-label mb-2">Account</p>
             <div className="card !p-0 overflow-hidden divide-y divide-line-light">
-              <Row icon="lock" label="Privacy" onClick={() => setPrivacyOpen(true)} right={<span className="text-ink-300">›</span>} />
-              <Row icon="help" label="Help & feedback" onClick={() => setHelpOpen(true)} right={<span className="text-ink-300">›</span>} />
-              <Row icon="play" label="Replay welcome tour" onClick={() => { resetOnboarding(); location.reload(); }} right={<span className="text-ink-300">›</span>} />
+              <Row icon="lock" label="Privacy" onClick={() => setPrivacyOpen(true)} right={<Chevron />} />
+              <Row icon="help" label="Help & feedback" onClick={() => setHelpOpen(true)} right={<Chevron />} />
+              <Row icon="play" label="Replay welcome tour" onClick={() => { resetOnboarding(); location.reload(); }} right={<Chevron />} />
+              <Row icon="logout" danger label="Log out" onClick={() => setLogoutOpen(true)} />
             </div>
-          </div>
-
-          {/* Dev tools */}
-          <div>
-            <p className="section-label mb-2">Developer</p>
-            <div className="card !p-0 overflow-hidden divide-y divide-line-light">
-              <Row icon="refresh" label={resetBusy ? 'Resetting…' : 'Reset demo data'} onClick={resetBusy ? undefined : doReset}
-                right={<span className="text-ink-300 text-[11px]">restores seed</span>} />
-              <Row icon="mail" label="Preview email digest" onClick={async () => setDigest(await api.digestPreview())}
-                right={<span className="text-ink-300 text-[11px]">no SMTP</span>} />
-            </div>
-            {digest && (
-              <div className="mt-2 card !p-3 space-y-1">
-                <p className="text-[11px] text-ink-300">To: {digest.to}</p>
-                <p className="text-[12px] font-semibold text-ink-900">{digest.subject}</p>
-                <pre className="text-[11px] text-ink-500 whitespace-pre-wrap font-sans">{digest.body}</pre>
-                <button onClick={() => setDigest(null)} className="text-[11px] text-brand-blue mt-1">Close</button>
-              </div>
-            )}
-            {resetToast && <p className="mt-2 text-[12px] text-brand-blue">{resetToast}</p>}
           </div>
         </>
       )}
@@ -520,6 +550,16 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
       <PrivacyModal open={privacyOpen} onClose={() => setPrivacyOpen(false)} />
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
       <EditProfileModal open={editOpen} onClose={() => setEditOpen(false)} user={localUser} onSaved={(u) => setLocalUser(u)} refreshUser={refreshUser} />
+      <ConfirmModal
+        open={logoutOpen}
+        onClose={() => !logoutBusy && setLogoutOpen(false)}
+        onConfirm={doLogout}
+        title="Log out?"
+        message="You'll need to sign in again to access your tasks, projects and notifications."
+        confirmLabel="Log out"
+        destructive
+        busy={logoutBusy}
+      />
     </div>
   );
 }
