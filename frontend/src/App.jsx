@@ -84,11 +84,35 @@ export default function App() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [deepLink, setDeepLink] = useState(null);
 
+  // Remembers "I navigated here from the Notifications overlay" so the
+  // back button can take the user back to notifications instead of just
+  // dropping them on the target tab's list. Ref (not state) because its
+  // only consumer is a window event handler — no re-render needed.
+  const resumeNotifsRef = useRef(false);
+
   const handlePaletteNavigate = ({ tab: nextTab, projectId }) => {
+    // Command palette is a fresh intent — the user is NOT expecting to
+    // land back in Notifications, so clear the flag.
+    resumeNotifsRef.current = false;
     setNotifOpen(false);
     if (nextTab) setTab(nextTab);
     if (projectId) setDeepLink({ kind: 'project', id: projectId, ts: Date.now() });
   };
+
+  // When a detail view (project / bug / event modal) closes, dispatch
+  // 'nexo:detail-closed' from the screen that owns it. We catch it here
+  // and, if the user got into that detail by tapping a notification,
+  // re-open the Notifications overlay so back-nav feels intuitive.
+  useEffect(() => {
+    const h = () => {
+      if (resumeNotifsRef.current) {
+        resumeNotifsRef.current = false;
+        setNotifOpen(true);
+      }
+    };
+    window.addEventListener('nexo:detail-closed', h);
+    return () => window.removeEventListener('nexo:detail-closed', h);
+  }, []);
   const isDesktop = useMediaQuery('(min-width: 768px)');
 
   const refreshUnread = useCallback(async () => {
@@ -132,6 +156,9 @@ export default function App() {
         <Notifications
           onClose={closeNotifications}
           onNavigate={(nextTab, payload) => {
+            // The user tapped a notification that opens a detail view.
+            // Mark that we should return here when that detail closes.
+            resumeNotifsRef.current = true;
             setNotifOpen(false);
             if (nextTab) setTab(nextTab);
             if (payload) setDeepLink({ ...payload, ts: Date.now() });
@@ -139,7 +166,13 @@ export default function App() {
           }}
         />
       ) : (
-        <Active me={me} unreadCount={unreadCount} onOpenNotifications={openNotifications} deepLink={deepLink} onSwitchTab={(t, payload) => { setTab(t); setNotifOpen(false); if (payload?.addEvent) setDeepLink({ kind: 'addEvent', title: payload.addEvent, ts: Date.now() }); if (payload?.kind) setDeepLink({ ...payload, ts: Date.now() }); }} />
+        <Active me={me} unreadCount={unreadCount} onOpenNotifications={openNotifications} deepLink={deepLink} onSwitchTab={(t, payload) => {
+          // User navigated themselves — not expecting to land back in Notifications.
+          resumeNotifsRef.current = false;
+          setTab(t); setNotifOpen(false);
+          if (payload?.addEvent) setDeepLink({ kind: 'addEvent', title: payload.addEvent, ts: Date.now() });
+          if (payload?.kind) setDeepLink({ ...payload, ts: Date.now() });
+        }} />
       )}
     </ErrorBoundary>
   );
@@ -229,7 +262,7 @@ export default function App() {
                 return (
                   <button
                     key={t.id}
-                    onClick={() => { setTab(t.id); setNotifOpen(false); setDeepLink(null); }}
+                    onClick={() => { resumeNotifsRef.current = false; setTab(t.id); setNotifOpen(false); setDeepLink(null); }}
                     className="flex-1 flex flex-col items-center justify-center gap-1.5 transition-all duration-300 relative"
                   >
                     {/* Active glow backdrop */}

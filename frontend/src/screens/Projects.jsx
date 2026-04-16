@@ -256,6 +256,16 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
   useBackHandler('project-detail', !!openId, () => { setOpenId(null); loadProjects(); });
   useOnRefresh(() => { loadProjects(); loadTasks(); });
 
+  // Notify the shell whenever ProjectDetail closes so it can decide
+  // whether to restore the Notifications overlay.
+  const prevOpenIdRef = useRef(openId);
+  useEffect(() => {
+    if (prevOpenIdRef.current && !openId) {
+      window.dispatchEvent(new Event('nexo:detail-closed'));
+    }
+    prevOpenIdRef.current = openId;
+  }, [openId]);
+
   const loadProjects = () => api.projects(scope).then(setProjects);
   const loadTasks = () => api.tasks({ quick: '1', owner: 'me' }).then(setQuickTasks);
 

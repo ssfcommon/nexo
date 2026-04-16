@@ -1336,6 +1336,16 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
   // Pull-to-refresh subscriber
   useOnRefresh(() => { loadDay(date); loadAll(); loadLeaves(); });
 
+  // Notify the shell when the event modal closes so it can restore
+  // Notifications if the user entered via a notification tap.
+  const prevSelRef = useRef(selectedEvent);
+  useEffect(() => {
+    if (prevSelRef.current && !selectedEvent) {
+      window.dispatchEvent(new Event('nexo:detail-closed'));
+    }
+    prevSelRef.current = selectedEvent;
+  }, [selectedEvent]);
+
   useEffect(() => {
     loadDay(date); loadAll(); loadLeaves();
     api.users().then(u => setTeamUsers(u.filter(x => x.id !== me?.id && (x.role === 'admin' || x.role === 'manager'))));

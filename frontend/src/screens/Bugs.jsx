@@ -709,6 +709,16 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
   // Pull-to-refresh subscriber
   useOnRefresh(() => { load(); });
 
+  // Notify the shell when the bug detail modal closes so it can restore
+  // Notifications if the user entered via a notification tap.
+  const prevDetailRef = useRef(detailBug);
+  useEffect(() => {
+    if (prevDetailRef.current && !detailBug) {
+      window.dispatchEvent(new Event('nexo:detail-closed'));
+    }
+    prevDetailRef.current = detailBug;
+  }, [detailBug]);
+
   const load = () => {
     api.bugs(appFilter || undefined).then(setBugs);
     api.bugApps().then(setApps);
