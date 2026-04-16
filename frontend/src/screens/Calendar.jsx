@@ -463,7 +463,7 @@ function AddEventModal({ open, onClose, onCreated, date, prefillTitle = '' }) {
         recurrence: recurrence || undefined,
       });
       onCreated?.(); onClose();
-    } catch (err) { showToast(err.message || 'Failed to create event', 'error'); }
+    } catch (err) { showToast(err.message || "Couldn't create event", 'error'); }
     finally { setBusy(false); }
   };
 
@@ -497,7 +497,7 @@ function AddLeaveModal({ open, onClose, onCreated, date }) {
   const submit = async (e) => {
     e.preventDefault(); if (!startDate || !endDate) return; setBusy(true);
     try { await api.addLeave({ userId: userId ? Number(userId) : undefined, startDate, endDate, type }); onCreated?.(); onClose(); }
-    catch (err) { showToast(err.message || 'Failed to add leave', 'error'); }
+    catch (err) { showToast(err.message || "Couldn't add leave", 'error'); }
     finally { setBusy(false); }
   };
 
@@ -616,16 +616,16 @@ function EventModal({ open, onClose, event, onUpdated, onChanged, onRequestDelet
         recurrence: recurrence || null,
       });
       onUpdated?.(); onClose();
-    } catch (err) { showToast(err.message || 'Failed to update event', 'error'); } finally { setBusy(false); }
+    } catch (err) { showToast(err.message || "Couldn't update event", 'error'); } finally { setBusy(false); }
   };
 
   const doComplete = async () => {
     if (!realEvent) return; setBusy(true);
     try {
       await api.completeEvent(realEvent.id, { linkedSubtaskId: linkSubtaskId || null });
-      showToast(linkSubtaskId ? 'Event completed & task marked done' : 'Event marked complete');
+      showToast(linkSubtaskId ? 'Event done · task marked complete' : 'Event done');
       onChanged?.(); onClose();
-    } catch (err) { showToast(err.message || 'Failed to complete', 'error'); }
+    } catch (err) { showToast(err.message || "Couldn't complete", 'error'); }
     finally { setBusy(false); }
   };
 
@@ -636,7 +636,7 @@ function EventModal({ open, onClose, event, onUpdated, onChanged, onRequestDelet
       await api.rescheduleEvent(realEvent.id, iso);
       showToast('Event rescheduled');
       onChanged?.(); onClose();
-    } catch (err) { showToast(err.message || 'Failed to reschedule', 'error'); }
+    } catch (err) { showToast(err.message || "Couldn't reschedule", 'error'); }
     finally { setBusy(false); }
   };
 
@@ -647,7 +647,7 @@ function EventModal({ open, onClose, event, onUpdated, onChanged, onRequestDelet
       await api.partialEvent(realEvent.id, { startTime: iso, durationMin: Number(newDuration), title: realEvent.title });
       showToast('Follow-up session scheduled');
       onChanged?.(); onClose();
-    } catch (err) { showToast(err.message || 'Failed to create follow-up', 'error'); }
+    } catch (err) { showToast(err.message || "Couldn't create follow-up", 'error'); }
     finally { setBusy(false); }
   };
 
@@ -1446,9 +1446,9 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
     const id = ev._originalId || ev.id;
     try {
       await api.completeEvent(id);
-      showToast('Event marked complete');
+      showToast('Event done');
       refresh();
-    } catch (err) { showToast(err.message || 'Failed to complete event', 'error'); }
+    } catch (err) { showToast(err.message || "Couldn't complete event", 'error'); }
   };
 
   // ── Undo-pattern deletes ──
@@ -1459,7 +1459,7 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
       action: { label: 'Undo', onClick: () => setLeaves(prev) },
       onExpire: async () => {
         try { await api.deleteLeave(leaveId); }
-        catch (err) { setLeaves(prev); showToast(err.message || 'Failed to remove leave', 'error'); }
+        catch (err) { setLeaves(prev); showToast(err.message || "Couldn't remove leave", 'error'); }
       },
     });
   };
@@ -1480,7 +1480,7 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
         try { await api.deleteEvent(id); }
         catch (err) {
           setRawEvents(prevRaw); setAllRawEvents(prevAll);
-          showToast(err.message || 'Failed to delete event', 'error');
+          showToast(err.message || "Couldn't delete event", 'error');
         }
       },
     });
@@ -1648,7 +1648,7 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
       )}
 
       {/* Modals */}
-      <AddEventModal open={addOpen} onClose={() => { setAddOpen(false); setPrefillTitle(''); }} onCreated={() => { refresh(); showToast('Event created'); }} date={isoDate(date)} prefillTitle={prefillTitle} />
+      <AddEventModal open={addOpen} onClose={() => { setAddOpen(false); setPrefillTitle(''); }} onCreated={() => { refresh(); showToast('On the calendar'); }} date={isoDate(date)} prefillTitle={prefillTitle} />
       <AddLeaveModal open={leaveOpen} onClose={() => setLeaveOpen(false)} onCreated={() => { loadLeaves(); showToast('Leave added'); }} date={isoDate(date)} />
 
       {/* Unified event view/edit/actions modal */}

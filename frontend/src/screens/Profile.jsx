@@ -215,7 +215,7 @@ function EditProfileModal({ open, onClose, user, onSaved, refreshUser }) {
       refreshUser?.();
       showToast('Profile updated');
       onClose();
-    } catch (err) { showToast(err.message || 'Failed to update profile', 'error'); } finally { setBusy(false); }
+    } catch (err) { showToast(err.message || "Couldn't update profile", 'error'); } finally { setBusy(false); }
   };
 
   const currentPhoto = photoPreview || (user?.avatar_url ? (user.avatar_url.startsWith('http') ? user.avatar_url : ASSET_ORIGIN + user.avatar_url) : null);
@@ -446,7 +446,7 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
   const update = async (patch) => {
     setPrefs(p => ({ ...p, ...patch })); setSaving(true);
     try { const next = await api.updatePreferences(patch); setPrefs(next); }
-    catch (err) { showToast(err.message || 'Failed to save preferences', 'error'); }
+    catch (err) { showToast(err.message || "Couldn't save preferences", 'error'); }
     finally { setSaving(false); }
   };
 
@@ -457,7 +457,7 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
       // AuthContext flips isAuthenticated → App renders Login.
       // No toast needed; screen change is the feedback.
     } catch (err) {
-      showToast(err.message || 'Failed to log out', 'error');
+      showToast(err.message || "Couldn't log out", 'error');
       setLogoutBusy(false);
       setLogoutOpen(false);
     }

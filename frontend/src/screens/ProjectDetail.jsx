@@ -402,7 +402,7 @@ function EditProjectModal({ open, onClose, project, onUpdated }) {
         department,
       });
       onUpdated?.();
-    } catch (err) { showToast(err.message || 'Failed to update project', 'error'); } finally { setBusy(false); }
+    } catch (err) { showToast(err.message || "Couldn't update project", 'error'); } finally { setBusy(false); }
   };
 
   return (
@@ -560,7 +560,7 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
       await api.deleteProject(id);
       showToast('Project deleted');
       onBack();
-    } catch { showToast('Delete failed', 'error'); }
+    } catch { showToast("Couldn't delete project", 'error'); }
     setConfirmDelete(null);
   };
 
@@ -572,20 +572,20 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
       await api.updateSubtask(s.id, { status: next });
       if (next === 'done') { fireConfetti(); showToast('Subtask completed'); }
       load();
-    } catch (err) { showToast(err.message || 'Failed to update subtask', 'error'); }
+    } catch (err) { showToast(err.message || "Couldn't update subtask", 'error'); }
   };
   const addSubtask = async (title, ownerId, deadline, parentId, complexity) => {
     try {
       await api.createSubtask(projectId, { title, ownerId, deadline, parentId, complexity });
       showToast('Subtask added');
       load();
-    } catch (err) { showToast(err.message || 'Failed to add subtask', 'error'); }
+    } catch (err) { showToast(err.message || "Couldn't add subtask", 'error'); }
   };
   const editSubtask = async (id, patch) => {
     try {
       await api.updateSubtask(id, patch);
       load();
-    } catch (err) { showToast(err.message || 'Failed to edit subtask', 'error'); }
+    } catch (err) { showToast(err.message || "Couldn't edit subtask", 'error'); }
   };
   // Optimistic removal + 5s undo. On expire we commit the DB delete.
   const deleteSubtask = (id) => {
@@ -598,7 +598,7 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
       },
       onExpire: async () => {
         try { await api.deleteSubtask(id); load(); }
-        catch (err) { setP(prev); showToast(err.message || 'Failed to delete subtask', 'error'); }
+        catch (err) { setP(prev); showToast(err.message || "Couldn't delete subtask", 'error'); }
       },
     });
   };
@@ -619,7 +619,7 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
       }
       load();
       showToast('Subtasks reordered');
-    } catch (err) { showToast(err.message || 'Failed to reorder subtasks', 'error'); }
+    } catch (err) { showToast(err.message || "Couldn't reorder subtasks", 'error'); }
   };
 
   const moveSubtask = async (subtask, newStatus) => {
@@ -627,7 +627,7 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
       await api.updateSubtask(subtask.id, { status: newStatus });
       if (newStatus === 'done') { fireConfetti(); showToast('Subtask completed'); }
       load();
-    } catch (err) { showToast(err.message || 'Failed to move subtask', 'error'); }
+    } catch (err) { showToast(err.message || "Couldn't move subtask", 'error'); }
   };
 
   const deleteComment = (id) => {
@@ -640,7 +640,7 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
       },
       onExpire: async () => {
         try { await api.deleteComment(id); load(); }
-        catch (err) { setP(prev); showToast(err.message || 'Failed to delete comment', 'error'); }
+        catch (err) { setP(prev); showToast(err.message || "Couldn't delete comment", 'error'); }
       },
     });
   };
@@ -656,7 +656,7 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
       setPendingFiles([]);
       showToast('Comment posted');
       load();
-    } catch (err) { showToast(err.message || 'Failed to post comment', 'error'); }
+    } catch (err) { showToast(err.message || "Couldn't post comment", 'error'); }
   };
 
   const doneCount = p.subtasks.filter(s => s.status === 'done').length;
@@ -856,7 +856,7 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
       <NewMeetingModal
         open={meetingModalOpen}
         onClose={() => setMeetingModalOpen(false)}
-        onCreated={() => { load(); showToast('Meeting scheduled'); }}
+        onCreated={() => { load(); showToast('Meeting on the books'); }}
         projectId={projectId}
         members={p.members || []}
       />

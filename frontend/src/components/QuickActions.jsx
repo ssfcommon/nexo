@@ -256,7 +256,7 @@ export function QuickTaskModal({ open, onClose, onCreated }) {
       onCreated?.();
       onClose();
     } catch (err) {
-      showToast(err.message || 'Failed to create task', 'error');
+      showToast(err.message || "Couldn't create task", 'error');
     } finally {
       setBusy(false);
     }
@@ -601,7 +601,7 @@ export function NewProjectModal({ open, onClose, onCreated }) {
       }
       onCreated?.();
       onClose();
-    } catch (err) { showToast(err.message || 'Failed to create project', 'error'); } finally { setBusy(false); }
+    } catch (err) { showToast(err.message || "Couldn't create project", 'error'); } finally { setBusy(false); }
   };
 
   const accent = ACCENT_PALETTE[accentKey] || ACCENT_PALETTE.sky;
@@ -911,7 +911,7 @@ export function NewMeetingModal({ open, onClose, onCreated, projectId, members =
       });
       setResult(meeting);
       onCreated?.();
-    } catch (err) { showToast(err.message || 'Failed to schedule meeting', 'error'); } finally { setBusy(false); }
+    } catch (err) { showToast(err.message || "Couldn't schedule meeting", 'error'); } finally { setBusy(false); }
   };
 
   return (
@@ -1007,7 +1007,7 @@ export function NewEventModal({ open, onClose, onCreated }) {
       });
       onCreated?.();
       onClose();
-    } catch (err) { showToast(err.message || 'Failed to create event', 'error'); } finally { setBusy(false); }
+    } catch (err) { showToast(err.message || "Couldn't create event", 'error'); } finally { setBusy(false); }
   };
 
   return (
@@ -1084,7 +1084,7 @@ export function ReportBugModal({ open, onClose, onCreated }) {
       await api.createBug({ appName: appName.trim(), issue: issue.trim(), screenshots: screenshotDataUrls, assignedTo: assignedTo || null, deadline: deadline || null, priority });
       onCreated?.();
       onClose();
-    } catch (err) { showToast(err.message || 'Failed to report bug', 'error'); } finally { setBusy(false); }
+    } catch (err) { showToast(err.message || "Couldn't report bug", 'error'); } finally { setBusy(false); }
   };
 
   return (

@@ -155,20 +155,20 @@ function BugDetailModal({ open, onClose, bug, users, onUpdated, meId }) {
       if (assignedTo !== (bug.assigned_to || '')) patch.assignedTo = assignedTo || null;
       if (priority !== (bug.metadata?.priority || 'medium')) patch.priority = priority;
       await api.updateBug(bug.id, patch);
-      showToast(status === 'resolved' ? 'Bug resolved — awaiting reporter confirmation' : 'Bug updated');
+      showToast(status === 'resolved' ? 'Sent to reporter for confirmation' : 'Bug updated');
       onUpdated?.();
       onClose();
-    } catch (err) { showToast(err.message || 'Failed to update bug', 'error'); } finally { setBusy(false); }
+    } catch (err) { showToast(err.message || "Couldn't update bug", 'error'); } finally { setBusy(false); }
   };
 
   const confirmBug = async () => {
     setBusy(true);
     try {
       await api.updateBug(bug.id, { status: 'confirmed' });
-      showToast('Bug confirmed as fixed');
+      showToast('Squashed. Fix confirmed.');
       onUpdated?.();
       onClose();
-    } catch (err) { showToast(err.message || 'Failed to confirm', 'error'); } finally { setBusy(false); }
+    } catch (err) { showToast(err.message || "Couldn't confirm", 'error'); } finally { setBusy(false); }
   };
 
   const reopenFromConfirmed = async () => {
@@ -178,7 +178,7 @@ function BugDetailModal({ open, onClose, bug, users, onUpdated, meId }) {
       showToast('Bug reopened');
       onUpdated?.();
       onClose();
-    } catch (err) { showToast(err.message || 'Failed to reopen', 'error'); } finally { setBusy(false); }
+    } catch (err) { showToast(err.message || "Couldn't reopen", 'error'); } finally { setBusy(false); }
   };
 
   const reopenBug = async () => {
@@ -189,7 +189,7 @@ function BugDetailModal({ open, onClose, bug, users, onUpdated, meId }) {
       showToast('Bug reopened — back to assignee');
       onUpdated?.();
       onClose();
-    } catch (err) { showToast(err.message || 'Failed to reopen', 'error'); } finally { setBusy(false); }
+    } catch (err) { showToast(err.message || "Couldn't reopen", 'error'); } finally { setBusy(false); }
   };
 
   // Modal title = first chunk of the issue, fallback to app name
@@ -769,10 +769,10 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
         api.updateBug(bug.id, { status: 'confirmed' }),
         new Promise(r => setTimeout(r, 420)), // matches bug-squash keyframes
       ]);
-      showToast('Bug confirmed as fixed');
+      showToast('Squashed. Fix confirmed.');
       load();
     } catch (err) {
-      showToast(err.message || 'Failed to confirm', 'error');
+      showToast(err.message || "Couldn't confirm", 'error');
       // On failure, restore the row — drop it from the squashing set.
       setSquashingIds(prev => { const n = new Set(prev); n.delete(bug.id); return n; });
     } finally {

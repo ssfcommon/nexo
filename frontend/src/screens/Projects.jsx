@@ -438,7 +438,7 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
       await api.updateTask(t.id, { status: next });
       if (next === 'done') fireConfetti();
       setQuickTasks(ts => ts.map(x => x.id === t.id ? { ...x, status: next } : x));
-    } catch (err) { showToast(err.message || 'Failed to update task', 'error'); }
+    } catch (err) { showToast(err.message || "Couldn't update task", 'error'); }
   };
 
   // Low-risk delete → optimistic removal + 5s undo toast. DB delete fires on expire.
@@ -454,7 +454,7 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
         try { await api.deleteTask(task.id); }
         catch (err) {
           setQuickTasks(prev);
-          showToast(err.message || 'Failed to delete task', 'error');
+          showToast(err.message || "Couldn't delete task", 'error');
         }
       },
     });
@@ -679,13 +679,13 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
       <NewProjectModal
         open={addProjectOpen}
         onClose={() => setAddProjectOpen(false)}
-        onCreated={() => { showToast('Project created'); loadProjects(); setAddProjectOpen(false); }}
+        onCreated={() => { showToast('Project launched'); loadProjects(); setAddProjectOpen(false); }}
       />
 
       <QuickTaskModal
         open={addTaskOpen}
         onClose={() => setAddTaskOpen(false)}
-        onCreated={() => { showToast('Task added'); loadTasks(); setAddTaskOpen(false); }}
+        onCreated={() => { showToast('Task on the list'); loadTasks(); setAddTaskOpen(false); }}
       />
 
       <AlarmModal
