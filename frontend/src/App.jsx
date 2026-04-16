@@ -84,16 +84,18 @@ export default function App() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [deepLink, setDeepLink] = useState(null);
 
-  // Remembers "I navigated here from the Notifications overlay" so the
-  // back button can take the user back to notifications instead of just
-  // dropping them on the target tab's list. Ref (not state) because its
-  // only consumer is a window event handler — no re-render needed.
+  // Two refs handle the notification-driven detour:
+  //   resumeNotifsRef — on detail-close, reopen Notifications (consumed once).
+  //   restoreTabRef   — on notif-close, go back to the tab the user was on
+  //                     before the detour (survives through the reopen).
+  // Both clear on any explicit user navigation (bottom nav, palette, etc.).
   const resumeNotifsRef = useRef(false);
+  const restoreTabRef = useRef(null);
 
   const handlePaletteNavigate = ({ tab: nextTab, projectId }) => {
-    // Command palette is a fresh intent — the user is NOT expecting to
-    // land back in Notifications, so clear the flag.
+    // Command palette is a fresh intent — no detour to resume.
     resumeNotifsRef.current = false;
+    restoreTabRef.current = null;
     setNotifOpen(false);
     if (nextTab) setTab(nextTab);
     if (projectId) setDeepLink({ kind: 'project', id: projectId, ts: Date.now() });
@@ -131,7 +133,18 @@ export default function App() {
   }, [isAuthenticated, refreshUnread]);
 
   useAlarms();
-  useBackHandler('notifications', notifOpen, () => { setNotifOpen(false); refreshUnread(); });
+  // Closing Notifications — whether via the X button, the back button,
+  // or the back-handler — should also restore the tab the user was on
+  // before the notif-driven detour (if one happened).
+  const closeNotificationsAndMaybeRestore = useCallback(() => {
+    setNotifOpen(false);
+    refreshUnread();
+    if (restoreTabRef.current) {
+      setTab(restoreTabRef.current);
+      restoreTabRef.current = null;
+    }
+  }, [refreshUnread]);
+  useBackHandler('notifications', notifOpen, closeNotificationsAndMaybeRestore);
 
   // Pull-to-refresh for the mobile shell. Screens subscribe to the
   // 'nexo:refresh' window event to re-fetch their data.
@@ -146,7 +159,7 @@ export default function App() {
   if (!isAuthenticated) return <Login />;
 
   const openNotifications = () => setNotifOpen(true);
-  const closeNotifications = () => { setNotifOpen(false); refreshUnread(); };
+  const closeNotifications = closeNotificationsAndMaybeRestore;
 
   const Active = tabs.find(t => t.id === tab).component;
 
@@ -157,8 +170,12 @@ export default function App() {
           onClose={closeNotifications}
           onNavigate={(nextTab, payload) => {
             // The user tapped a notification that opens a detail view.
-            // Mark that we should return here when that detail closes.
+            // Mark that we should return to notifs when that detail closes,
+            // AND remember the tab they were on so we can restore it when
+            // notifs finally closes. Only save origin on the first detour
+            // so chained notif taps don't overwrite the true origin tab.
             resumeNotifsRef.current = true;
+            if (restoreTabRef.current === null) restoreTabRef.current = tab;
             setNotifOpen(false);
             if (nextTab) setTab(nextTab);
             if (payload) setDeepLink({ ...payload, ts: Date.now() });
@@ -169,6 +186,7 @@ export default function App() {
         <Active me={me} unreadCount={unreadCount} onOpenNotifications={openNotifications} deepLink={deepLink} onSwitchTab={(t, payload) => {
           // User navigated themselves — not expecting to land back in Notifications.
           resumeNotifsRef.current = false;
+          restoreTabRef.current = null;
           setTab(t); setNotifOpen(false);
           if (payload?.addEvent) setDeepLink({ kind: 'addEvent', title: payload.addEvent, ts: Date.now() });
           if (payload?.kind) setDeepLink({ ...payload, ts: Date.now() });
@@ -262,7 +280,7 @@ export default function App() {
                 return (
                   <button
                     key={t.id}
-                    onClick={() => { resumeNotifsRef.current = false; setTab(t.id); setNotifOpen(false); setDeepLink(null); }}
+                    onClick={() => { resumeNotifsRef.current = false; restoreTabRef.current = null; setTab(t.id); setNotifOpen(false); setDeepLink(null); }}
                     className="flex-1 flex flex-col items-center justify-center gap-1.5 transition-all duration-300 relative"
                   >
                     {/* Active glow backdrop */}
