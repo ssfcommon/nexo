@@ -294,7 +294,16 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
     }
   };
 
-  const upcomingLeave = leaves.find(l => l.user_id !== me?.id);
+  // Surface someone-else's leave only if it's currently ongoing or upcoming.
+  // Past leaves (end_date < today) are filtered out so the banner doesn't
+  // linger after the leave has ended. Prefer the one starting soonest.
+  const upcomingLeave = (() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const eligible = leaves
+      .filter(l => l.user_id !== me?.id && l.end_date >= today)
+      .sort((a, b) => a.start_date.localeCompare(b.start_date));
+    return eligible[0] || null;
+  })();
 
   const hasBugs = myBugs.length > 0 || bugsToConfirm.length > 0;
   const bothBugSegments = myBugs.length > 0 && bugsToConfirm.length > 0;
