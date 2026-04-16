@@ -45,11 +45,18 @@ const actions = [
   { id: 'bug',     label: 'Bug',     Icon: IconBug,     color: '#EF4444' },
 ];
 
-export default function FAB() {
+export default function FAB({ tab = 'home' }) {
   const showToast = useToast();
   const [open, setOpen] = useState(false);
   const [modal, setModal] = useState(null);
   const [closing, setClosing] = useState(false);
+  // Hide-on-scroll state (only used in minimal mode)
+  const [hidden, setHidden] = useState(false);
+
+  // Home keeps the full-weight hero FAB. Other screens get a muted glass
+  // variant that also hides on downward scroll so it doesn't sit on top
+  // of content — addresses the "too distracting everywhere" complaint.
+  const minimal = tab !== 'home';
 
   const toggle = useCallback(() => {
     if (open) {
@@ -67,6 +74,29 @@ export default function FAB() {
     return () => window.removeEventListener('keydown', handleKey);
   }, [open, toggle]);
 
+  // Reset visibility whenever the tab changes
+  useEffect(() => { setHidden(false); }, [tab]);
+
+  // Hide on scroll-down / show on scroll-up (minimal mode only).
+  // The scrollable surface is the <main> element in App.jsx for both
+  // mobile and desktop layouts.
+  useEffect(() => {
+    if (!minimal) return;
+    const main = document.querySelector('main');
+    if (!main) return;
+    let lastY = main.scrollTop;
+    const THRESH = 18; // ignore micro-scrolls
+    const onScroll = () => {
+      const y = main.scrollTop;
+      const delta = y - lastY;
+      if (y < 40) { setHidden(false); lastY = y; return; }
+      if (delta > THRESH) { setHidden(true); lastY = y; }
+      else if (delta < -THRESH) { setHidden(false); lastY = y; }
+    };
+    main.addEventListener('scroll', onScroll, { passive: true });
+    return () => main.removeEventListener('scroll', onScroll);
+  }, [minimal]);
+
   const pickAction = (id) => {
     setClosing(true);
     setTimeout(() => {
@@ -77,6 +107,8 @@ export default function FAB() {
   };
 
   const isExpanded = open && !closing;
+  // Always show the FAB while the fan is open, even mid-scroll.
+  const effectivelyHidden = hidden && !isExpanded;
 
   // Fan geometry: anchor at FAB center, arc from straight-up (90°) to straight-left (180°)
   // Buttons sit on inner arc; labels sit on outer arc (radially outward), so a label
@@ -102,38 +134,65 @@ export default function FAB() {
         />
       )}
 
-      {/* FAB Container — exactly sized to the main button; actions position-absolute relative to it */}
-      <div className="fixed z-[71] bottom-[90px] right-5 md:bottom-8 md:right-8 w-14 h-14">
+      {/* FAB Container — exactly sized to the main button; actions position-absolute relative to it.
+          Minimal mode: 48x48 (vs 56x56) and hides on scroll. */}
+      <div
+        className={
+          'fixed z-[71] right-5 md:right-8 transition-transform duration-300 ease-out ' +
+          (minimal
+            ? 'bottom-[90px] md:bottom-8 w-12 h-12'
+            : 'bottom-[90px] md:bottom-8 w-14 h-14')
+        }
+        style={{
+          transform: effectivelyHidden ? 'translate(0, 120%) scale(0.85)' : 'translate(0, 0) scale(1)',
+          opacity: effectivelyHidden ? 0 : 1,
+          pointerEvents: effectivelyHidden ? 'none' : 'auto',
+        }}
+      >
         {/* Main FAB Button */}
         <button
           onClick={toggle}
           aria-label={isExpanded ? 'Close quick actions' : 'Open quick actions'}
-          className="absolute inset-0 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 ease-out active:scale-90"
-          style={{
-            background: isExpanded
-              ? 'linear-gradient(135deg, #1F2937 0%, #111827 100%)'
-              : 'linear-gradient(135deg, #4A6CF7 0%, #3B5DE7 100%)',
-            boxShadow: isExpanded
-              ? '0 10px 40px rgba(0,0,0,0.5), 0 0 0 4px rgba(255,255,255,0.06)'
-              : '0 8px 32px rgba(74,108,247,0.4), 0 0 0 4px rgba(74,108,247,0.1)',
-          }}
+          className="absolute inset-0 rounded-full flex items-center justify-center transition-all duration-300 ease-out active:scale-90"
+          style={
+            isExpanded
+              ? {
+                  // Same "open" treatment on both modes — the user is interacting
+                  background: 'linear-gradient(135deg, #1F2937 0%, #111827 100%)',
+                  boxShadow: '0 10px 40px rgba(0,0,0,0.5), 0 0 0 4px rgba(255,255,255,0.06)',
+                }
+              : minimal
+              ? {
+                  // Muted glass — no bright color, no glow, no outer ring
+                  background: 'rgba(17,24,39,0.72)',
+                  backdropFilter: 'blur(14px)',
+                  WebkitBackdropFilter: 'blur(14px)',
+                  border: '1px solid rgba(255,255,255,0.10)',
+                  boxShadow: '0 4px 14px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)',
+                }
+              : {
+                  // Home: original hero treatment
+                  background: 'linear-gradient(135deg, #4A6CF7 0%, #3B5DE7 100%)',
+                  boxShadow: '0 8px 32px rgba(74,108,247,0.4), 0 0 0 4px rgba(74,108,247,0.1)',
+                }
+          }
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="white"
-            strokeWidth="2.5"
+            stroke={minimal && !isExpanded ? 'rgba(229,231,235,0.85)' : 'white'}
+            strokeWidth={minimal && !isExpanded ? '2' : '2.5'}
             strokeLinecap="round"
-            className="w-6 h-6 transition-transform duration-300 ease-out"
+            className={minimal && !isExpanded ? 'w-5 h-5 transition-transform duration-300 ease-out' : 'w-6 h-6 transition-transform duration-300 ease-out'}
             style={{ transform: isExpanded ? 'rotate(135deg)' : 'rotate(0deg)' }}
           >
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
 
-          {/* Breathing glow ring — only when closed */}
-          {!open && (
+          {/* Breathing glow ring — only when closed AND in Home (hero) mode */}
+          {!open && !minimal && (
             <span className="absolute inset-[-3px] rounded-full fab-breathe pointer-events-none" />
           )}
         </button>

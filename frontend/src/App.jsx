@@ -142,7 +142,7 @@ export default function App() {
           </div>
         </main>
       </div>
-      <FAB />
+      <FAB tab={tab} />
       <ConfettiHost />
       <OnboardingTour />
       <CommandPalette onNavigate={handlePaletteNavigate} />
@@ -196,7 +196,7 @@ export default function App() {
         </div>
       </div>
 
-      <FAB />
+      <FAB tab={tab} />
       <ConfettiHost />
       <OnboardingTour />
       <CommandPalette onNavigate={handlePaletteNavigate} />
