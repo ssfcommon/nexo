@@ -540,7 +540,7 @@ function OverflowMenu({ open, onClose, onExportCsv }) {
 }
 
 // ── Bug card ───────────────────────────────────────────────────
-function BugCard({ bug, onOpen, onInlineConfirm, onInlineReopen, meId, busy }) {
+function BugCard({ bug, onOpen, onInlineConfirm, onInlineReopen, meId, busy, squashing }) {
   const isReporter = bug.reported_by === meId;
   const isAssignee = bug.assigned_to === meId;
   const isAwaitingMyConfirm = bug.status === 'resolved' && isReporter;
@@ -562,7 +562,7 @@ function BugCard({ bug, onOpen, onInlineConfirm, onInlineReopen, meId, busy }) {
   const subtle = isConfirmed ? 'opacity-50' : '';
 
   return (
-    <GlassCard accent={accent} className={'w-full ' + subtle}>
+    <GlassCard accent={accent} className={'w-full ' + subtle + (squashing ? ' bug-squashing' : '')}>
       <button
         onClick={onOpen}
         className="w-full text-left flex items-start gap-3 pl-4 pr-3 py-3"
@@ -696,6 +696,9 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
   const [filterOpen, setFilterOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [inlineBusy, setInlineBusy] = useState(false);
+  // ids of bugs playing the squash-collapse animation right now.
+  // kept as a Set so multiple rapid confirms don't step on each other.
+  const [squashingIds, setSquashingIds] = useState(() => new Set());
 
   const filterWrap = useRef(null);
   const filterButtonRef = useRef(null);
@@ -757,14 +760,26 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
 
   const inlineConfirm = async (bug) => {
     setInlineBusy(true);
+    // Kick off the squash animation immediately for tactile feedback.
+    // The API call runs in parallel; we only swap data after both settle,
+    // so the row visibly collapses before it gets resorted into "Confirmed".
+    setSquashingIds(prev => { const n = new Set(prev); n.add(bug.id); return n; });
     try {
-      await api.updateBug(bug.id, { status: 'confirmed' });
+      await Promise.all([
+        api.updateBug(bug.id, { status: 'confirmed' }),
+        new Promise(r => setTimeout(r, 420)), // matches bug-squash keyframes
+      ]);
       showToast('Bug confirmed as fixed');
       load();
     } catch (err) {
       showToast(err.message || 'Failed to confirm', 'error');
+      // On failure, restore the row — drop it from the squashing set.
+      setSquashingIds(prev => { const n = new Set(prev); n.delete(bug.id); return n; });
     } finally {
       setInlineBusy(false);
+      // After load() replaces data, any remounted card should start fresh.
+      // Clearing here is safe: success path has already unmounted the row.
+      setTimeout(() => setSquashingIds(new Set()), 0);
     }
   };
 
@@ -935,7 +950,7 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
       {awaitingMine.length > 0 && (
         <Section title="Confirm fix" count={awaitingMine.length} color="#22C55E">
           {awaitingMine.map(b => (
-            <BugCard key={b.id} bug={b} meId={meId} onOpen={() => setDetailBug(b)} onInlineConfirm={inlineConfirm} onInlineReopen={inlineReopen} busy={inlineBusy} />
+            <BugCard key={b.id} bug={b} meId={meId} onOpen={() => setDetailBug(b)} onInlineConfirm={inlineConfirm} onInlineReopen={inlineReopen} busy={inlineBusy} squashing={squashingIds.has(b.id)} />
           ))}
         </Section>
       )}
@@ -943,7 +958,7 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
       {openBugs.length > 0 && (
         <Section title="Active" count={openBugs.length}>
           {openBugs.map(b => (
-            <BugCard key={b.id} bug={b} meId={meId} onOpen={() => setDetailBug(b)} onInlineConfirm={inlineConfirm} onInlineReopen={inlineReopen} busy={inlineBusy} />
+            <BugCard key={b.id} bug={b} meId={meId} onOpen={() => setDetailBug(b)} onInlineConfirm={inlineConfirm} onInlineReopen={inlineReopen} busy={inlineBusy} squashing={squashingIds.has(b.id)} />
           ))}
         </Section>
       )}
@@ -951,7 +966,7 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
       {awaitingOthers.length > 0 && (
         <Section title="Awaiting reporter" count={awaitingOthers.length}>
           {awaitingOthers.map(b => (
-            <BugCard key={b.id} bug={b} meId={meId} onOpen={() => setDetailBug(b)} onInlineConfirm={inlineConfirm} onInlineReopen={inlineReopen} busy={inlineBusy} />
+            <BugCard key={b.id} bug={b} meId={meId} onOpen={() => setDetailBug(b)} onInlineConfirm={inlineConfirm} onInlineReopen={inlineReopen} busy={inlineBusy} squashing={squashingIds.has(b.id)} />
           ))}
         </Section>
       )}
@@ -971,7 +986,7 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
           {showConfirmed && (
             <div className="space-y-2 mt-1">
               {confirmedBugs.map(b => (
-                <BugCard key={b.id} bug={b} meId={meId} onOpen={() => setDetailBug(b)} onInlineConfirm={inlineConfirm} onInlineReopen={inlineReopen} busy={inlineBusy} />
+                <BugCard key={b.id} bug={b} meId={meId} onOpen={() => setDetailBug(b)} onInlineConfirm={inlineConfirm} onInlineReopen={inlineReopen} busy={inlineBusy} squashing={squashingIds.has(b.id)} />
               ))}
             </div>
           )}

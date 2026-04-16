@@ -438,6 +438,39 @@ input[type="radio"], input[type="checkbox"] {
 }
 .gentle-bob { animation: gentle-bob 2.4s ease-in-out infinite; }
 
+/* Bug squash — row compresses vertically, briefly splats, then collapses.
+   The scale values are tuned so it feels like something actually got
+   stomped rather than just fading out. max-height on the outer wrapper
+   handles the smooth height collapse since we can't transition `height: auto`. */
+@keyframes bug-squash {
+  0%   { transform: scaleY(1) scaleX(1);       opacity: 1;   max-height: 240px; margin-bottom: 10px; }
+  30%  { transform: scaleY(0.62) scaleX(1.04); opacity: 1;   max-height: 240px; }
+  55%  { transform: scaleY(0.28) scaleX(0.94); opacity: 0.5; }
+  100% { transform: scaleY(0)    scaleX(0.9);  opacity: 0;   max-height: 0;     margin-bottom: 0; padding-top: 0; padding-bottom: 0; }
+}
+.bug-squashing {
+  animation: bug-squash 420ms cubic-bezier(0.5, 0, 0.75, 0) forwards;
+  transform-origin: center bottom;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* NumberBump — a tabular-nums number bumps up briefly when its value
+   changes. Triggered by toggling the class on the span. */
+@keyframes number-bump {
+  0%   { transform: translateY(0)    scale(1);    }
+  40%  { transform: translateY(-3px) scale(1.12); }
+  100% { transform: translateY(0)    scale(1);    }
+}
+.number-bump { animation: number-bump 420ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+/* Time-of-day glyph entrance — a soft rise with a slight rotate. */
+@keyframes glyph-rise {
+  0%   { opacity: 0; transform: translateY(6px) rotate(-8deg); }
+  100% { opacity: 1; transform: translateY(0)   rotate(0deg);  }
+}
+.glyph-rise { animation: glyph-rise 520ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
 /* Project card — press feedback on a single line. Transition targets
    transform only so it composites on the GPU. */
 .project-card-press {

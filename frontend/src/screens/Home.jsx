@@ -20,6 +20,16 @@ function greeting() {
   return 'Good evening';
 }
 
+// Time-of-day glyph — matches greeting's mood at a glance.
+// Morning sun, afternoon sun-behind-cloud, early evening cityscape, night moon.
+function timeGlyph() {
+  const h = new Date().getHours();
+  if (h < 12) return '☀️';
+  if (h < 17) return '🌤';
+  if (h < 21) return '🌆';
+  return '🌙';
+}
+
 function liveDate() {
   return new Date().toLocaleDateString('en-IN', { weekday: 'long', month: 'long', day: 'numeric' });
 }
@@ -309,20 +319,40 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
   const bothBugSegments = myBugs.length > 0 && bugsToConfirm.length > 0;
   const bugList = bugSeg === 'open' ? myBugs : bugsToConfirm;
 
+  // Today-specific count — drives the hero subtitle's warmth.
+  // A bare "3 this week" reads as inventory; "3 for today" reads as a plan.
+  const today = new Date().toISOString().slice(0, 10);
+  const todayCount = tasks.filter(t => t.deadline && t.deadline <= today).length;
+  const glyph = timeGlyph();
+  // Subtitle copy, in priority order. Playful without being saccharine.
+  let subCopy;
+  if (loading) subCopy = null;
+  else if (todayCount === 1) subCopy = <><span className="text-ink-700 font-medium">1</span> for today</>;
+  else if (todayCount > 1) subCopy = <><span className="text-ink-700 font-medium">{todayCount}</span> for today</>;
+  else if (tasks.length > 0) subCopy = <><span className="text-ink-700 font-medium">{tasks.length}</span> {tasks.length === 1 ? 'task' : 'tasks'} this week</>;
+  else subCopy = <span className="text-ink-700">you're all clear ✨</span>;
+
   return (
     <div className="space-y-6 pb-24">
-      {/* Greeting */}
+      {/* Greeting — time-of-day glyph + warmer, today-aware subtitle */}
       <div className="flex items-start justify-between pt-1 gap-3">
-        <div className="min-w-0">
-          <h1 className="text-[26px] sm:text-3xl font-bold text-ink-900 tracking-tight leading-tight">
-            {greeting()}{me ? `, ${me.name.split(' ')[0]}` : ''}
-          </h1>
-          <p className="text-[13px] text-ink-500 mt-1">
-            {liveDate()}
-            {tasks.length > 0 ? (
-              <> · <span className="text-ink-700 font-medium">{tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}</span> this week</>
-            ) : ' · all clear'}
-          </p>
+        <div className="flex items-start gap-3 min-w-0">
+          <span
+            aria-hidden
+            className="glyph-rise flex-shrink-0 text-[32px] sm:text-[38px] leading-none select-none"
+            style={{ filter: 'drop-shadow(0 2px 10px rgba(255,255,255,0.08))' }}
+          >
+            {glyph}
+          </span>
+          <div className="min-w-0">
+            <h1 className="text-[26px] sm:text-3xl font-bold text-ink-900 tracking-tight leading-tight">
+              {greeting()}{me ? `, ${me.name.split(' ')[0]}` : ''}
+            </h1>
+            <p className="text-[13px] text-ink-500 mt-1">
+              {liveDate()}
+              {subCopy && <> · {subCopy}</>}
+            </p>
+          </div>
         </div>
         <HeaderActions
           me={me}

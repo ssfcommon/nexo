@@ -10,6 +10,7 @@ import { CameraIcon, DownloadIcon } from '../components/Icons.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useOnRefresh } from '../hooks/usePullToRefresh.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import NumberBump from '../components/NumberBump.jsx';
 
 // ── Shared helpers ──
 
@@ -510,19 +511,25 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
         </button>
       )}
 
-      {/* Stats row */}
+      {/* Stats row — numbers spring when they change (see NumberBump) */}
       {summary && (
         <div className="grid grid-cols-3 gap-3">
           <div className="card text-center py-3">
-            <p className="text-[22px] font-bold text-ink-900 leading-none">{summary.done}</p>
+            <p className="text-[22px] font-bold text-ink-900 leading-none tabular-nums">
+              <NumberBump value={summary.done} />
+            </p>
             <p className="text-[10px] text-ink-500 mt-1">Tasks Done</p>
           </div>
           <div className="card text-center py-3">
-            <p className="text-[22px] font-bold text-success leading-none">{streaks.reduce((m, s) => Math.max(m, s.current_count), 0)}</p>
+            <p className="text-[22px] font-bold text-success leading-none tabular-nums">
+              <NumberBump value={streaks.reduce((m, s) => Math.max(m, s.current_count), 0)} />
+            </p>
             <p className="text-[10px] text-ink-500 mt-1">Top Streak</p>
           </div>
           <div className="card text-center py-3">
-            <p className="text-[22px] font-bold text-brand-blue leading-none">{summary.onTimeRate}%</p>
+            <p className="text-[22px] font-bold text-brand-blue leading-none tabular-nums">
+              <NumberBump value={summary.onTimeRate}>{v => `${v}%`}</NumberBump>
+            </p>
             <p className="text-[10px] text-ink-500 mt-1">On-time</p>
           </div>
         </div>
