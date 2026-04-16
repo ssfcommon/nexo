@@ -11,6 +11,7 @@ import FilterChip from '../components/FilterChip.jsx';
 import { NewProjectModal, QuickTaskModal } from '../components/QuickActions.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useBackHandler } from '../hooks/useBackHandler.js';
+import { useOnRefresh } from '../hooks/usePullToRefresh.js';
 import {
   SearchIcon,
   FilterIcon,
@@ -253,6 +254,7 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
   }, [deepLink]);
 
   useBackHandler('project-detail', !!openId, () => { setOpenId(null); loadProjects(); });
+  useOnRefresh(() => { loadProjects(); loadTasks(); });
 
   const loadProjects = () => api.projects(scope).then(setProjects);
   const loadTasks = () => api.tasks({ quick: '1', owner: 'me' }).then(setQuickTasks);

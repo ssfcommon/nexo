@@ -6,6 +6,7 @@ import Modal, { Field, inputCls } from '../components/Modal.jsx';
 import { PrivacyModal, HelpModal } from '../components/InfoModals.jsx';
 import { resetOnboarding } from '../components/OnboardingTour.jsx';
 import { useToast } from '../context/ToastContext.jsx';
+import { useOnRefresh } from '../hooks/usePullToRefresh.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 // ── Shared helpers ──
@@ -371,6 +372,11 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
     api.reportSummary().then(setSummary);
     api.preferences().then(setPrefs).catch(() => setPrefs({ theme: 'light', notifications: true, calendarSync: 'Google', moodTime: '09:00' }));
   }, []);
+
+  useOnRefresh(() => {
+    api.streaks().then(setStreaks).catch(() => {});
+    api.reportSummary().then(setSummary).catch(() => {});
+  });
 
   useEffect(() => {
     if (!prefs) return;

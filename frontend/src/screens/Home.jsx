@@ -4,6 +4,7 @@ import { SectionHeader } from '../components/ui.jsx';
 import HeaderActions from '../components/HeaderActions.jsx';
 import { SkeletonCard } from '../components/Skeleton.jsx';
 import useLiveUpdates from '../hooks/useLiveUpdates.js';
+import { useOnRefresh } from '../hooks/usePullToRefresh.js';
 import { useToast } from '../context/ToastContext.jsx';
 import AlarmModal from '../components/AlarmModal.jsx';
 import RowActions from '../components/RowActions.jsx';
@@ -261,6 +262,13 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
   const reloadTasks = () => api.homeTasks().then(setTasks);
   useLiveUpdates({
     'subtask-updated': reloadTasks,
+  });
+
+  // Pull-to-refresh: reload everything on Home
+  useOnRefresh(() => {
+    api.homeTasks().then(setTasks).catch(() => {});
+    api.leaves().then(setLeaves).catch(() => {});
+    api.myBugs().then(r => { setMyBugs(r.assigned || []); setBugsToConfirm(r.awaitingConfirm || []); }).catch(() => {});
   });
 
   useEffect(() => {

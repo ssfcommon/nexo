@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { api } from '../api.js';
 import { useToast } from '../context/ToastContext.jsx';
 import { useBackHandler } from '../hooks/useBackHandler.js';
+import { useOnRefresh } from '../hooks/usePullToRefresh.js';
 import { Avatar, Pill } from '../components/ui.jsx';
 import HeaderActions from '../components/HeaderActions.jsx';
 import Modal, { Field, inputCls } from '../components/Modal.jsx';
@@ -1331,6 +1332,9 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
   const loadDay = (d) => api.events(isoDate(d)).then(setRawEvents);
   const loadAll = () => api.events().then(setAllRawEvents);
   const loadLeaves = () => api.leaves().then(setLeaves);
+
+  // Pull-to-refresh subscriber
+  useOnRefresh(() => { loadDay(date); loadAll(); loadLeaves(); });
 
   useEffect(() => {
     loadDay(date); loadAll(); loadLeaves();

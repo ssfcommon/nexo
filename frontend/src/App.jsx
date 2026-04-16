@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useAuth } from './context/AuthContext.jsx';
 import { api } from './api.js';
 import Home from './screens/Home.jsx';
@@ -15,6 +15,7 @@ import OnboardingTour from './components/OnboardingTour.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
 import useAlarms from './hooks/useAlarms.js';
 import { useBackHandler } from './hooks/useBackHandler.js';
+import { usePullToRefresh } from './hooks/usePullToRefresh.js';
 import { HomeIcon, FolderIcon, CalendarIcon, UserIcon, BugIcon } from './components/Icons.jsx';
 import FAB from './components/FAB.jsx';
 import { Avatar } from './components/ui.jsx';
@@ -26,6 +27,55 @@ const tabs = [
   { id: 'calendar',label: 'Calendar', Icon: CalendarIcon, component: Calendar },
   { id: 'profile', label: 'Profile',  Icon: UserIcon,     component: Profile },
 ];
+
+// ── Pull-to-refresh indicator ────────────────────────────────
+// Floats under the status bar, fades in with pull, locks into a
+// spinner while refreshing. Dark glass to match the app vocabulary.
+function PullRefreshIndicator({ pullDelta, refreshing, threshold }) {
+  const visible = refreshing || pullDelta > 4;
+  const ratio = Math.min(1, pullDelta / threshold);
+  const travel = refreshing ? threshold * 0.55 : pullDelta * 0.4;
+  return (
+    <div
+      className="pointer-events-none absolute left-1/2 -translate-x-1/2 z-[65] transition-opacity duration-200"
+      style={{
+        // Shell already has safe-area-inset-top padding; 8px sits just below it
+        top: 8,
+        transform: `translate(-50%, ${travel}px)`,
+        opacity: visible ? 1 : 0,
+      }}
+    >
+      <div
+        className="w-9 h-9 rounded-full flex items-center justify-center"
+        style={{
+          background: 'rgba(17,24,39,0.82)',
+          backdropFilter: 'blur(14px)',
+          WebkitBackdropFilter: 'blur(14px)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+          transform: `scale(${0.7 + ratio * 0.3})`,
+          transition: refreshing ? 'transform 180ms ease' : 'none',
+        }}
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+          {refreshing ? (
+            // Spinner — rotating arc
+            <circle cx="12" cy="12" r="8" strokeDasharray="24 36" style={{ animation: 'spin 0.8s linear infinite', transformOrigin: '12px 12px' }} />
+          ) : (
+            // Progress arc fills as user pulls
+            <circle
+              cx="12"
+              cy="12"
+              r="8"
+              strokeDasharray={`${Math.max(2, ratio * 50)} 100`}
+              transform="rotate(-90 12 12)"
+            />
+          )}
+        </svg>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const { user: me, isAuthenticated, isAuthLoading } = useAuth();
@@ -58,6 +108,15 @@ export default function App() {
 
   useAlarms();
   useBackHandler('notifications', notifOpen, () => { setNotifOpen(false); refreshUnread(); });
+
+  // Pull-to-refresh for the mobile shell. Screens subscribe to the
+  // 'nexo:refresh' window event to re-fetch their data.
+  const mainRef = useRef(null);
+  const onPullRefresh = useCallback(() => {
+    window.dispatchEvent(new Event('nexo:refresh'));
+    refreshUnread();
+  }, [refreshUnread]);
+  const { pullDelta, refreshing, threshold } = usePullToRefresh(mainRef, onPullRefresh);
 
   if (isAuthLoading) return <div className="min-h-screen flex items-center justify-center text-ink-300">Loading…</div>;
   if (!isAuthenticated) return <Login />;
@@ -156,7 +215,10 @@ export default function App() {
           className="w-full max-w-[420px] bg-page h-full flex flex-col relative"
           style={{ paddingTop: 'env(safe-area-inset-top)' }}
         >
-          <main className="flex-1 px-5 pt-4 pb-4 overflow-y-auto">
+          {/* Pull-to-refresh indicator — fades in as the user pulls, spins while refreshing */}
+          <PullRefreshIndicator pullDelta={pullDelta} refreshing={refreshing} threshold={threshold} />
+
+          <main ref={mainRef} className="flex-1 px-5 pt-4 pb-4 overflow-y-auto">
             {content}
           </main>
           <nav className="flex-shrink-0 w-full border-t"
