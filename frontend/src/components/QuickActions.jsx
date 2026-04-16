@@ -2,139 +2,508 @@ import React, { useEffect, useState } from 'react';
 import Modal, { Field, inputCls } from './Modal.jsx';
 import { api } from '../api.js';
 import { useToast } from '../context/ToastContext.jsx';
+import {
+  CalendarIcon, UserIcon, MoreIcon, CheckIcon, PaperclipIcon, LinkIcon, CloseIcon,
+} from './Icons.jsx';
 
 import { PRIORITIES, COMPLEXITIES } from './ui.jsx';
 const DEPARTMENTS = ['Operations', "CEO's Office", 'Common'];
 
 function today() { return new Date().toISOString().slice(0, 10); }
+function isoOffset(days) { return new Date(Date.now() + days * 86400000).toISOString().slice(0, 10); }
 
+// Placeholders rotate every few seconds while the title is empty — subtly
+// hints at the variety of things you can quickly capture.
+const PLACEHOLDERS = [
+  'Call the vendor about packaging',
+  'Reply to Alex about the proposal',
+  'Review Q1 numbers',
+  'Follow up with finance',
+  'Book flight to Mumbai',
+];
+
+// ── Date preset popover ─────────────────────────────────────────
+function DatePresetPopover({ value, presets, onChange, onClear, onClose }) {
+  const [customOpen, setCustomOpen] = useState(false);
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div
+        className="absolute z-50 left-0 top-[calc(100%+6px)] w-56 rounded-[12px] py-1.5"
+        style={{
+          background: 'rgba(17,24,39,0.95)',
+          backdropFilter: 'blur(24px)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          boxShadow: '0 12px 48px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08)',
+        }}
+      >
+        {presets.map(p => (
+          <button
+            key={p.value}
+            type="button"
+            onClick={() => onChange(p.value)}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/5 transition"
+          >
+            <span className="text-[13px] text-ink-900 flex-1">{p.label}</span>
+            {value === p.value && <span className="text-brand-blue"><CheckIcon width="12" height="12" /></span>}
+          </button>
+        ))}
+        <div className="mx-2 my-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+        {!customOpen ? (
+          <button
+            type="button"
+            onClick={() => setCustomOpen(true)}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/5 transition"
+          >
+            <span className="text-[13px] text-ink-900 flex-1">Pick date…</span>
+          </button>
+        ) : (
+          <div className="px-2 py-1.5">
+            <input
+              type="date"
+              value={value || ''}
+              onChange={e => onChange(e.target.value)}
+              className="w-full h-9 px-2 rounded-[8px] text-[13px] bg-white/5 border border-white/10 text-ink-900"
+            />
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={onClear}
+          className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/5 transition"
+        >
+          <span className="text-[13px] text-ink-400 flex-1">No deadline</span>
+          {!value && <span className="text-brand-blue"><CheckIcon width="12" height="12" /></span>}
+        </button>
+      </div>
+    </>
+  );
+}
+
+// ── Assignee popover ───────────────────────────────────────────
+function AssigneePopover({ value, users, onChange, onClose }) {
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div
+        className="absolute z-50 left-0 top-[calc(100%+6px)] w-56 rounded-[12px] py-1.5 max-h-[280px] overflow-y-auto"
+        style={{
+          background: 'rgba(17,24,39,0.95)',
+          backdropFilter: 'blur(24px)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          boxShadow: '0 12px 48px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08)',
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => onChange('')}
+          className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/5 transition"
+        >
+          <span className="text-[13px] text-ink-900 flex-1">Myself</span>
+          {!value && <span className="text-brand-blue"><CheckIcon width="12" height="12" /></span>}
+        </button>
+        <div className="mx-2 my-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+        {users.map(u => {
+          const active = String(value) === String(u.id);
+          return (
+            <button
+              key={u.id}
+              type="button"
+              onClick={() => onChange(String(u.id))}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/5 transition"
+            >
+              <span className="text-[13px] text-ink-900 flex-1 truncate">{u.name}</span>
+              {active && <span className="text-brand-blue"><CheckIcon width="12" height="12" /></span>}
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+// ── Chip ───────────────────────────────────────────────────────
+function Chip({ active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="h-9 px-3 rounded-pill text-[12px] font-semibold flex items-center gap-1.5 transition-all active:scale-[0.97]"
+      style={{
+        background: active ? 'rgba(91,140,255,0.15)' : 'rgba(255,255,255,0.05)',
+        color: active ? '#A8C4FF' : '#9CA3AF',
+        border: `1px solid ${active ? 'rgba(91,140,255,0.30)' : 'rgba(255,255,255,0.10)'}`,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ── Quick Task modal ───────────────────────────────────────────
 export function QuickTaskModal({ open, onClose, onCreated }) {
   const showToast = useToast();
+
+  // Core state
   const [title, setTitle] = useState('');
   const [deadline, setDeadline] = useState(today());
-  const [complexity, setComplexity] = useState(COMPLEXITIES[1]);
-  const [recurrence, setRecurrence] = useState('');
-  const [description, setDescription] = useState('');
   const [assignedTo, setAssignedTo] = useState('');
-  const [users, setUsers] = useState([]);
+
+  // Secondary state (inside the "More" sheet)
+  const [description, setDescription] = useState('');
+  const [recurrence, setRecurrence] = useState('');
   const [files, setFiles] = useState([]);
   const [links, setLinks] = useState([]);
   const [newLink, setNewLink] = useState('');
   const [addToCalendar, setAddToCalendar] = useState(false);
   const [calTime, setCalTime] = useState('09:00');
   const [calDuration, setCalDuration] = useState(30);
-  const [busy, setBusy] = useState(false);
 
-  useEffect(() => { if (open) { setTitle(''); setDeadline(today()); setComplexity(COMPLEXITIES[1]); setRecurrence(''); setDescription(''); setAssignedTo(''); setFiles([]); setLinks([]); setNewLink(''); setAddToCalendar(false); setCalTime('09:00'); setCalDuration(30); api.users().then(setUsers); } }, [open]);
+  // UI state
+  const [datePopOpen, setDatePopOpen] = useState(false);
+  const [assigneePopOpen, setAssigneePopOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  const [users, setUsers] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [phIdx, setPhIdx] = useState(0);
+
+  useEffect(() => {
+    if (!open) return;
+    setTitle('');
+    setDeadline(today());
+    setRecurrence('');
+    setDescription('');
+    setFiles([]);
+    setLinks([]);
+    setNewLink('');
+    setAddToCalendar(false);
+    setCalTime('09:00');
+    setCalDuration(30);
+    setDatePopOpen(false);
+    setAssigneePopOpen(false);
+    setMoreOpen(false);
+    setPhIdx(0);
+    // Smart recency — remember who the user last assigned to.
+    const last = typeof window !== 'undefined' ? localStorage.getItem('nexo:qt:last-assignee') || '' : '';
+    setAssignedTo(last);
+    api.users().then(setUsers);
+  }, [open]);
+
+  // Rotate placeholder while empty — pause once the user types.
+  useEffect(() => {
+    if (!open || title) return;
+    const id = setInterval(() => setPhIdx(i => (i + 1) % PLACEHOLDERS.length), 3500);
+    return () => clearInterval(id);
+  }, [open, title]);
 
   const readFiles = async (fileList) => {
     const result = [];
     for (const f of fileList) {
-      const dataUrl = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(f); });
+      const dataUrl = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result);
+        r.onerror = rej;
+        r.readAsDataURL(f);
+      });
       result.push({ filename: f.name, dataUrl });
     }
     return result;
   };
 
   const submit = async (e) => {
-    e.preventDefault();
-    if (!title.trim()) return;
+    e?.preventDefault?.();
+    if (!title.trim() || busy) return;
     setBusy(true);
     try {
       const attachments = await readFiles(files);
-      await api.createTask({ title: title.trim(), deadline, complexity, isQuick: true, recurrence: recurrence || null, description: description || null, assignedTo: assignedTo || null, attachments, links });
+      await api.createTask({
+        title: title.trim(),
+        deadline,
+        // Complexity field removed from UI — server default / Medium sentinel.
+        complexity: COMPLEXITIES[1],
+        isQuick: true,
+        recurrence: recurrence || null,
+        description: description.trim() || null,
+        assignedTo: assignedTo || null,
+        attachments,
+        links,
+      });
       if (addToCalendar) {
         try {
-          await api.createEvent({ title: title.trim(), startTime: new Date(`${deadline}T${calTime}:00`).toISOString(), durationMin: Number(calDuration), eventType: 'work' });
-        } catch {} // silently fail calendar event — task was already created
+          await api.createEvent({
+            title: title.trim(),
+            startTime: new Date(`${deadline}T${calTime}:00`).toISOString(),
+            durationMin: Number(calDuration),
+            eventType: 'work',
+          });
+        } catch {} // silent — task already created
       }
+      if (assignedTo) localStorage.setItem('nexo:qt:last-assignee', assignedTo);
+      else localStorage.removeItem('nexo:qt:last-assignee');
       onCreated?.();
       onClose();
-    } catch (err) { showToast(err.message || 'Failed to create task', 'error'); } finally { setBusy(false); }
+    } catch (err) {
+      showToast(err.message || 'Failed to create task', 'error');
+    } finally {
+      setBusy(false);
+    }
   };
 
+  // Cmd/Ctrl + Enter submits from anywhere (incl. Description)
+  const onKeyDown = (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      submit();
+    }
+  };
+
+  // Human-friendly label for the deadline chip
+  const deadlineLabel = (() => {
+    if (!deadline) return '+ Deadline';
+    const t = today();
+    const tmr = isoOffset(1);
+    if (deadline === t) return 'Today';
+    if (deadline === tmr) return 'Tomorrow';
+    return new Date(deadline + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  })();
+
+  const assigneeLabel = (() => {
+    if (!assignedTo) return 'Myself';
+    const u = users.find(x => String(x.id) === String(assignedTo));
+    if (!u) return 'Myself';
+    return u.name.split(' ')[0];
+  })();
+
+  // Date presets — "This Friday" / "Next week" / etc.
+  const datePresets = (() => {
+    const t = today();
+    const tmr = isoOffset(1);
+    const now = new Date();
+    const daysToFri = (5 - now.getDay() + 7) % 7 || 7;
+    const fri = isoOffset(daysToFri);
+    const nxtWk = isoOffset(7);
+    return [
+      { label: 'Today', value: t },
+      { label: 'Tomorrow', value: tmr },
+      { label: 'This Friday', value: fri },
+      { label: 'Next week', value: nxtWk },
+    ];
+  })();
+
   return (
-    <Modal open={open} onClose={onClose} title="Quick Task">
-      <form onSubmit={submit}>
-        <Field label="Title">
-          <input className={inputCls} value={title} onChange={e => setTitle(e.target.value)} autoFocus required placeholder="Call vendor about packaging" />
-        </Field>
-        <Field label="Description (optional)">
-          <textarea className={inputCls + ' !h-16 py-2'} value={description} onChange={e => setDescription(e.target.value)} placeholder="Details, notes…" />
-        </Field>
-        <Field label="Assign to">
-          <select className={inputCls} value={assignedTo} onChange={e => setAssignedTo(e.target.value)}>
-            <option value="">Myself</option>
-            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
-        </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Deadline">
-            <input type="date" className={inputCls} value={deadline} onChange={e => setDeadline(e.target.value)} required />
-          </Field>
-          <Field label="Complexity">
-            <select className={inputCls} value={complexity} onChange={e => setComplexity(e.target.value)}>
-              {COMPLEXITIES.map(c => <option key={c}>{c}</option>)}
-            </select>
-          </Field>
-        </div>
-        <Field label="Attachments">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <label className="cursor-pointer">
-                <span className="pill pill-outline !h-8 !px-3 !text-[12px]">📎 File</span>
-                <input type="file" multiple className="hidden" onChange={e => setFiles(Array.from(e.target.files || []))} />
-              </label>
-              <input value={newLink} onChange={e => setNewLink(e.target.value)} placeholder="Paste a link…" className="flex-1 h-8 px-3 rounded-[8px] border border-line-light text-[12px]"
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (newLink.trim()) { setLinks(l => [...l, newLink.trim()]); setNewLink(''); } } }} />
-              {newLink && <button type="button" onClick={() => { setLinks(l => [...l, newLink.trim()]); setNewLink(''); }} className="text-[11px] text-brand-blue font-semibold">Add</button>}
-            </div>
-            {(files.length > 0 || links.length > 0) && (
-              <div className="flex flex-wrap gap-1">
-                {files.map((f, i) => <span key={`f${i}`} className="text-[11px] bg-line-light rounded-full px-2 py-0.5">📎 {f.name}</span>)}
-                {links.map((l, i) => <span key={`l${i}`} className="text-[11px] bg-brand-blueLight text-brand-blue rounded-full px-2 py-0.5 flex items-center gap-1">🔗 {l.length > 30 ? l.slice(0, 30) + '…' : l}<button type="button" onClick={() => setLinks(ls => ls.filter((_, j) => j !== i))} className="text-ink-300 ml-0.5">×</button></span>)}
-              </div>
+    <Modal open={open} onClose={onClose} title="Quick task">
+      <form onSubmit={submit} onKeyDown={onKeyDown}>
+        {/* Hero title — the one thing that matters */}
+        <input
+          type="text"
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          autoFocus
+          required
+          placeholder={PLACEHOLDERS[phIdx] + '…'}
+          className="w-full text-[18px] text-ink-900 placeholder:text-ink-400/80 bg-transparent border-0 focus:outline-none py-2 font-medium"
+        />
+
+        {/* Chip row — deadline, assignee, more */}
+        <div className="flex items-center gap-2 mt-2 mb-4 flex-wrap">
+          <div className="relative">
+            <Chip
+              active={!!deadline}
+              onClick={() => { setDatePopOpen(v => !v); setAssigneePopOpen(false); }}
+            >
+              {deadline && <CalendarIcon width="12" height="12" />}
+              {deadlineLabel}
+            </Chip>
+            {datePopOpen && (
+              <DatePresetPopover
+                value={deadline}
+                presets={datePresets}
+                onChange={(v) => { setDeadline(v); setDatePopOpen(false); }}
+                onClear={() => { setDeadline(''); setDatePopOpen(false); }}
+                onClose={() => setDatePopOpen(false)}
+              />
             )}
           </div>
-        </Field>
-        <Field label="Repeat">
-          <select className={inputCls} value={recurrence} onChange={e => setRecurrence(e.target.value)}>
-            <option value="">Does not repeat</option>
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
-          </select>
-        </Field>
-        {/* Add to Calendar toggle */}
-        <div className="mb-3">
-          <button type="button" onClick={() => setAddToCalendar(v => !v)}
-            className={'w-full flex items-center gap-3 px-3 py-2.5 rounded-[10px] border transition text-left ' +
-              (addToCalendar ? 'bg-brand-blueLight border-brand-blue/30' : 'border-line-light hover:bg-ink-50')}>
-            <span className="text-[16px]">📅</span>
-            <span className={'flex-1 text-[13px] font-medium ' + (addToCalendar ? 'text-brand-blue' : 'text-ink-500')}>Add to Calendar</span>
-            <div className={'w-9 h-5 rounded-full relative transition ' + (addToCalendar ? 'bg-brand-blue' : 'bg-ink-200')}>
-              <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all" style={{ left: addToCalendar ? '18px' : '2px' }} />
-            </div>
-          </button>
-          {addToCalendar && (
-            <div className="grid grid-cols-2 gap-3 mt-2 ml-7">
-              <div>
-                <label className="text-[10px] text-ink-400 uppercase tracking-wide font-semibold">Time</label>
-                <input type="time" className={inputCls + ' !h-9 !text-[13px]'} value={calTime} onChange={e => setCalTime(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-[10px] text-ink-400 uppercase tracking-wide font-semibold">Duration</label>
-                <select className={inputCls + ' !h-9 !text-[13px]'} value={calDuration} onChange={e => setCalDuration(e.target.value)}>
-                  <option value="15">15 min</option>
-                  <option value="30">30 min</option>
-                  <option value="60">1 hour</option>
-                  <option value="120">2 hours</option>
-                </select>
-              </div>
-            </div>
-          )}
+
+          <div className="relative">
+            <Chip
+              active={!!assignedTo}
+              onClick={() => { setAssigneePopOpen(v => !v); setDatePopOpen(false); }}
+            >
+              {assignedTo && <UserIcon width="12" height="12" />}
+              {assigneeLabel}
+            </Chip>
+            {assigneePopOpen && (
+              <AssigneePopover
+                value={assignedTo}
+                users={users}
+                onChange={(v) => { setAssignedTo(v); setAssigneePopOpen(false); }}
+                onClose={() => setAssigneePopOpen(false)}
+              />
+            )}
+          </div>
+
+          <Chip active={moreOpen} onClick={() => setMoreOpen(v => !v)}>
+            <MoreIcon width="12" height="12" />
+            {moreOpen ? 'Less' : 'More'}
+          </Chip>
         </div>
-        <button disabled={busy} type="submit" className="w-full h-11 rounded-[10px] bg-brand-blue text-white font-semibold disabled:opacity-60">
+
+        {/* More sheet — collapsed by default */}
+        {moreOpen && (
+          <div className="space-y-3 pt-1 pb-2 border-t animate-fade-in" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+            <Field label="Description (optional)">
+              <textarea
+                className={inputCls + ' !h-16 py-2'}
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                placeholder="Details, notes…"
+              />
+            </Field>
+
+            <Field label="Attachments">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer">
+                    <span
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-[8px] text-[12px] font-medium"
+                      style={{ background: 'rgba(255,255,255,0.05)', color: '#9CA3AF', border: '1px solid rgba(255,255,255,0.10)' }}
+                    >
+                      <PaperclipIcon /> File
+                    </span>
+                    <input
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={e => setFiles(Array.from(e.target.files || []))}
+                    />
+                  </label>
+                  <input
+                    value={newLink}
+                    onChange={e => setNewLink(e.target.value)}
+                    placeholder="Paste a link…"
+                    className="flex-1 h-8 px-3 rounded-[8px] text-[12px] bg-white/5 border border-white/10 text-ink-900 placeholder:text-ink-400 focus:outline-none focus:border-brand-blue/50"
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (newLink.trim()) { setLinks(l => [...l, newLink.trim()]); setNewLink(''); }
+                      }
+                    }}
+                  />
+                </div>
+                {(files.length > 0 || links.length > 0) && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {files.map((f, i) => (
+                      <span
+                        key={`f${i}`}
+                        className="text-[11px] px-2 py-0.5 rounded-full flex items-center gap-1"
+                        style={{ background: 'rgba(255,255,255,0.06)', color: '#D1D5DB', border: '1px solid rgba(255,255,255,0.08)' }}
+                      >
+                        <PaperclipIcon /> {f.name}
+                      </span>
+                    ))}
+                    {links.map((l, i) => (
+                      <span
+                        key={`l${i}`}
+                        className="text-[11px] px-2 py-0.5 rounded-full flex items-center gap-1"
+                        style={{ background: 'rgba(91,140,255,0.12)', color: '#A8C4FF', border: '1px solid rgba(91,140,255,0.22)' }}
+                      >
+                        <LinkIcon />
+                        {l.length > 28 ? l.slice(0, 28) + '…' : l}
+                        <button
+                          type="button"
+                          onClick={() => setLinks(ls => ls.filter((_, j) => j !== i))}
+                          className="ml-0.5 text-ink-400 hover:text-[#F87171] transition"
+                        >
+                          <CloseIcon width="10" height="10" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </Field>
+
+            <Field label="Repeat">
+              <select
+                className={inputCls}
+                value={recurrence}
+                onChange={e => setRecurrence(e.target.value)}
+              >
+                <option value="">Does not repeat</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </Field>
+
+            {/* Add to Calendar */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setAddToCalendar(v => !v)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-[10px] transition text-left"
+                style={{
+                  background: addToCalendar ? 'rgba(91,140,255,0.10)' : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${addToCalendar ? 'rgba(91,140,255,0.28)' : 'rgba(255,255,255,0.08)'}`,
+                }}
+              >
+                <span className={addToCalendar ? 'text-[#A8C4FF]' : 'text-ink-400'}>
+                  <CalendarIcon width="15" height="15" />
+                </span>
+                <span className={'flex-1 text-[13px] font-medium ' + (addToCalendar ? 'text-[#A8C4FF]' : 'text-ink-500')}>
+                  Add to Calendar
+                </span>
+                <div
+                  className={'w-9 h-5 rounded-full relative transition ' + (addToCalendar ? 'bg-brand-blue' : 'bg-white/10')}
+                >
+                  <span
+                    className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all"
+                    style={{ left: addToCalendar ? '18px' : '2px' }}
+                  />
+                </div>
+              </button>
+              {addToCalendar && (
+                <div className="grid grid-cols-2 gap-3 mt-2 ml-7">
+                  <div>
+                    <label className="text-[10px] text-ink-400 uppercase tracking-wide font-semibold">Time</label>
+                    <input
+                      type="time"
+                      className={inputCls + ' !h-9 !text-[13px]'}
+                      value={calTime}
+                      onChange={e => setCalTime(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-ink-400 uppercase tracking-wide font-semibold">Duration</label>
+                    <select
+                      className={inputCls + ' !h-9 !text-[13px]'}
+                      value={calDuration}
+                      onChange={e => setCalDuration(e.target.value)}
+                    >
+                      <option value="15">15 min</option>
+                      <option value="30">30 min</option>
+                      <option value="60">1 hour</option>
+                      <option value="120">2 hours</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Submit */}
+        <button
+          type="submit"
+          disabled={busy || !title.trim()}
+          className="w-full h-11 rounded-[10px] text-white font-semibold disabled:opacity-50 transition-all active:scale-[0.99]"
+          style={{
+            background: 'linear-gradient(135deg, #5B8CFF 0%, #4A6CF7 100%)',
+            boxShadow: '0 0 20px rgba(91,140,255,0.25), inset 0 1px 0 rgba(255,255,255,0.15)',
+          }}
+        >
           {busy ? 'Creating…' : 'Create Task'}
         </button>
       </form>
