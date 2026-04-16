@@ -689,16 +689,34 @@ async function createTask(data) {
   // Only record assigned_by when cross-assigning, so self-created tasks don't
   // render a redundant "by You" attribution.
   const crossAssigned = assignedTo && assignedTo !== me;
-  return unwrap(await supabase.from('tasks').insert({
+  const base = {
     title, description: description || null,
     project_id: projectId || null, owner_id: assignedTo || me,
-    assigned_by: crossAssigned ? me : null,
     deadline: deadline || null,
     status: 'pending',
     is_quick: isQuick ? true : false,
     recurrence: recurrence || null,
     alarm_at: alarm_at || null,
-  }).select().single());
+  };
+
+  // Try with assigned_by first. If the column (or alarm_at) isn't migrated
+  // yet in this Supabase instance, retry without the offending field so
+  // task creation still works — same pattern as the tasks read-side fallback.
+  let res = await supabase.from('tasks').insert({
+    ...base,
+    assigned_by: crossAssigned ? me : null,
+  }).select().single();
+
+  if (res.error && /assigned_by/.test(res.error.message || '')) {
+    console.warn('[tasks] assigned_by column missing, retrying without it:', res.error.message);
+    res = await supabase.from('tasks').insert(base).select().single();
+  }
+  if (res.error && /alarm_at/.test(res.error.message || '')) {
+    console.warn('[tasks] alarm_at column missing, retrying without it:', res.error.message);
+    const { alarm_at: _drop, ...safe } = base;
+    res = await supabase.from('tasks').insert(safe).select().single();
+  }
+  return unwrap(res);
 }
 
 async function updateTask(id, data) {
