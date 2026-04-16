@@ -578,7 +578,8 @@ function BugCard({ bug, onOpen, onInlineConfirm, onInlineReopen, meId, busy }) {
             </span>
           </div>
 
-          <p className={'text-[14px] leading-snug ' + (isConfirmed || isResolved ? 'text-ink-400' : 'text-ink-900 font-medium')}>
+          <p className={'text-[14px] leading-snug ' + (isConfirmed || isResolved ? 'text-ink-400' : 'text-ink-900 font-medium')}
+            style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
             {bug.issue}
           </p>
 
