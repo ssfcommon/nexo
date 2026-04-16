@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api, ASSET_ORIGIN } from '../api.js';
 import { Avatar, AvatarStack, PriorityTag, ProgressBar, deptDotColor, COMPLEXITIES } from '../components/ui.jsx';
 import { NewMeetingModal } from '../components/QuickActions.jsx';
+import { getProjectAccent, getProjectEmoji } from '../lib/projectAccent.js';
 import Modal, { Field, inputCls } from '../components/Modal.jsx';
 import { fireConfetti } from '../components/Confetti.jsx';
 import KanbanBoard from '../components/KanbanBoard.jsx';
@@ -659,6 +660,11 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
   };
 
   const doneCount = p.subtasks.filter(s => s.status === 'done').length;
+  // Identity — same accent + emoji the user sees on the Projects grid card,
+  // so arriving here feels like opening "that orange rocket project" rather
+  // than landing on a generic detail page.
+  const accent = getProjectAccent(p);
+  const emoji = getProjectEmoji(p);
 
   return (
     <div className="space-y-5">
@@ -667,6 +673,17 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
         <button onClick={onBack} className="text-ink-500" aria-label="Back">
           <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         </button>
+        <span
+          aria-hidden
+          className="flex-shrink-0 w-8 h-8 rounded-[9px] flex items-center justify-center text-[18px] leading-none select-none"
+          style={{
+            background: `linear-gradient(135deg, ${accent.from}22 0%, ${accent.to}14 100%)`,
+            border: `1px solid ${accent.solid}33`,
+            boxShadow: `0 0 14px ${accent.glow}`,
+          }}
+        >
+          {emoji}
+        </span>
         <h1 className="text-[20px] font-bold text-ink-900 flex-1 min-w-0 truncate">{p.title}</h1>
         <button onClick={() => setEditOpen(true)} className="w-8 h-8 rounded-full border border-line-light flex items-center justify-center text-ink-300 hover:text-brand-blue hover:border-brand-blue transition" title="Edit project">
           <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -679,35 +696,62 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
         </button>
       </div>
 
-      {/* Meta card */}
-      <div className="card">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: deptDotColor(p.department) }} />
-            <span className="text-[13px] text-ink-500">{p.department}</span>
+      {/* Meta card — a thin accent bar on top marks identity at a glance
+          without turning the whole card into a color block. */}
+      <div
+        className="card"
+        style={{
+          padding: 0,
+          overflow: 'hidden',
+          boxShadow: `0 4px 24px rgba(0,0,0,0.5), 0 0 24px ${accent.glow}, inset 0 1px 0 rgba(255,255,255,0.10)`,
+        }}
+      >
+        <div
+          aria-hidden
+          style={{
+            height: 4,
+            background: `linear-gradient(90deg, ${accent.from} 0%, ${accent.to} 100%)`,
+            boxShadow: `0 0 12px ${accent.glow}`,
+          }}
+        />
+        <div style={{ padding: 16 }}>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: deptDotColor(p.department) }} />
+              <span className="text-[13px] text-ink-500">{p.department}</span>
+            </div>
+            <PriorityTag priority={p.priority} />
+            {p.deadline && (
+              <span className="text-[12px] text-ink-500 ml-auto">
+                Due {new Date(p.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              </span>
+            )}
           </div>
-          <PriorityTag priority={p.priority} />
-          {p.deadline && (
-            <span className="text-[12px] text-ink-500 ml-auto">
-              Due {new Date(p.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            </span>
-          )}
-        </div>
-        {p.description && <p className="text-[13px] text-ink-500 mb-3">{p.description}</p>}
-        <div className="flex items-center gap-3 mb-2">
-          <div className="flex-1"><ProgressBar percent={p.progress} /></div>
-          <span className="text-[13px] font-semibold text-brand-blue">{p.progress}%</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <p className="text-[11px] text-ink-300">{doneCount} of {p.subtasks.length} subtasks complete</p>
-          <AvatarStack users={p.members} max={3} size={26} />
+          {p.description && <p className="text-[13px] text-ink-500 mb-3">{p.description}</p>}
+          <div className="flex items-center gap-3 mb-2">
+            <div className="flex-1"><ProgressBar percent={p.progress} color={accent.solid} /></div>
+            <span className="text-[13px] font-semibold tabular-nums" style={{ color: accent.solid }}>{p.progress}%</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] text-ink-300">{doneCount} of {p.subtasks.length} subtasks complete</p>
+            <AvatarStack users={p.members} max={3} size={26} />
+          </div>
         </div>
       </div>
 
-      {/* Archive ceremony — shows when all subtasks done */}
+      {/* Archive ceremony — shows when all subtasks done. Uses the
+          project's own accent so the celebration feels earned by THIS
+          project, not a generic green banner. */}
       {p.progress === 100 && p.subtasks.length > 0 && p.status === 'active' && (
-        <div className="card text-center py-5" style={{ background: 'linear-gradient(135deg, #F0FFF4, #EEF1FF)' }}>
-          <p className="text-[28px] mb-1">🎉</p>
+        <div
+          className="card text-center py-5"
+          style={{
+            background: `linear-gradient(135deg, ${accent.from}26 0%, ${accent.to}14 100%)`,
+            border: `1px solid ${accent.solid}40`,
+            boxShadow: `0 4px 24px rgba(0,0,0,0.45), 0 0 28px ${accent.glow}, inset 0 1px 0 rgba(255,255,255,0.10)`,
+          }}
+        >
+          <p className="text-[28px] mb-1">{emoji} 🎉</p>
           <p className="text-[16px] font-bold text-ink-900">All subtasks complete!</p>
           <p className="text-[13px] text-ink-500 mt-1 mb-3">Great work, team. Ready to close this project?</p>
           <button
@@ -717,7 +761,12 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
               showToast('Project completed! 🎉');
               load();
             }}
-            className="pill bg-success text-white !h-10 !px-5 !text-[13px] font-semibold"
+            className="pill !h-10 !px-5 !text-[13px] font-semibold text-white"
+            style={{
+              background: `linear-gradient(135deg, ${accent.from}, ${accent.to})`,
+              boxShadow: `0 4px 16px ${accent.glow}`,
+              border: `1px solid ${accent.solid}66`,
+            }}
           >
             ✓ Mark as Complete
           </button>

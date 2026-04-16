@@ -10,6 +10,7 @@ import AlarmModal from '../components/AlarmModal.jsx';
 import RowActions from '../components/RowActions.jsx';
 import GlassCard from '../components/GlassCard.jsx';
 import { BugIcon, UmbrellaIcon, CheckIcon, FolderIcon } from '../components/Icons.jsx';
+import { fireConfetti } from '../components/Confetti.jsx';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -76,36 +77,44 @@ function TaskCard({ task, onComplete, completing, onSetAlarm, onAddToCal }) {
   const urgency = urgencyOf(task.deadline);
   const s = URGENCY_STYLES[urgency];
   const fromCrossAssign = task.creator_name && task.assigned_by && task.assigned_by !== task.owner_id;
+  // Color of the ring/tick at rest — swaps to success green once completing.
+  const ringColor = urgency === 'overdue' ? '#EF4444' : urgency === 'due' ? '#F59E0B' : 'rgba(255,255,255,0.35)';
+  const tickColor = urgency === 'overdue' ? '#EF4444' : urgency === 'due' ? '#F59E0B' : 'rgba(255,255,255,0.85)';
 
   return (
     <GlassCard
       accent={s.accent}
-      className={'flex items-center gap-3 pl-4 pr-3.5 py-3 ' + (s.pulse ? 'overdue-pulse' : '') + (completing ? ' opacity-50' : '')}
+      className={'flex items-center gap-3 pl-4 pr-3.5 py-3 ' + (s.pulse && !completing ? 'overdue-pulse' : '') + (completing ? ' task-row-sweep' : '')}
     >
-      {/* Checkbox — 40px tap target, always-visible ring, tick fills on press */}
+      {/* Checkbox — 40px tap target, always-visible ring, tick fills on press.
+          When completing: ring snaps to green, tick re-renders with the
+          `task-tick-draw` class so stroke-dashoffset animates from 28 → 0. */}
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); if (!completing) onComplete(task); }}
         aria-label={`Mark ${task.title} complete`}
         disabled={completing}
-        className="flex-shrink-0 w-10 h-10 -ml-2 rounded-full flex items-center justify-center group transition-all active:scale-90"
+        className="flex-shrink-0 w-10 h-10 -ml-2 rounded-full flex items-center justify-center group active:scale-90"
         style={{ background: 'transparent' }}
       >
         <span
-          className="w-[22px] h-[22px] rounded-full flex items-center justify-center transition-all group-hover:scale-110"
+          className="w-[22px] h-[22px] rounded-full flex items-center justify-center group-hover:scale-110"
           style={{
-            border: `2px solid ${urgency === 'overdue' ? '#EF4444' : urgency === 'due' ? '#F59E0B' : 'rgba(255,255,255,0.35)'}`,
-            background: 'transparent',
+            border: `2px solid ${completing ? '#22C55E' : ringColor}`,
+            background: completing ? '#22C55E' : 'transparent',
+            transform: completing ? 'scale(1.12)' : undefined,
+            transition: 'background 220ms ease, border-color 220ms ease, transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+            boxShadow: completing ? '0 0 14px rgba(34,197,94,0.45)' : undefined,
           }}
         >
           <svg
             viewBox="0 0 24 24"
             fill="none"
-            stroke={urgency === 'overdue' ? '#EF4444' : urgency === 'due' ? '#F59E0B' : 'rgba(255,255,255,0.85)'}
+            stroke={completing ? 'white' : tickColor}
             strokeWidth="3"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="w-[13px] h-[13px] opacity-40 group-hover:opacity-100 group-active:opacity-100 transition-opacity"
+            className={'w-[13px] h-[13px] ' + (completing ? 'task-tick-draw' : 'opacity-40 group-hover:opacity-100 group-active:opacity-100 transition-opacity')}
           >
             <path d="M20 6L9 17l-5-5" />
           </svg>
@@ -291,17 +300,42 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
 
   const handleComplete = async (item) => {
     const key = `${item.kind}:${item.id}`;
+    if (completingIds.has(key)) return;
+    // Snapshot BEFORE mutating state — used to detect "last for today"
+    // moments so we can fire confetti. Compared against this exact task,
+    // not against tasks.length, so midnight-rollover edge cases stay sane.
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayTasks = tasks.filter(t => t.deadline && t.deadline <= todayStr);
+    const wasLastForToday =
+      item.deadline && item.deadline <= todayStr &&
+      todayTasks.length === 1 &&
+      todayTasks[0].id === item.id && todayTasks[0].kind === item.kind;
+
     setCompletingIds(prev => { const n = new Set(prev); n.add(key); return n; });
-    try {
-      await api.completeHomeItem(item);
-      setTasks(prev => prev.filter(t => !(t.id === item.id && t.kind === item.kind)));
-      showToast(item.kind === 'subtask' ? 'Subtask completed' : 'Task completed');
-    } catch {
+
+    // Run the API and the 720ms celebration in parallel. The card doesn't
+    // leave state until both settle, so the animation always plays even on
+    // fast networks.
+    const ANIM_MS = 720;
+    const [apiOk] = await Promise.all([
+      api.completeHomeItem(item).then(() => true).catch(() => false),
+      new Promise(r => setTimeout(r, ANIM_MS)),
+    ]);
+
+    if (!apiOk) {
       showToast('Could not mark complete', 'error');
       reloadTasks();
-    } finally {
       setCompletingIds(prev => { const n = new Set(prev); n.delete(key); return n; });
+      return;
     }
+
+    setTasks(prev => prev.filter(t => !(t.id === item.id && t.kind === item.kind)));
+    setCompletingIds(prev => { const n = new Set(prev); n.delete(key); return n; });
+
+    // The milestone: last thing on today's plate. Confetti earns its keep
+    // here — every other completion gets a quieter toast.
+    if (wasLastForToday) fireConfetti();
+    else showToast(item.kind === 'subtask' ? 'Subtask completed' : 'Task completed');
   };
 
   // Surface someone-else's leave only if it's currently ongoing or upcoming.

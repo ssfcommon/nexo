@@ -81,11 +81,15 @@ export function PriorityTag({ priority }) {
 
 // ─── Progress Bar ───
 export function ProgressBar({ percent, color }) {
+  // When caller passes a custom color, match the glow to it so the bar
+  // doesn't ghost-blue at the edges. Default keeps the brand look.
+  const fill = color || 'linear-gradient(90deg, #5B8CFF, #22D3EE)';
+  const glow = color ? `0 0 8px ${color}66` : '0 0 8px rgba(91,140,255,0.4)';
   return (
     <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
       <div
         className="h-full rounded-full"
-        style={{ width: `${percent}%`, background: color || 'linear-gradient(90deg, #5B8CFF, #22D3EE)', boxShadow: '0 0 8px rgba(91,140,255,0.4)', transition: 'width 0.5s cubic-bezier(0.4, 0, 0.2, 1)' }}
+        style={{ width: `${percent}%`, background: fill, boxShadow: glow, transition: 'width 0.5s cubic-bezier(0.4, 0, 0.2, 1)' }}
       />
     </div>
   );

@@ -471,6 +471,38 @@ input[type="radio"], input[type="checkbox"] {
 }
 .glyph-rise { animation: glyph-rise 520ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 
+/* Task complete — the tick draws itself into a filled ring, then the
+   whole row sweeps out to the right and collapses. Sequenced so the
+   user sees the satisfying "check" before the row leaves.
+
+   Timing budget (total ≈ 720ms):
+     0–260ms   ring fills (via inline transitions on TaskCard)
+     60–340ms  tick path draws (stroke-dashoffset 28 → 0)
+     340–700ms row sweeps out + max-height collapses            */
+@keyframes task-tick-draw {
+  0%   { stroke-dashoffset: 28; opacity: 0; }
+  25%  { opacity: 1; }
+  100% { stroke-dashoffset: 0;  opacity: 1; }
+}
+.task-tick-draw {
+  stroke-dasharray: 28;
+  stroke-dashoffset: 28;
+  stroke: white !important;
+  opacity: 1 !important;
+  animation: task-tick-draw 280ms 60ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes task-row-sweep {
+  0%   { opacity: 1; transform: translateX(0)   scale(1);    max-height: 200px; margin-bottom: 10px; }
+  15%  { opacity: 1; transform: translateX(0)   scale(1);    max-height: 200px; }
+  100% { opacity: 0; transform: translateX(28px) scale(0.96); max-height: 0;    margin-bottom: 0; padding-top: 0; padding-bottom: 0; border-width: 0; }
+}
+.task-row-sweep {
+  animation: task-row-sweep 420ms 300ms cubic-bezier(0.5, 0, 0.75, 0) forwards;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 /* Project card — press feedback on a single line. Transition targets
    transform only so it composites on the GPU. */
 .project-card-press {
@@ -483,7 +515,14 @@ input[type="radio"], input[type="checkbox"] {
   .urgency-pulse,
   .flame-wiggle,
   .gentle-bob,
-  .fab-breathe { animation: none !important; }
+  .fab-breathe,
+  .bug-squashing,
+  .number-bump,
+  .glyph-rise,
+  .task-tick-draw,
+  .task-row-sweep { animation: none !important; }
+  .task-tick-draw { stroke-dashoffset: 0 !important; }
+  .task-row-sweep { opacity: 0 !important; max-height: 0 !important; }
   .project-card-press { transition: none !important; }
 }
 
