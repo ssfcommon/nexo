@@ -11,16 +11,16 @@ export default function Modal({ open, title, onClose, children }) {
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-[4px]" onClick={onClose} />
-      <div className="relative w-full max-w-[420px] rounded-t-[20px] sm:rounded-[16px] p-5 pb-6 max-h-[90vh] overflow-y-auto animate-slide-up"
+      <div className="relative w-full max-w-[400px] rounded-[20px] p-5 pb-6 max-h-[85vh] overflow-y-auto animate-scale-in"
         style={{
-          background: 'linear-gradient(160deg, rgba(22,30,50,0.92) 0%, rgba(12,18,32,0.95) 100%)',
-          backdropFilter: 'blur(24px)',
-          WebkitBackdropFilter: 'blur(24px)',
+          background: 'linear-gradient(160deg, rgba(22,30,50,0.94) 0%, rgba(12,18,32,0.96) 100%)',
+          backdropFilter: 'blur(28px)',
+          WebkitBackdropFilter: 'blur(28px)',
           border: '1px solid rgba(255,255,255,0.10)',
           borderTopColor: 'rgba(255,255,255,0.18)',
-          boxShadow: '0 24px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.1)',
+          boxShadow: '0 28px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.1)',
         }}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold" style={{ color: '#E5E7EB' }}>{title}</h2>

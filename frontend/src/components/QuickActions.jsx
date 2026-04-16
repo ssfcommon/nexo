@@ -128,11 +128,11 @@ function Chip({ active, onClick, children }) {
     <button
       type="button"
       onClick={onClick}
-      className="h-9 px-3 rounded-pill text-[12px] font-semibold flex items-center gap-1.5 transition-all active:scale-[0.97]"
+      className="h-8 px-3 rounded-full text-[12px] font-semibold flex items-center gap-1.5 transition-all duration-150 active:scale-[0.96] hover:brightness-110"
       style={{
-        background: active ? 'rgba(91,140,255,0.15)' : 'rgba(255,255,255,0.05)',
+        background: active ? 'rgba(91,140,255,0.14)' : 'rgba(255,255,255,0.04)',
         color: active ? '#A8C4FF' : '#9CA3AF',
-        border: `1px solid ${active ? 'rgba(91,140,255,0.30)' : 'rgba(255,255,255,0.10)'}`,
+        border: `1px solid ${active ? 'rgba(91,140,255,0.28)' : 'rgba(255,255,255,0.08)'}`,
       }}
     >
       {children}
@@ -302,11 +302,11 @@ export function QuickTaskModal({ open, onClose, onCreated }) {
           autoFocus
           required
           placeholder={PLACEHOLDERS[phIdx] + '…'}
-          className="w-full text-[18px] text-ink-900 placeholder:text-ink-400/80 bg-transparent border-0 focus:outline-none py-2 font-medium"
+          className="hero-input"
         />
 
         {/* Chip row — deadline, assignee, more */}
-        <div className="flex items-center gap-2 mt-2 mb-4 flex-wrap">
+        <div className="flex items-center gap-2 mt-4 mb-5 flex-wrap">
           <div className="relative">
             <Chip
               active={!!deadline}
@@ -498,10 +498,10 @@ export function QuickTaskModal({ open, onClose, onCreated }) {
         <button
           type="submit"
           disabled={busy || !title.trim()}
-          className="w-full h-11 rounded-[10px] text-white font-semibold disabled:opacity-50 transition-all active:scale-[0.99]"
+          className="w-full h-11 rounded-[12px] text-white font-semibold text-[14px] tracking-[0.01em] disabled:opacity-50 transition-all duration-200 active:scale-[0.99]"
           style={{
             background: 'linear-gradient(135deg, #5B8CFF 0%, #4A6CF7 100%)',
-            boxShadow: '0 0 20px rgba(91,140,255,0.25), inset 0 1px 0 rgba(255,255,255,0.15)',
+            boxShadow: '0 6px 20px rgba(74,108,247,0.22), inset 0 1px 0 rgba(255,255,255,0.14)',
           }}
         >
           {busy ? 'Creating…' : 'Create Task'}
