@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { api } from '../api.js';
 import { useToast } from '../context/ToastContext.jsx';
+import { useBackHandler } from '../hooks/useBackHandler.js';
 import { Avatar, Pill } from '../components/ui.jsx';
 import HeaderActions from '../components/HeaderActions.jsx';
 import Modal, { Field, inputCls } from '../components/Modal.jsx';
@@ -1321,6 +1322,11 @@ export default function Calendar({ me, unreadCount, onOpenNotifications, onSwitc
   const [teamUsers, setTeamUsers] = useState([]);
   const [selectedTeam, setSelectedTeam] = useState([]);
   const [teamRawEvents, setTeamRawEvents] = useState([]);
+
+  // Back-button integration — modals register with the history stack.
+  useBackHandler('event-modal', !!selectedEvent, () => setSelectedEvent(null));
+  useBackHandler('add-event', addOpen, () => { setAddOpen(false); setPrefillTitle(''); });
+  useBackHandler('add-leave', leaveOpen, () => setLeaveOpen(false));
 
   const loadDay = (d) => api.events(isoDate(d)).then(setRawEvents);
   const loadAll = () => api.events().then(setAllRawEvents);

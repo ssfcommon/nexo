@@ -4,6 +4,7 @@ import { Avatar } from '../components/ui.jsx';
 import HeaderActions from '../components/HeaderActions.jsx';
 import Modal, { Field, inputCls } from '../components/Modal.jsx';
 import { useToast } from '../context/ToastContext.jsx';
+import { useBackHandler } from '../hooks/useBackHandler.js';
 import { ReportBugModal } from '../components/QuickActions.jsx';
 import GlassCard from '../components/GlassCard.jsx';
 import FilterChip from '../components/FilterChip.jsx';
@@ -699,6 +700,10 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
   const filterButtonRef = useRef(null);
   const moreWrap = useRef(null);
   const searchInputRef = useRef(null);
+
+  // Back-button integration
+  useBackHandler('bug-detail', !!detailBug, () => setDetailBug(null));
+  useBackHandler('add-bug', addOpen, () => setAddOpen(false));
 
   const load = () => {
     api.bugs(appFilter || undefined).then(setBugs);

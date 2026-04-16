@@ -14,6 +14,7 @@ import ErrorBoundary from './components/ErrorBoundary.jsx';
 import OnboardingTour from './components/OnboardingTour.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
 import useAlarms from './hooks/useAlarms.js';
+import { useBackHandler } from './hooks/useBackHandler.js';
 import { HomeIcon, FolderIcon, CalendarIcon, UserIcon, BugIcon } from './components/Icons.jsx';
 import FAB from './components/FAB.jsx';
 import { Avatar } from './components/ui.jsx';
@@ -56,6 +57,7 @@ export default function App() {
   }, [isAuthenticated, refreshUnread]);
 
   useAlarms();
+  useBackHandler('notifications', notifOpen, () => { setNotifOpen(false); refreshUnread(); });
 
   if (isAuthLoading) return <div className="min-h-screen flex items-center justify-center text-ink-300">Loading…</div>;
   if (!isAuthenticated) return <Login />;

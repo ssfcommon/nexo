@@ -10,6 +10,7 @@ import GlassCard from '../components/GlassCard.jsx';
 import FilterChip from '../components/FilterChip.jsx';
 import { NewProjectModal, QuickTaskModal } from '../components/QuickActions.jsx';
 import { useToast } from '../context/ToastContext.jsx';
+import { useBackHandler } from '../hooks/useBackHandler.js';
 import {
   SearchIcon,
   FilterIcon,
@@ -250,6 +251,8 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
   useEffect(() => {
     if (deepLink?.kind === 'project' && deepLink.id) setOpenId(deepLink.id);
   }, [deepLink]);
+
+  useBackHandler('project-detail', !!openId, () => { setOpenId(null); loadProjects(); });
 
   const loadProjects = () => api.projects(scope).then(setProjects);
   const loadTasks = () => api.tasks({ quick: '1', owner: 'me' }).then(setQuickTasks);
