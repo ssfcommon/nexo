@@ -65,12 +65,46 @@ function Chevron() {
   );
 }
 
-function Toggle({ on, onChange }) {
+function Toggle({ on, onChange, disabled }) {
+  // Proportions: 44x26 track, 18px thumb, 3px inset on each side. The thumb
+  // leaves a comfortable ring of track visible at rest, which keeps the on/off
+  // state legible at a glance — closer to iOS / Stripe feel than the previous
+  // 40x24 track with a 20px thumb (too chunky).
   return (
-    <button type="button" onClick={() => onChange(!on)}
-      className={'w-10 h-6 rounded-full relative transition ' + (on ? 'bg-brand-blue' : 'bg-line-light')}
-      aria-pressed={on}>
-      <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all" style={{ left: on ? '18px' : '2px' }} />
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      disabled={disabled}
+      onClick={() => !disabled && onChange(!on)}
+      className="relative rounded-full transition-all duration-200 active:scale-[0.97] disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40"
+      style={{
+        width: 44,
+        height: 26,
+        background: on
+          ? 'linear-gradient(135deg, #5B8CFF 0%, #4A6CF7 100%)'
+          : 'rgba(255,255,255,0.06)',
+        border: `1px solid ${on ? 'rgba(91,140,255,0.35)' : 'rgba(255,255,255,0.10)'}`,
+        boxShadow: on
+          ? 'inset 0 1px 2px rgba(0,0,0,0.20), 0 0 14px rgba(91,140,255,0.22)'
+          : 'inset 0 1px 2px rgba(0,0,0,0.30)',
+      }}
+    >
+      <span
+        className="absolute rounded-full"
+        style={{
+          width: 18,
+          height: 18,
+          top: 3,
+          left: on ? 22 : 3,
+          // Subtle off-white gradient + hairline shadow ring gives the thumb
+          // a sense of weight. A springy overshoot on the translate adds
+          // tactility — the thumb briefly passes its target then settles.
+          background: 'linear-gradient(180deg, #FFFFFF 0%, #E8EAEE 100%)',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.35), 0 0 0 0.5px rgba(0,0,0,0.08), inset 0 -1px 0 rgba(0,0,0,0.06)',
+          transition: 'left 220ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+        }}
+      />
     </button>
   );
 }
