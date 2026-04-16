@@ -5,9 +5,21 @@ import { useToast } from '../context/ToastContext.jsx';
 import {
   CalendarIcon, UserIcon, MoreIcon, CheckIcon, PaperclipIcon, LinkIcon, CloseIcon,
 } from './Icons.jsx';
+import { ACCENT_PALETTE, ACCENT_KEYS, EMOJI_CHOICES, DEFAULT_EMOJI } from '../lib/projectAccent.js';
+import { spring } from '../lib/motion.js';
 
 import { PRIORITIES, COMPLEXITIES } from './ui.jsx';
 const DEPARTMENTS = ['Operations', "CEO's Office", 'Common'];
+
+// Rotating placeholders for the project-title input. Playful but
+// credible — drawn from real work. Changes every ~3.5s while empty.
+const PROJECT_PLACEHOLDERS = [
+  'Mobile redesign',
+  'Q2 planning sprint',
+  'Launch the new site',
+  'Customer onboarding revamp',
+  'Retail partnerships push',
+];
 
 function today() { return new Date().toISOString().slice(0, 10); }
 function isoOffset(days) { return new Date(Date.now() + days * 86400000).toISOString().slice(0, 10); }
@@ -527,12 +539,34 @@ export function NewProjectModal({ open, onClose, onCreated }) {
   const [projNewLink, setProjNewLink] = useState('');
   const [templates, setTemplates] = useState([]);
 
+  // ─── Identity (emoji + accent) ────────────────────────────────
+  // Randomised on open so every new project feels like a fresh pick,
+  // but the user can override with a tap.
+  const [emoji, setEmoji] = useState(DEFAULT_EMOJI);
+  const [accentKey, setAccentKey] = useState('sky');
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [phIdx, setPhIdx] = useState(0);
+
   useEffect(() => {
     if (!open) return;
     setTitle(''); setDescription(''); setDeadline(today()); setMemberIds([]); setSteps([]); setNewStep(''); setProjFiles([]); setProjLinks([]); setProjNewLink('');
+    // Random starting identity — feels like a "fresh slate" each open.
+    setEmoji(EMOJI_CHOICES[Math.floor(Math.random() * EMOJI_CHOICES.length)]);
+    setAccentKey(ACCENT_KEYS[Math.floor(Math.random() * ACCENT_KEYS.length)]);
+    setEmojiPickerOpen(false);
+    setMoreOpen(false);
+    setPhIdx(0);
     api.users().then(setUsers);
     api.templates().then(setTemplates).catch(() => {});
   }, [open]);
+
+  // Rotate the title placeholder every 3.5s while the field is empty.
+  useEffect(() => {
+    if (!open || title) return;
+    const id = setInterval(() => setPhIdx(i => (i + 1) % PROJECT_PLACEHOLDERS.length), 3500);
+    return () => clearInterval(id);
+  }, [open, title]);
 
   const applyTemplate = (t) => {
     setTitle(t.name);
@@ -552,7 +586,10 @@ export function NewProjectModal({ open, onClose, onCreated }) {
     setBusy(true);
     try {
       let project;
-      project = await api.createProject({ title: title.trim(), department, description, deadline, memberIds });
+      project = await api.createProject({
+        title: title.trim(), department, description, deadline, memberIds,
+        accent: accentKey, emoji,
+      });
       // Create checklist steps + substeps
       if (project?.id && steps.length > 0) {
         for (const step of steps) {
@@ -567,15 +604,18 @@ export function NewProjectModal({ open, onClose, onCreated }) {
     } catch (err) { showToast(err.message || 'Failed to create project', 'error'); } finally { setBusy(false); }
   };
 
+  const accent = ACCENT_PALETTE[accentKey] || ACCENT_PALETTE.sky;
+
   return (
-    <Modal open={open} onClose={onClose} title="New Project">
+    <Modal open={open} onClose={onClose} title="New project">
       {templates.length > 0 && (
-        <div className="mb-3">
-          <p className="text-[11px] font-semibold text-ink-500 mb-1.5">START FROM TEMPLATE</p>
+        <div className="mb-4">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-ink-400 mb-1.5">Start from template</p>
           <div className="flex flex-wrap gap-2">
             {templates.map(t => (
               <button key={t.id} type="button" onClick={() => applyTemplate(t)}
-                className="px-3 h-8 rounded-full text-[12px] font-medium bg-[#F3F4F6] text-ink-500 hover:bg-brand-blueLight hover:text-brand-blue transition">
+                className="px-3 h-8 rounded-full text-[12px] font-medium transition"
+                style={{ background: 'rgba(255,255,255,0.05)', color: '#9CA3AF', border: '1px solid rgba(255,255,255,0.08)' }}>
                 {t.name}
               </button>
             ))}
@@ -583,19 +623,121 @@ export function NewProjectModal({ open, onClose, onCreated }) {
         </div>
       )}
       <form onSubmit={submit}>
-        <Field label="Title">
-          <input className={inputCls} value={title} onChange={e => setTitle(e.target.value)} autoFocus required placeholder="Q3 B2B expansion" />
-        </Field>
-        <Field label="Department">
-          <select className={inputCls} value={department} onChange={e => setDepartment(e.target.value)}>
-            {DEPARTMENTS.map(d => <option key={d}>{d}</option>)}
-          </select>
-        </Field>
+        {/* ─── Identity hero: emoji + name ─────────────────────── */}
+        <div className="flex flex-col items-center mb-4">
+          <button
+            type="button"
+            onClick={() => setEmojiPickerOpen(v => !v)}
+            className="w-[72px] h-[72px] rounded-full flex items-center justify-center text-[36px] leading-none mb-3 transition-all active:scale-[0.95]"
+            style={{
+              background: `radial-gradient(circle at 30% 30%, ${accent.glow} 0%, rgba(255,255,255,0.03) 72%)`,
+              border: `1px solid ${accent.solid}44`,
+              boxShadow: `0 0 24px ${accent.glow}, inset 0 1px 0 rgba(255,255,255,0.12)`,
+              transition: `background 240ms ${spring.gentle}, border-color 240ms ${spring.gentle}, box-shadow 240ms ${spring.gentle}`,
+            }}
+            aria-label="Change emoji"
+          >
+            {emoji}
+          </button>
+          <p className="text-[10px] text-ink-400 uppercase tracking-wide font-semibold">Tap to change</p>
+        </div>
+
+        {/* Emoji picker — 24 curated choices. Opens inline above the
+            name input so the user's context isn't broken by another
+            modal. Closes on pick. */}
+        {emojiPickerOpen && (
+          <div
+            className="mb-4 p-3 rounded-[12px] grid grid-cols-8 gap-1.5 animate-fade-in"
+            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}
+          >
+            {EMOJI_CHOICES.map(e => (
+              <button
+                key={e}
+                type="button"
+                onClick={() => { setEmoji(e); setEmojiPickerOpen(false); }}
+                className="h-9 rounded-[8px] flex items-center justify-center text-[20px] hover:bg-white/5 transition"
+                style={emoji === e ? { background: `${accent.solid}22`, outline: `1px solid ${accent.solid}66` } : {}}
+                aria-label={`Pick ${e}`}
+              >
+                {e}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Name — hero input, same visual weight as QuickTaskModal. */}
+        <input
+          type="text"
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          autoFocus
+          required
+          placeholder={PROJECT_PLACEHOLDERS[phIdx] + '…'}
+          className="hero-input"
+        />
+
+        {/* ─── Color palette ────────────────────────────────────── */}
+        <div className="mt-4 mb-4">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-ink-400 mb-2">Vibe</p>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {ACCENT_KEYS.map(key => {
+              const p = ACCENT_PALETTE[key];
+              const active = key === accentKey;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setAccentKey(key)}
+                  aria-label={key}
+                  className="relative rounded-full transition-all active:scale-[0.92]"
+                  style={{
+                    width: active ? 26 : 22,
+                    height: active ? 26 : 22,
+                    background: `linear-gradient(135deg, ${p.from} 0%, ${p.to} 100%)`,
+                    boxShadow: active
+                      ? `0 0 0 2px #0B0F1A, 0 0 0 3.5px ${p.solid}, 0 0 12px ${p.glow}`
+                      : `0 0 6px ${p.glow}`,
+                    transition: `width 180ms ${spring.snappy}, height 180ms ${spring.snappy}, box-shadow 180ms ease`,
+                  }}
+                />
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ─── Deadline + department — the two most-used secondary fields,
+               always visible. Everything else hides under "More". */}
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <Field label="Deadline">
+            <input type="date" className={inputCls} value={deadline} onChange={e => setDeadline(e.target.value)} required />
+          </Field>
+          <Field label="Department">
+            <select className={inputCls} value={department} onChange={e => setDepartment(e.target.value)}>
+              {DEPARTMENTS.map(d => <option key={d}>{d}</option>)}
+            </select>
+          </Field>
+        </div>
+
+        {/* ─── More toggle ──────────────────────────────────────── */}
+        <button
+          type="button"
+          onClick={() => setMoreOpen(v => !v)}
+          className="mb-3 h-8 px-3 rounded-full text-[12px] font-semibold flex items-center gap-1.5 transition-all active:scale-[0.96]"
+          style={{
+            background: moreOpen ? 'rgba(91,140,255,0.14)' : 'rgba(255,255,255,0.04)',
+            color: moreOpen ? '#A8C4FF' : '#9CA3AF',
+            border: `1px solid ${moreOpen ? 'rgba(91,140,255,0.28)' : 'rgba(255,255,255,0.08)'}`,
+          }}
+        >
+          <MoreIcon width="12" height="12" />
+          {moreOpen ? 'Less' : 'More — description, members, checklist'}
+        </button>
+
+        {/* ─── More sheet ───────────────────────────────────────── */}
+        {moreOpen && (
+          <div className="space-y-3 pt-1 pb-2 border-t animate-fade-in" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
         <Field label="Description">
           <textarea className={inputCls + ' !h-20 py-2'} value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional" />
-        </Field>
-        <Field label="Deadline">
-          <input type="date" className={inputCls} value={deadline} onChange={e => setDeadline(e.target.value)} required />
         </Field>
         <Field label="Attachments">
           <div className="space-y-2">
@@ -719,8 +861,21 @@ export function NewProjectModal({ open, onClose, onCreated }) {
             ))}
           </div>
         </Field>
-        <button disabled={busy} type="submit" className="w-full h-11 rounded-[10px] bg-brand-blue text-white font-semibold disabled:opacity-60">
-          {busy ? 'Creating…' : 'Create Project'}
+          </div>
+        )}
+
+        {/* ─── Launch ──────────────────────────────────────────── */}
+        <button
+          disabled={busy || !title.trim()}
+          type="submit"
+          className="w-full h-11 rounded-[12px] text-white font-semibold text-[14px] tracking-[0.01em] disabled:opacity-50 transition-all duration-200 active:scale-[0.99] flex items-center justify-center gap-1.5"
+          style={{
+            background: `linear-gradient(135deg, ${accent.from} 0%, ${accent.to} 100%)`,
+            boxShadow: `0 6px 20px ${accent.glow}, inset 0 1px 0 rgba(255,255,255,0.14)`,
+            transition: `background 240ms ${spring.gentle}, box-shadow 240ms ease, transform 120ms ${spring.snappy}`,
+          }}
+        >
+          {busy ? 'Launching…' : <>Launch {emoji}</>}
         </button>
       </form>
     </Modal>

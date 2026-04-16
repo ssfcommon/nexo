@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
-import { AvatarStack, ProgressBar, deptDotColor } from '../components/ui.jsx';
+import { AvatarStack, deptDotColor } from '../components/ui.jsx';
 import HeaderActions from '../components/HeaderActions.jsx';
 import ProjectDetail from './ProjectDetail.jsx';
 import { fireConfetti } from '../components/Confetti.jsx';
@@ -8,15 +8,26 @@ import AlarmModal from '../components/AlarmModal.jsx';
 import RowActions from '../components/RowActions.jsx';
 import GlassCard from '../components/GlassCard.jsx';
 import FilterChip from '../components/FilterChip.jsx';
+import ProgressRing from '../components/ProgressRing.jsx';
+import MomentumChip from '../components/MomentumChip.jsx';
 import { NewProjectModal, QuickTaskModal } from '../components/QuickActions.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useBackHandler } from '../hooks/useBackHandler.js';
 import { useOnRefresh } from '../hooks/usePullToRefresh.js';
+import { staggerIn } from '../lib/motion.js';
+import {
+  getProjectAccent,
+  getProjectEmoji,
+  getMomentum,
+  getUrgency,
+  formatDeadline,
+  MOMENTUM_ORDER,
+  MOMENTUM_GROUP_LABELS,
+} from '../lib/projectAccent.js';
 import {
   SearchIcon,
   FilterIcon,
   PlusIcon,
-  FolderIcon,
   TrashIcon,
   RepeatIcon,
 } from '../components/Icons.jsx';
@@ -136,21 +147,115 @@ function FilterPopover({ open, onClose, scope, setScope, departments, department
 }
 
 // ── Project card ─────────────────────────────────────────────
+// The hero element of this screen. Every project gets:
+//   • an accent color (metadata.accent, hash fallback for legacy)
+//   • an emoji badge (metadata.emoji, 📁 fallback)
+//   • a progress ring (replaces the old flat bar)
+//   • a momentum chip (On fire / Building / Quiet / All clear)
+//   • an urgency glow on the right edge when deadlines burn
+//
+// Press feedback is CSS-only via `.project-card-press` so it composites
+// on the GPU (no React re-render on every tap).
 
-function ProjectCard({ project, onOpen }) {
-  const accent = PRIORITY_ACCENT[project.priority] || 'none';
+function ProjectCard({ project, onOpen, index }) {
+  const accent = getProjectAccent(project);
+  const emoji = getProjectEmoji(project);
+  const momentum = getMomentum(project);
+  const urgency = getUrgency(project);
+
+  // Right-edge glow reserved for hot/overdue. Calm + warm states get
+  // nothing — we don't want ambient amber noise on every card.
+  const urgencyClass =
+    urgency.state === 'overdue' ? 'urgency-pulse' :
+    urgency.state === 'hot'     ? 'urgency-hot'   : '';
+
   return (
-    <GlassCard as="button" accent={accent} onClick={onOpen} className="w-full text-left pl-4 pr-4 py-3.5 hover:bg-white/[0.02] transition">
-      <div className="flex items-start justify-between gap-3 mb-2">
-        <h3 className="font-semibold text-[15px] text-ink-900 leading-snug">{project.title}</h3>
-        <AvatarStack users={project.members || []} max={2} />
+    <button
+      onClick={onOpen}
+      style={staggerIn(index)}
+      className={'project-card-press w-full text-left relative rounded-[14px] overflow-hidden hover:bg-white/[0.02] transition-colors ' + urgencyClass}
+      aria-label={`Open ${project.title}`}
+    >
+      {/* Card surface */}
+      <div
+        className="relative px-4 py-3.5"
+        style={{
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%)',
+          border: '1px solid rgba(255,255,255,0.10)',
+          borderTopColor: 'rgba(255,255,255,0.16)',
+          borderRadius: 14,
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          boxShadow: '0 2px 16px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.08)',
+        }}
+      >
+        {/* Top accent bar — the project's identity stripe */}
+        <span
+          aria-hidden
+          className="absolute top-0 left-0 right-0 h-[2px]"
+          style={{
+            background: `linear-gradient(90deg, ${accent.from} 0%, ${accent.to} 100%)`,
+            opacity: 0.75,
+          }}
+        />
+
+        {/* Main row: emoji + title/meta + progress ring */}
+        <div className="flex items-center gap-3">
+          {/* Emoji badge with accent halo */}
+          <div
+            className="flex-shrink-0 w-11 h-11 rounded-full flex items-center justify-center text-[22px] leading-none"
+            style={{
+              background: `radial-gradient(circle at 30% 30%, ${accent.glow} 0%, rgba(255,255,255,0.03) 70%)`,
+              border: `1px solid ${accent.solid}33`,
+              boxShadow: `0 0 12px ${accent.glow}`,
+            }}
+            aria-hidden
+          >
+            {emoji}
+          </div>
+
+          {/* Title + meta */}
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-[15px] text-ink-900 leading-snug line-clamp-2">
+              {project.title}
+            </h3>
+            <div className="flex items-center gap-1.5 mt-1">
+              <span
+                className="w-[6px] h-[6px] rounded-full flex-shrink-0"
+                style={{ backgroundColor: deptDotColor(project.department) }}
+              />
+              <span className="text-[11.5px] text-ink-500 truncate">
+                {project.department}
+              </span>
+              {project.members?.length > 0 && (
+                <>
+                  <span className="text-ink-400">·</span>
+                  <AvatarStack users={project.members} max={2} size={18} />
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Progress ring — 40px, accent-colored */}
+          <ProgressRing percent={project.progress} color={accent.solid} size={40} stroke={3} />
+        </div>
+
+        {/* Bottom row: momentum chip + deadline (only if either present) */}
+        {(momentum || project.deadline) && (
+          <div className="flex items-center gap-2 mt-2.5 pl-[54px]">
+            <MomentumChip momentum={momentum} />
+            {project.deadline && (
+              <span
+                className="text-[11px] font-semibold tabular-nums ml-auto whitespace-nowrap"
+                style={{ color: urgency.color }}
+              >
+                {urgency.prefix}{formatDeadline(project)}
+              </span>
+            )}
+          </div>
+        )}
       </div>
-      <div className="flex items-center gap-2 mb-2.5">
-        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: deptDotColor(project.department) }} />
-        <span className="text-[12px] text-ink-500">{project.department}</span>
-      </div>
-      <ProgressBar percent={project.progress} />
-    </GlassCard>
+    </button>
   );
 }
 
@@ -296,6 +401,23 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
     return [...filtered].sort(byDeadline);
   }, [projects, query, department, priority]);
 
+  // Whether any filter/search is active. When it is, we skip momentum
+  // grouping and show a flat list — grouping 1–2 results is noisy.
+  const filtersActive = !!(query.trim() || department || priority);
+
+  // Group by momentum state. Order: fire → building → quiet → clear.
+  // Empty groups are simply not rendered. Within a group, projects are
+  // already ordered by deadline urgency (from `visibleProjects`).
+  const groupedProjects = useMemo(() => {
+    if (filtersActive) return null;
+    const groups = { fire: [], building: [], quiet: [], clear: [] };
+    for (const p of visibleProjects) {
+      const m = getMomentum(p);
+      groups[m.state].push(p);
+    }
+    return groups;
+  }, [visibleProjects, filtersActive]);
+
   // Pending tasks first, then done, each group sorted by deadline ASC (nulls last).
   const sortedTasks = useMemo(() => {
     const pending = [];
@@ -422,34 +544,49 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
         </div>
       )}
 
-      {/* Ongoing Projects */}
+      {/* Projects — grouped by momentum when no filters active,
+          flat when filtered. Empty state is a "ready when you are"
+          moment with a gentle-bobbing rocket. */}
       <section>
-        <p className="section-label mb-3">Ongoing</p>
         {visibleProjects.length === 0 ? (
           <div className="py-12 flex flex-col items-center text-center">
-            <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)' }}>
-              <span className="text-ink-400"><FolderIcon /></span>
-            </div>
-            <p className="text-[15px] font-semibold text-ink-900">
-              {projects.length === 0 ? 'No projects yet' : 'No projects match'}
+            <div className="text-[48px] leading-none mb-4 gentle-bob" aria-hidden>🚀</div>
+            <p className="text-[16px] font-semibold text-ink-900">
+              {projects.length === 0 ? 'Ready when you are' : 'Nothing matches'}
             </p>
-            <p className="text-[12px] text-ink-500 mt-1">
-              {projects.length === 0 ? 'Create your first project to get started.' : 'Try a different search or adjust the filters.'}
+            <p className="text-[13px] text-ink-500 mt-1.5 max-w-[260px]">
+              {projects.length === 0
+                ? 'Your first mission awaits. Pick a name, pick a vibe, and launch.'
+                : 'Try clearing filters or searching for something else.'}
             </p>
-            {projects.length === 0 && (
+            {projects.length === 0 ? (
               <button
                 onClick={() => setAddProjectOpen(true)}
-                className="mt-4 h-9 px-4 rounded-lg text-[12px] font-semibold transition"
-                style={{ background: 'rgba(91,140,255,0.15)', color: '#A8C4FF', border: '1px solid rgba(91,140,255,0.30)' }}
+                className="mt-5 h-10 px-5 rounded-full text-[13px] font-semibold transition-all active:scale-[0.97] flex items-center gap-1.5"
+                style={{
+                  background: 'linear-gradient(135deg, #5B8CFF 0%, #4A6CF7 100%)',
+                  color: '#fff',
+                  boxShadow: '0 6px 20px rgba(74,108,247,0.30), inset 0 1px 0 rgba(255,255,255,0.14)',
+                }}
               >
-                + New project
+                Start a project
+              </button>
+            ) : (
+              <button
+                onClick={() => { setQuery(''); setDepartment(''); setPriority(''); setScope('mine'); }}
+                className="mt-4 h-9 px-4 rounded-lg text-[12px] font-semibold transition"
+                style={{ background: 'rgba(255,255,255,0.06)', color: '#C9CDD4', border: '1px solid rgba(255,255,255,0.10)' }}
+              >
+                Clear filters
               </button>
             )}
           </div>
-        ) : (
+        ) : filtersActive ? (
+          // Flat list when filtering — grouping 1–2 results is noise.
           <div className="space-y-2.5">
-            {(showAllProjects ? visibleProjects : visibleProjects.slice(0, PROJECT_LIMIT)).map(p => (
-              <ProjectCard key={p.id} project={p} onOpen={() => setOpenId(p.id)} />
+            <p className="section-label">Results</p>
+            {(showAllProjects ? visibleProjects : visibleProjects.slice(0, PROJECT_LIMIT)).map((p, i) => (
+              <ProjectCard key={p.id} project={p} index={i} onOpen={() => setOpenId(p.id)} />
             ))}
             {visibleProjects.length > PROJECT_LIMIT && (
               <button
@@ -459,6 +596,27 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
                 {showAllProjects ? 'Show less' : `Show all ${visibleProjects.length}`}
               </button>
             )}
+          </div>
+        ) : (
+          // Grouped by momentum. Fire first so the heat is above the fold.
+          <div className="space-y-5">
+            {MOMENTUM_ORDER.map(groupKey => {
+              const list = groupedProjects?.[groupKey] || [];
+              if (list.length === 0) return null;
+              return (
+                <div key={groupKey}>
+                  <p className="section-label mb-2.5">
+                    {MOMENTUM_GROUP_LABELS[groupKey]}
+                    <span className="ml-1.5 text-ink-400 font-normal normal-case tracking-normal">· {list.length}</span>
+                  </p>
+                  <div className="space-y-2.5">
+                    {list.map((p, i) => (
+                      <ProjectCard key={p.id} project={p} index={i} onOpen={() => setOpenId(p.id)} />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>

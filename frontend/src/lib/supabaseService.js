@@ -231,10 +231,17 @@ async function project(id) {
 }
 
 async function createProject(data) {
-  const { title, department, description, deadline, priority, complexity, memberIds = [] } = data;
+  const { title, department, description, deadline, priority, complexity, memberIds = [], accent, emoji } = data;
+  // Build metadata JSONB — only include keys we actually have so we
+  // don't litter null fields. Defaults are resolved client-side.
+  const metadata = {};
+  if (accent) metadata.accent = accent;
+  if (emoji) metadata.emoji = emoji;
+
   const p = unwrap(await supabase.from('projects').insert({
     title, department, description: description || null, owner_id: uid(),
     deadline: deadline || null, progress: 0, status: 'active',
+    metadata,
   }).select().single());
 
   // Add creator + members
