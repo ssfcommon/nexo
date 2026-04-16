@@ -152,7 +152,10 @@ export default function App() {
   return (
     <div className="h-screen bg-page overflow-hidden">
       <div className="flex justify-center h-full">
-        <div className="w-full max-w-[420px] bg-page h-full flex flex-col relative">
+        <div
+          className="w-full max-w-[420px] bg-page h-full flex flex-col relative"
+          style={{ paddingTop: 'env(safe-area-inset-top)' }}
+        >
           <main className="flex-1 px-5 pt-4 pb-4 overflow-y-auto">
             {content}
           </main>

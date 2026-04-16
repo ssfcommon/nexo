@@ -135,13 +135,14 @@ export default function FAB({ tab = 'home' }) {
       )}
 
       {/* FAB Container — exactly sized to the main button; actions position-absolute relative to it.
-          Minimal mode: 48x48 (vs 56x56) and hides on scroll. */}
+          Minimal mode: 48x48 (vs 56x56) and hides on scroll.
+          Bottom offset on mobile = safe-area (home indicator) + 80px, which clears
+          the 64px tab bar + a ~16px breathing gap. Desktop uses md:bottom-8. */}
       <div
         className={
           'fixed z-[71] right-5 md:right-8 transition-transform duration-300 ease-out ' +
-          (minimal
-            ? 'bottom-[90px] md:bottom-8 w-12 h-12'
-            : 'bottom-[90px] md:bottom-8 w-14 h-14')
+          'bottom-[calc(env(safe-area-inset-bottom)+80px)] md:bottom-8 ' +
+          (minimal ? 'w-12 h-12' : 'w-14 h-14')
         }
         style={{
           transform: effectivelyHidden ? 'translate(0, 120%) scale(0.85)' : 'translate(0, 0) scale(1)',
