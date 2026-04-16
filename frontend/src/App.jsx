@@ -9,6 +9,7 @@ import Profile from './screens/Profile.jsx';
 import Login from './screens/Login.jsx';
 import Notifications from './screens/Notifications.jsx';
 import ConfettiHost from './components/Confetti.jsx';
+import AmbientBackdrop from './components/AmbientBackdrop.jsx';
 import useMediaQuery from './hooks/useMediaQuery.js';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import OnboardingTour from './components/OnboardingTour.jsx';
@@ -197,7 +198,11 @@ export default function App() {
 
   if (isDesktop) return (
     <div className="min-h-screen bg-page">
-      <div className="flex min-h-screen">
+      {/* Ambient time-of-day tint — sits behind everything; content z-10
+          stacks above it so cards stay legible and blur it via their own
+          backdrop-filter. */}
+      <AmbientBackdrop />
+      <div className="flex min-h-screen relative z-10">
         <aside className="w-60 border-r border-line-light bg-white flex flex-col">
           <div className="px-5 py-5">
             <div className="flex items-center gap-3">
@@ -261,9 +266,11 @@ export default function App() {
 
   return (
     <div className="h-screen bg-page overflow-hidden">
-      <div className="flex justify-center h-full">
+      {/* Ambient time-of-day tint — see desktop branch above */}
+      <AmbientBackdrop />
+      <div className="flex justify-center h-full relative z-10">
         <div
-          className="w-full max-w-[420px] bg-page h-full flex flex-col relative"
+          className="w-full max-w-[420px] h-full flex flex-col relative"
           style={{ paddingTop: 'env(safe-area-inset-top)' }}
         >
           {/* Pull-to-refresh indicator — fades in as the user pulls, spins while refreshing */}

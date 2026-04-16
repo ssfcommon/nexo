@@ -1154,14 +1154,31 @@ function DayView({ events, leaves, date, onEventClick, onDeleteLeave, onQuickCom
 }
 
 function EmptyDay() {
+  // Rotate through a few warm lines — same day shouldn't show the same
+  // line twice in a session, so seed by date so different days feel
+  // different but a single day feels consistent.
+  const LINES = [
+    { glyph: '☕', title: 'Nothing on the books', sub: "A clear day. Use it or guard it — either's a win." },
+    { glyph: '🌿', title: 'Quiet day ahead',      sub: 'No meetings. No events. Rare and wonderful.' },
+    { glyph: '🪁', title: 'Open canvas',           sub: "Nothing scheduled. Tap + to put something on it." },
+    { glyph: '🎈', title: "You're free today",     sub: 'Nothing on this day yet. Fancy adding one?' },
+  ];
+  const seed = new Date().toISOString().slice(0, 10);
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  const line = LINES[hash % LINES.length];
+
   return (
     <div className="py-14 flex flex-col items-center text-center">
-      <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3"
-        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)' }}>
-        <span className="text-ink-400"><CalendarIcon width="20" height="20" /></span>
-      </div>
-      <p className="text-[14px] font-semibold text-ink-900">Nothing scheduled</p>
-      <p className="text-[12px] text-ink-400 mt-1">Tap “+” to add an event.</p>
+      <span
+        aria-hidden
+        className="gentle-bob text-[44px] leading-none mb-3 select-none"
+        style={{ filter: 'drop-shadow(0 4px 16px rgba(255,255,255,0.08))' }}
+      >
+        {line.glyph}
+      </span>
+      <p className="text-[15px] font-semibold text-ink-900">{line.title}</p>
+      <p className="text-[12px] text-ink-500 mt-1 max-w-[240px]">{line.sub}</p>
     </div>
   );
 }

@@ -931,18 +931,33 @@ export default function Bugs({ me, unreadCount, onOpenNotifications, onSwitchTab
         </div>
       )}
 
-      {/* Empty state */}
+      {/* Empty state — filter-driven empties are terse + actionable; a
+          genuinely clean inbox earns a small celebration. */}
       {!hasAny && (
         <div className="py-16 flex flex-col items-center text-center">
-          <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)' }}>
-            <span className="text-ink-400"><BugIcon /></span>
-          </div>
-          <p className="text-[15px] font-semibold text-ink-900">
-            {chips.length > 0 || query ? 'No bugs match' : 'No bugs reported'}
-          </p>
-          <p className="text-[12px] text-ink-500 mt-1">
-            {chips.length > 0 || query ? 'Try a different search or clear the filters.' : 'Nothing to triage — nice.'}
-          </p>
+          {chips.length > 0 || query ? (
+            <>
+              <div className="w-12 h-12 rounded-full flex items-center justify-center mb-3" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)' }}>
+                <span className="text-ink-400"><BugIcon /></span>
+              </div>
+              <p className="text-[15px] font-semibold text-ink-900">No bugs match</p>
+              <p className="text-[12px] text-ink-500 mt-1">Try a different search or clear the filters.</p>
+            </>
+          ) : (
+            <>
+              <span
+                aria-hidden
+                className="gentle-bob text-[48px] leading-none mb-3 select-none"
+                style={{ filter: 'drop-shadow(0 4px 16px rgba(34,197,94,0.18))' }}
+              >
+                ✨
+              </span>
+              <p className="text-[15px] font-semibold text-ink-900">Clean inbox</p>
+              <p className="text-[12px] text-ink-500 mt-1 max-w-[260px]">
+                No bugs reported. Keep shipping — we'll surface them when they show up.
+              </p>
+            </>
+          )}
         </div>
       )}
 
