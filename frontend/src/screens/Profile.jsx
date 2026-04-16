@@ -552,8 +552,10 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
             <div className="card !p-0 overflow-hidden divide-y divide-line-light">
               {/* Real, wired preferences first */}
               <Row icon="bell" label="Notifications" right={<Toggle on={!!prefs?.notifications} onChange={v => update({ notifications: v })} />} />
-              <Row icon="calendar" label="Calendar visibility"
-                right={<select value={prefs?.calendarVisibility || 'full'} onChange={e => update({ calendarVisibility: e.target.value })} className="inline-control text-[13px] text-ink-500 outline-none"><option value="full">Show details</option><option value="busy">Show as Busy</option></select>} />
+              {/* Binary mapping: ON = teammates see full event titles, OFF = they see only "Busy".
+                  Replaces the inline <select> for visual consistency with the Notifications row. */}
+              <Row icon="calendar" label="Show event details"
+                right={<Toggle on={(prefs?.calendarVisibility || 'full') === 'full'} onChange={v => update({ calendarVisibility: v ? 'full' : 'busy' })} />} />
 
               {/* Not-yet-wired preferences — visible but clearly marked. No interactive widgets. */}
               <Row icon="moon"     label="Dark mode"           disabled right={<ComingSoon />} />
