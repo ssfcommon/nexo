@@ -122,7 +122,13 @@ function TaskCard({ task, onComplete, completing, onSetAlarm, onAddToCal }) {
       </button>
 
       <div className="flex-1 min-w-0">
-        <p className="text-[14px] font-semibold text-ink-900 truncate leading-snug">{task.title}</p>
+        {/* Wrap to 2 lines on narrow widths — narrow screens couldn't read
+            the full title with a single-line truncate. Lines clamp at 2
+            so a pathological title can't push the row sky-high. */}
+        <p
+          className="text-[14px] font-semibold text-ink-900 leading-snug"
+          style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', wordBreak: 'break-word' }}
+        >{task.title}</p>
         {(task.project_title || fromCrossAssign) && (
           <p className="text-[11px] text-ink-500 truncate mt-0.5 flex items-center gap-1.5">
             {task.project_title && (

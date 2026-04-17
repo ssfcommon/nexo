@@ -292,10 +292,19 @@ function QuickTaskRow({ task, isLast, onToggle, onSetAlarm, onAddToCal, onDelete
       </button>
 
       <div className={'flex-1 min-w-0 flex flex-col ' + (done ? 'line-through text-ink-400' : 'text-ink-900')}>
-        <span className="flex items-center gap-1.5 truncate text-[14px]">
-          <span className="truncate">{task.title}</span>
+        {/* Two-line wrap for titles — a mobile-width row can't read more
+            than ~18 chars on one line. Repeat icon rides after the text
+            so it flows with the last line instead of eating title space. */}
+        <span
+          className="text-[14px] leading-snug"
+          style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', wordBreak: 'break-word' }}
+        >
+          {task.title}
           {task.recurrence && (
-            <span className="text-ink-500 flex-shrink-0" title={`Repeats ${task.recurrence}`}>
+            <span
+              className="text-ink-500 inline-block align-[-2px] ml-1"
+              title={`Repeats ${task.recurrence}`}
+            >
               <RepeatIcon />
             </span>
           )}
