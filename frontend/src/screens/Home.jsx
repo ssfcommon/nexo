@@ -7,7 +7,7 @@ import useLiveUpdates from '../hooks/useLiveUpdates.js';
 import { useOnRefresh } from '../hooks/usePullToRefresh.js';
 import { useToast } from '../context/ToastContext.jsx';
 import AlarmModal from '../components/AlarmModal.jsx';
-import RowActions from '../components/RowActions.jsx';
+import TaskRowMenu from '../components/TaskRowMenu.jsx';
 import GlassCard from '../components/GlassCard.jsx';
 import { BugIcon, UmbrellaIcon, CheckIcon, FolderIcon } from '../components/Icons.jsx';
 import { fireConfetti } from '../components/Confetti.jsx';
@@ -140,8 +140,8 @@ function TaskCard({ task, onComplete, completing, onSetAlarm, onAddToCal }) {
         )}
       </div>
 
-      {(onSetAlarm || onAddToCal) && (
-        <RowActions
+      {(onSetAlarm || onAddToCal) && !completing && (
+        <TaskRowMenu
           item={task}
           size="sm"
           onSetAlarm={onSetAlarm}

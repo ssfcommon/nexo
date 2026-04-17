@@ -5,7 +5,7 @@ import HeaderActions from '../components/HeaderActions.jsx';
 import ProjectDetail from './ProjectDetail.jsx';
 import { fireConfetti } from '../components/Confetti.jsx';
 import AlarmModal from '../components/AlarmModal.jsx';
-import RowActions from '../components/RowActions.jsx';
+import TaskRowMenu from '../components/TaskRowMenu.jsx';
 import GlassCard from '../components/GlassCard.jsx';
 import FilterChip from '../components/FilterChip.jsx';
 import ProgressRing from '../components/ProgressRing.jsx';
@@ -28,7 +28,6 @@ import {
   SearchIcon,
   FilterIcon,
   PlusIcon,
-  TrashIcon,
   RepeatIcon,
 } from '../components/Icons.jsx';
 
@@ -308,23 +307,16 @@ function QuickTaskRow({ task, isLast, onToggle, onSetAlarm, onAddToCal, onDelete
         )}
       </div>
 
-      {!done && (
-        <RowActions
-          item={task}
-          onSetAlarm={onSetAlarm}
-          onAddToCal={onAddToCal}
-        />
-      )}
-
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); onDelete(); }}
-        aria-label={`Delete ${task.title}`}
-        title="Delete task"
-        className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-400 hover:text-[#F87171] hover:bg-[#EF4444]/12 transition"
-      >
-        <TrashIcon />
-      </button>
+      {/* All trailing actions collapsed into one kebab so the title gets
+          room to breathe. Alarm status still shows via amber kebab tint.
+          Done tasks keep the kebab so they can still be deleted. */}
+      <TaskRowMenu
+        item={task}
+        onSetAlarm={done ? undefined : onSetAlarm}
+        onAddToCal={done ? undefined : onAddToCal}
+        onDelete={() => onDelete()}
+        size="sm"
+      />
 
       <span className="text-[12px] font-semibold tabular-nums min-w-[44px] text-right" style={{ color: dueColor(task.deadline) }}>
         {dueLabel(task.deadline)}
