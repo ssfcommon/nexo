@@ -690,6 +690,100 @@ async function completeHomeItem(item) {
   return updateTask(item.id, { status: 'done' });
 }
 
+// Reverse view of homeTasks: what have I asked OTHERS to do, and where
+// does it stand? Returns tasks + subtasks where I'm the assigner but
+// somebody else is the owner, still open, within a 14-day window
+// (overdue always included — the whole point is visibility).
+async function assignedByMe({ windowDays = 14 } = {}) {
+  const me = uid();
+  const today = todayStr();
+  const horizon = new Date();
+  horizon.setDate(horizon.getDate() + windowDays);
+  const horizonStr = horizon.toISOString().slice(0, 10);
+
+  const tasksQuery = (select) => supabase
+    .from('tasks')
+    .select(select)
+    .eq('assigned_by', me)
+    .neq('owner_id', me)
+    .neq('status', 'done')
+    .or(`deadline.is.null,deadline.lte.${horizonStr}`)
+    .order('deadline', { ascending: true, nullsFirst: false });
+
+  const subtasksQuery = (select) => supabase
+    .from('subtasks')
+    .select(select)
+    .eq('assigned_by', me)
+    .neq('owner_id', me)
+    .neq('status', 'done')
+    .neq('assignment_status', 'declined')
+    .or(`deadline.is.null,deadline.lte.${horizonStr}`)
+    .order('deadline', { ascending: true, nullsFirst: false });
+
+  // Tasks don't have `assignment_status` (subtasks-only column). Keep
+  // the enriched selects tight and only fall back if the owner join or
+  // assigned_by column is genuinely missing.
+  let [tasksRes, subtasksRes] = await Promise.all([
+    tasksQuery('id, title, deadline, status, is_quick, project_id, owner_id, assigned_by, owner:users!owner_id(name, initials, avatar_color, avatar_url)'),
+    subtasksQuery('id, title, deadline, status, project_id, owner_id, assigned_by, assignment_status, project:projects(title), owner:users!owner_id(name, initials, avatar_color, avatar_url)'),
+  ]);
+
+  if (tasksRes.error && isMissingSchemaError(tasksRes.error)) {
+    console.warn('[assignedByMe] tasks enriched select failed, falling back:', tasksRes.error.message);
+    tasksRes = await tasksQuery('id, title, deadline, status, is_quick, project_id, owner_id, assigned_by');
+  }
+  if (subtasksRes.error && isMissingSchemaError(subtasksRes.error)) {
+    console.warn('[assignedByMe] subtasks enriched select failed, falling back:', subtasksRes.error.message);
+    subtasksRes = await subtasksQuery('id, title, deadline, status, project_id, owner_id, assigned_by, project:projects(title)');
+  }
+
+  const quick = (tasksRes.data || []).map(t => ({
+    id: t.id,
+    title: t.title,
+    deadline: t.deadline,
+    kind: 'task',
+    project_title: null,
+    project_id: t.project_id || null,
+    owner_id: t.owner_id,
+    owner_name: t.owner?.name || null,
+    owner_initials: t.owner?.initials || null,
+    owner_color: t.owner?.avatar_color || null,
+    owner_avatar: t.owner?.avatar_url || null,
+    status: t.status,
+    // Tasks don't expose assignment_status — always null to keep the
+    // AssignedRow's declined-pill branch inert for quick-task items.
+    assignment_status: null,
+  }));
+  const subs = (subtasksRes.data || []).map(s => ({
+    id: s.id,
+    title: s.title,
+    deadline: s.deadline,
+    kind: 'subtask',
+    project_title: s.project?.title || null,
+    project_id: s.project_id,
+    owner_id: s.owner_id,
+    owner_name: s.owner?.name || null,
+    owner_initials: s.owner?.initials || null,
+    owner_color: s.owner?.avatar_color || null,
+    owner_avatar: s.owner?.avatar_url || null,
+    status: s.status,
+    assignment_status: s.assignment_status || null,
+  }));
+
+  const all = [...quick, ...subs];
+  // Overdue bubbles to top, then due today, then upcoming, then no-deadline.
+  const ranked = all.map(x => ({
+    ...x,
+    _rank: !x.deadline ? 3 : (x.deadline < today ? 0 : x.deadline === today ? 1 : 2),
+  }));
+  ranked.sort((a, b) =>
+    a._rank - b._rank ||
+    (a.deadline || '9999').localeCompare(b.deadline || '9999') ||
+    a.title.localeCompare(b.title)
+  );
+  return ranked.map(({ _rank, ...rest }) => rest);
+}
+
 async function createTask(data) {
   const { title, projectId, deadline, priority, complexity, isQuick, recurrence, alarm_at, description, assignedTo } = data;
   const me = uid();
@@ -744,6 +838,23 @@ async function updateTask(id, data) {
       is_quick: task.is_quick, recurrence: task.recurrence,
       recurrence_parent: task.recurrence_parent || task.id,
     });
+  }
+
+  // Notify the assigner when a cross-assigned task gets completed. The
+  // assigner delegated this and needs to know it's done — this was the
+  // missing half of task-assignment visibility.
+  if (data.status === 'done' && task.assigned_by && task.assigned_by !== uid()) {
+    try {
+      const { data: completer } = await supabase.from('users').select('name').eq('id', uid()).single();
+      const firstName = completer?.name?.split(' ')[0] || 'Someone';
+      await supabase.from('notifications').insert({
+        user_id: task.assigned_by,
+        type: 'completed',
+        title: `${firstName} completed "${task.title}"`,
+        body: 'The task you assigned is done.',
+        ref_task: task.id,
+      });
+    } catch (e) { console.warn('task completion notification failed:', e); }
   }
   return task;
 }
@@ -1929,6 +2040,7 @@ export const api = {
   tasks,
   urgentTasks,
   homeTasks,
+  assignedByMe,
   completeHomeItem,
   createTask,
   updateTask,

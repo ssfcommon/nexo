@@ -11,6 +11,7 @@ import TaskRowMenu from '../components/TaskRowMenu.jsx';
 import GlassCard from '../components/GlassCard.jsx';
 import { BugIcon, UmbrellaIcon, CheckIcon, FolderIcon } from '../components/Icons.jsx';
 import { fireConfetti } from '../components/Confetti.jsx';
+import { Avatar } from '../components/ui.jsx';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -165,6 +166,73 @@ function TaskCard({ task, onComplete, completing, onSetAlarm, onAddToCal }) {
   );
 }
 
+// ── Assigned row — "tasks I handed off" ──────────────────────
+// Deliberately non-interactive. The assigner shouldn't be checking off
+// work they delegated — the assignee does that, and the assigner gets
+// a notification. All we surface here is: who's on it, what's due when,
+// and whether it's still pending.
+function AssignedRow({ item }) {
+  const urgency = urgencyOf(item.deadline);
+  const s = URGENCY_STYLES[urgency];
+  const declined = item.assignment_status === 'declined';
+  // Subtle accent on the right edge only if deadline is due/overdue.
+  const accent = declined ? 'none' : s.accent;
+  return (
+    <GlassCard
+      accent={accent}
+      className={'flex items-center gap-3 pl-4 pr-3.5 py-3 ' + (s.pulse ? 'overdue-pulse' : '')}
+    >
+      <Avatar
+        user={{
+          name: item.owner_name || '',
+          initials: item.owner_initials || '??',
+          avatar_color: item.owner_color || '#6B7280',
+          avatar_url: item.owner_avatar || null,
+        }}
+        size={32}
+      />
+      <div className="flex-1 min-w-0">
+        <p
+          className="text-[14px] font-semibold text-ink-900 leading-snug"
+          style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', wordBreak: 'break-word' }}
+        >{item.title}</p>
+        <p className="text-[11px] text-ink-500 truncate mt-0.5 flex items-center gap-1.5">
+          <span className="truncate">
+            {item.owner_name ? item.owner_name.split(' ')[0] : 'Someone'}
+          </span>
+          {item.project_title && (
+            <>
+              <span className="text-ink-400">·</span>
+              <span className="text-ink-400"><FolderIcon width="12" height="12" /></span>
+              <span className="truncate">{item.project_title}</span>
+            </>
+          )}
+        </p>
+      </div>
+      {/* Pending pill — amber so it reads as "waiting on them". Declined
+          gets its own red pill because the delegation didn't take. */}
+      <span
+        className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0"
+        style={
+          declined
+            ? { color: '#F87171', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)' }
+            : { color: '#F59E0B', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.25)' }
+        }
+      >
+        {declined ? 'Declined' : 'Pending'}
+      </span>
+      {item.deadline && (
+        <span
+          className="text-[11px] font-semibold flex-shrink-0 tabular-nums"
+          style={{ color: s.chipColor }}
+        >
+          {relLabel(item.deadline)}
+        </span>
+      )}
+    </GlassCard>
+  );
+}
+
 // ── Bug row ──────────────────────────────────────────────────
 
 function BugRow({ bug, intent, onClick }) {
@@ -269,6 +337,8 @@ function Segmented({ value, onChange, segments }) {
 export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab }) {
   const showToast = useToast();
   const [tasks, setTasks] = useState([]);
+  const [assigned, setAssigned] = useState([]);
+  const [showAllAssigned, setShowAllAssigned] = useState(false);
   const [leaves, setLeaves] = useState([]);
   const [myBugs, setMyBugs] = useState([]);
   const [bugsToConfirm, setBugsToConfirm] = useState([]);
@@ -284,7 +354,10 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
     else if (myBugs.length > 0) setBugSeg('open');
   }, [myBugs.length, bugsToConfirm.length]);
 
-  const reloadTasks = () => api.homeTasks().then(setTasks);
+  const reloadTasks = () => {
+    api.homeTasks().then(setTasks);
+    api.assignedByMe().then(setAssigned).catch(() => {});
+  };
   useLiveUpdates({
     'subtask-updated': reloadTasks,
   });
@@ -292,6 +365,7 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
   // Pull-to-refresh: reload everything on Home
   useOnRefresh(() => {
     api.homeTasks().then(setTasks).catch(() => {});
+    api.assignedByMe().then(setAssigned).catch(() => {});
     api.leaves().then(setLeaves).catch(() => {});
     api.myBugs().then(r => { setMyBugs(r.assigned || []); setBugsToConfirm(r.awaitingConfirm || []); }).catch(() => {});
   });
@@ -299,6 +373,7 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
   useEffect(() => {
     Promise.all([
       api.homeTasks().then(setTasks),
+      api.assignedByMe().then(setAssigned).catch(() => setAssigned([])),
       api.leaves().then(setLeaves),
       api.myBugs().then(result => { setMyBugs(result.assigned || []); setBugsToConfirm(result.awaitingConfirm || []); }).catch(() => { setMyBugs([]); setBugsToConfirm([]); }),
     ]).finally(() => setLoading(false));
@@ -436,6 +511,34 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
           )}
         </div>
       </section>
+
+      {/* Assigned — tasks I handed off, still open. Only renders when
+          there are any; an empty "Assigned" header with nothing under
+          it would be noise. Mirrors the This Week 3-visible-then-View-all
+          pattern for symmetry. */}
+      {assigned.length > 0 && (
+        <section>
+          <div className="flex items-center justify-between mb-3 gap-3">
+            <h2 className="text-lg font-semibold text-ink-900">Assigned</h2>
+            <span className="text-[11px] text-ink-500">
+              <span className="text-ink-700 font-medium">{assigned.length}</span> pending
+            </span>
+          </div>
+          <div className="space-y-2.5">
+            {(showAllAssigned ? assigned : assigned.slice(0, 3)).map(a => (
+              <AssignedRow key={`${a.kind}:${a.id}`} item={a} />
+            ))}
+            {assigned.length > 3 && (
+              <button
+                onClick={() => setShowAllAssigned(v => !v)}
+                className="text-[12px] text-brand-blue w-full text-center pt-1 font-medium"
+              >
+                {showAllAssigned ? 'Show less' : `View all ${assigned.length}`}
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Bugs — single merged section with segmented tabs */}
       {hasBugs && (
