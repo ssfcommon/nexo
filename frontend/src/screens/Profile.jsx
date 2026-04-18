@@ -9,6 +9,7 @@ import ConfirmModal from '../components/ConfirmModal.jsx';
 import { CameraIcon, DownloadIcon } from '../components/Icons.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import { useOnRefresh } from '../hooks/usePullToRefresh.js';
+import { useBackHandler } from '../hooks/useBackHandler.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import NumberBump from '../components/NumberBump.jsx';
 
@@ -424,6 +425,13 @@ export default function Profile({ me, unreadCount, onOpenNotifications }) {
   const [logoutBusy, setLogoutBusy] = useState(false);
   const [localUser, setLocalUser] = useState(me);
   const [section, setSection] = useState('profile'); // 'profile' | 'reports'
+
+  // Wire Android/browser back to close each modal in turn, so the back
+  // button never exits the app while a sheet is open on Profile.
+  useBackHandler('profile-edit',    editOpen,    () => setEditOpen(false));
+  useBackHandler('profile-privacy', privacyOpen, () => setPrivacyOpen(false));
+  useBackHandler('profile-help',    helpOpen,    () => setHelpOpen(false));
+  useBackHandler('profile-logout',  logoutOpen,  () => setLogoutOpen(false));
 
   useEffect(() => { setLocalUser(me); }, [me]);
 

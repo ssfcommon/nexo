@@ -8,7 +8,7 @@ import {
 import { ACCENT_PALETTE, ACCENT_KEYS, EMOJI_CHOICES, DEFAULT_EMOJI } from '../lib/projectAccent.js';
 import { spring } from '../lib/motion.js';
 
-import { PRIORITIES, COMPLEXITIES } from './ui.jsx';
+import { PRIORITIES, COMPLEXITIES, Avatar } from './ui.jsx';
 const DEPARTMENTS = ['Operations', "CEO's Office", 'Common'];
 
 // Rotating placeholders for the project-title input. Playful but
@@ -34,87 +34,94 @@ const PLACEHOLDERS = [
   'Book flight to Mumbai',
 ];
 
-// ── Date preset popover ─────────────────────────────────────────
-function DatePresetPopover({ value, presets, onChange, onClear, onClose }) {
-  const [customOpen, setCustomOpen] = useState(false);
+// ── Date preset panel (inline) ──────────────────────────────────
+// Renders below the chip row as a full-width panel inside the modal.
+// A floating popover was too narrow on mobile and got clipped by the
+// modal edge — this version gives every preset a real tap target and
+// keeps the custom-date input visible without a second click.
+function DatePresetPanel({ value, presets, onChange, onClear }) {
   return (
-    <>
-      <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div
-        className="absolute z-50 left-0 top-[calc(100%+6px)] w-56 rounded-[12px] py-1.5"
-        style={{
-          background: 'rgba(17,24,39,0.95)',
-          backdropFilter: 'blur(24px)',
-          border: '1px solid rgba(255,255,255,0.12)',
-          boxShadow: '0 12px 48px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08)',
-        }}
-      >
-        {presets.map(p => (
-          <button
-            key={p.value}
-            type="button"
-            onClick={() => onChange(p.value)}
-            className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/5 transition"
-          >
-            <span className="text-[13px] text-ink-900 flex-1">{p.label}</span>
-            {value === p.value && <span className="text-brand-blue"><CheckIcon width="12" height="12" /></span>}
-          </button>
-        ))}
-        <div className="mx-2 my-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
-        {!customOpen ? (
-          <button
-            type="button"
-            onClick={() => setCustomOpen(true)}
-            className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/5 transition"
-          >
-            <span className="text-[13px] text-ink-900 flex-1">Pick date…</span>
-          </button>
-        ) : (
-          <div className="px-2 py-1.5">
-            <input
-              type="date"
-              value={value || ''}
-              onChange={e => onChange(e.target.value)}
-              className="w-full h-9 px-2 rounded-[8px] text-[13px] bg-white/5 border border-white/10 text-ink-900"
-            />
-          </div>
-        )}
+    <div
+      className="rounded-[12px] p-2.5 mt-1 mb-4 animate-fade-in"
+      style={{
+        background: 'rgba(255,255,255,0.03)',
+        border: '1px solid rgba(255,255,255,0.08)',
+      }}
+    >
+      <div className="grid grid-cols-2 gap-1.5">
+        {presets.map(p => {
+          const active = value === p.value;
+          return (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => onChange(p.value)}
+              className="h-10 px-3 rounded-[10px] text-[13px] font-medium flex items-center justify-between gap-2 transition-all active:scale-[0.98]"
+              style={{
+                background: active ? 'rgba(91,140,255,0.14)' : 'rgba(255,255,255,0.04)',
+                color: active ? '#A8C4FF' : '#D1D5DB',
+                border: `1px solid ${active ? 'rgba(91,140,255,0.28)' : 'rgba(255,255,255,0.06)'}`,
+              }}
+            >
+              <span>{p.label}</span>
+              {active && <CheckIcon width="12" height="12" />}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <input
+          type="date"
+          value={value || ''}
+          onChange={e => onChange(e.target.value)}
+          className="flex-1 h-10 px-3 rounded-[10px] text-[13px] bg-white/5 border border-white/10 text-ink-900"
+        />
         <button
           type="button"
           onClick={onClear}
-          className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/5 transition"
+          className="h-10 px-3 rounded-[10px] text-[12px] font-medium text-ink-400 hover:text-ink-900 transition"
+          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
         >
-          <span className="text-[13px] text-ink-400 flex-1">No deadline</span>
-          {!value && <span className="text-brand-blue"><CheckIcon width="12" height="12" /></span>}
+          None
         </button>
       </div>
-    </>
+    </div>
   );
 }
 
-// ── Assignee popover ───────────────────────────────────────────
-function AssigneePopover({ value, users, onChange, onClose }) {
+// ── Assignee panel (inline) ────────────────────────────────────
+// Same story as the date panel: floating popovers got clipped by the
+// modal and the 224px width gave 2 rows before scroll. This inline
+// panel uses a 2-col grid of avatar pills so the whole team is visible
+// in roughly the same vertical space.
+function AssigneePanel({ value, users, onChange }) {
   return (
-    <>
-      <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div
-        className="absolute z-50 left-0 top-[calc(100%+6px)] w-56 rounded-[12px] py-1.5 max-h-[280px] overflow-y-auto"
-        style={{
-          background: 'rgba(17,24,39,0.95)',
-          backdropFilter: 'blur(24px)',
-          border: '1px solid rgba(255,255,255,0.12)',
-          boxShadow: '0 12px 48px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08)',
-        }}
-      >
+    <div
+      className="rounded-[12px] p-2.5 mt-1 mb-4 animate-fade-in max-h-[240px] overflow-y-auto"
+      style={{
+        background: 'rgba(255,255,255,0.03)',
+        border: '1px solid rgba(255,255,255,0.08)',
+      }}
+    >
+      <div className="grid grid-cols-2 gap-1.5">
         <button
           type="button"
           onClick={() => onChange('')}
-          className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/5 transition"
+          className="h-11 px-2.5 rounded-[10px] flex items-center gap-2.5 transition-all active:scale-[0.98]"
+          style={{
+            background: !value ? 'rgba(91,140,255,0.14)' : 'rgba(255,255,255,0.04)',
+            border: `1px solid ${!value ? 'rgba(91,140,255,0.28)' : 'rgba(255,255,255,0.06)'}`,
+          }}
         >
-          <span className="text-[13px] text-ink-900 flex-1">Myself</span>
-          {!value && <span className="text-brand-blue"><CheckIcon width="12" height="12" /></span>}
+          <div
+            className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-semibold flex-shrink-0"
+            style={{ background: 'rgba(91,140,255,0.35)' }}
+          >
+            <UserIcon width="13" height="13" />
+          </div>
+          <span className="text-[13px] font-medium truncate" style={{ color: !value ? '#A8C4FF' : '#D1D5DB' }}>Myself</span>
+          {!value && <CheckIcon width="12" height="12" />}
         </button>
-        <div className="mx-2 my-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
         {users.map(u => {
           const active = String(value) === String(u.id);
           return (
@@ -122,15 +129,25 @@ function AssigneePopover({ value, users, onChange, onClose }) {
               key={u.id}
               type="button"
               onClick={() => onChange(String(u.id))}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/5 transition"
+              className="h-11 px-2.5 rounded-[10px] flex items-center gap-2.5 transition-all active:scale-[0.98]"
+              style={{
+                background: active ? 'rgba(91,140,255,0.14)' : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${active ? 'rgba(91,140,255,0.28)' : 'rgba(255,255,255,0.06)'}`,
+              }}
             >
-              <span className="text-[13px] text-ink-900 flex-1 truncate">{u.name}</span>
-              {active && <span className="text-brand-blue"><CheckIcon width="12" height="12" /></span>}
+              <Avatar user={u} size={28} />
+              <span
+                className="text-[13px] font-medium truncate flex-1 text-left"
+                style={{ color: active ? '#A8C4FF' : '#D1D5DB' }}
+              >
+                {u.name.split(' ')[0]}
+              </span>
+              {active && <CheckIcon width="12" height="12" />}
             </button>
           );
         })}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -287,7 +304,10 @@ export function QuickTaskModal({ open, onClose, onCreated }) {
     return u.name.split(' ')[0];
   })();
 
-  // Date presets — "This Friday" / "Next week" / etc.
+  // Date presets — "This Friday" / "Next week" / etc. De-duped by
+  // value because when today is Friday, "This Friday" and "Next week"
+  // both resolve to a week out and we'd render two identical options
+  // (plus React complains about duplicate keys).
   const datePresets = (() => {
     const t = today();
     const tmr = isoOffset(1);
@@ -295,12 +315,14 @@ export function QuickTaskModal({ open, onClose, onCreated }) {
     const daysToFri = (5 - now.getDay() + 7) % 7 || 7;
     const fri = isoOffset(daysToFri);
     const nxtWk = isoOffset(7);
-    return [
+    const raw = [
       { label: 'Today', value: t },
       { label: 'Tomorrow', value: tmr },
       { label: 'This Friday', value: fri },
       { label: 'Next week', value: nxtWk },
     ];
+    const seen = new Set();
+    return raw.filter(p => (seen.has(p.value) ? false : (seen.add(p.value), true)));
   })();
 
   return (
@@ -317,50 +339,49 @@ export function QuickTaskModal({ open, onClose, onCreated }) {
           className="hero-input"
         />
 
-        {/* Chip row — deadline, assignee, more */}
-        <div className="flex items-center gap-2 mt-4 mb-5 flex-wrap">
-          <div className="relative">
-            <Chip
-              active={!!deadline}
-              onClick={() => { setDatePopOpen(v => !v); setAssigneePopOpen(false); }}
-            >
-              {deadline && <CalendarIcon width="12" height="12" />}
-              {deadlineLabel}
-            </Chip>
-            {datePopOpen && (
-              <DatePresetPopover
-                value={deadline}
-                presets={datePresets}
-                onChange={(v) => { setDeadline(v); setDatePopOpen(false); }}
-                onClear={() => { setDeadline(''); setDatePopOpen(false); }}
-                onClose={() => setDatePopOpen(false)}
-              />
-            )}
-          </div>
+        {/* Chip row — deadline, assignee, more. Tapping a chip toggles
+            an inline panel below this row (not a floating popover),
+            so the picker gets the full modal width and proper touch
+            targets on mobile. */}
+        <div className="flex items-center gap-2 mt-4 mb-2 flex-wrap">
+          <Chip
+            active={datePopOpen || !!deadline}
+            onClick={() => { setDatePopOpen(v => !v); setAssigneePopOpen(false); }}
+          >
+            <CalendarIcon width="12" height="12" />
+            {deadlineLabel}
+          </Chip>
 
-          <div className="relative">
-            <Chip
-              active={!!assignedTo}
-              onClick={() => { setAssigneePopOpen(v => !v); setDatePopOpen(false); }}
-            >
-              {assignedTo && <UserIcon width="12" height="12" />}
-              {assigneeLabel}
-            </Chip>
-            {assigneePopOpen && (
-              <AssigneePopover
-                value={assignedTo}
-                users={users}
-                onChange={(v) => { setAssignedTo(v); setAssigneePopOpen(false); }}
-                onClose={() => setAssigneePopOpen(false)}
-              />
-            )}
-          </div>
+          <Chip
+            active={assigneePopOpen || !!assignedTo}
+            onClick={() => { setAssigneePopOpen(v => !v); setDatePopOpen(false); }}
+          >
+            <UserIcon width="12" height="12" />
+            {assigneeLabel}
+          </Chip>
 
           <Chip active={moreOpen} onClick={() => setMoreOpen(v => !v)}>
             <MoreIcon width="12" height="12" />
             {moreOpen ? 'Less' : 'More'}
           </Chip>
         </div>
+
+        {datePopOpen && (
+          <DatePresetPanel
+            value={deadline}
+            presets={datePresets}
+            onChange={(v) => { setDeadline(v); setDatePopOpen(false); }}
+            onClear={() => { setDeadline(''); setDatePopOpen(false); }}
+          />
+        )}
+        {assigneePopOpen && (
+          <AssigneePanel
+            value={assignedTo}
+            users={users}
+            onChange={(v) => { setAssignedTo(v); setAssigneePopOpen(false); }}
+          />
+        )}
+        {!datePopOpen && !assigneePopOpen && <div className="mb-3" />}
 
         {/* More sheet — collapsed by default */}
         {moreOpen && (

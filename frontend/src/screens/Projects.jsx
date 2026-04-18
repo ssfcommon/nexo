@@ -262,10 +262,14 @@ function ProjectCard({ project, onOpen, index }) {
 
 function QuickTaskRow({ task, isLast, onToggle, onSetAlarm, onAddToCal, onDelete }) {
   const done = task.status === 'done';
+  // Completed tasks shouldn't borrow the urgency palette — a red "Apr 13"
+  // next to a strikethrough title reads like "overdue" when the right
+  // signal is "already handled." Mute the date once status is done.
+  const dateColor = done ? '#6B7280' : dueColor(task.deadline);
   return (
     <div
-      className={'flex items-center gap-3 pl-4 pr-3 py-3 ' + (isLast ? '' : 'border-b')}
-      style={{ borderColor: 'rgba(255,255,255,0.06)' }}
+      className={'flex items-center gap-3 pl-4 pr-3 py-3 transition-opacity ' + (isLast ? '' : 'border-b') + (done ? ' opacity-65' : '')}
+      style={{ borderColor: 'rgba(255,255,255,0.05)' }}
     >
       <button
         onClick={onToggle}
@@ -292,9 +296,6 @@ function QuickTaskRow({ task, isLast, onToggle, onSetAlarm, onAddToCal, onDelete
       </button>
 
       <div className={'flex-1 min-w-0 flex flex-col ' + (done ? 'line-through text-ink-400' : 'text-ink-900')}>
-        {/* Two-line wrap for titles — a mobile-width row can't read more
-            than ~18 chars on one line. Repeat icon rides after the text
-            so it flows with the last line instead of eating title space. */}
         <span
           className="text-[14px] leading-snug"
           style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', wordBreak: 'break-word' }}
@@ -316,9 +317,6 @@ function QuickTaskRow({ task, isLast, onToggle, onSetAlarm, onAddToCal, onDelete
         )}
       </div>
 
-      {/* All trailing actions collapsed into one kebab so the title gets
-          room to breathe. Alarm status still shows via amber kebab tint.
-          Done tasks keep the kebab so they can still be deleted. */}
       <TaskRowMenu
         item={task}
         onSetAlarm={done ? undefined : onSetAlarm}
@@ -327,9 +325,33 @@ function QuickTaskRow({ task, isLast, onToggle, onSetAlarm, onAddToCal, onDelete
         size="sm"
       />
 
-      <span className="text-[12px] font-semibold tabular-nums min-w-[44px] text-right" style={{ color: dueColor(task.deadline) }}>
+      <span className="text-[12px] font-semibold tabular-nums min-w-[44px] text-right" style={{ color: dateColor }}>
         {dueLabel(task.deadline)}
       </span>
+    </div>
+  );
+}
+
+// Soft in-card divider between the pending group and the done group.
+// Keeps them in one card (no layout jump) while signalling "below is
+// finished business — you can skip." Used by the Quick-tasks section.
+function DoneDivider({ count }) {
+  return (
+    <div
+      className="flex items-center gap-2 px-4 py-1.5 border-b"
+      style={{
+        borderColor: 'rgba(255,255,255,0.05)',
+        background: 'rgba(255,255,255,0.015)',
+      }}
+    >
+      <span
+        className="text-[10px] font-bold uppercase tracking-wide"
+        style={{ color: '#6B7280', letterSpacing: '0.08em' }}
+      >
+        Done
+      </span>
+      <span className="text-[10px] text-ink-500 font-medium">· {count}</span>
+      <div className="flex-1 h-px ml-1" style={{ background: 'rgba(255,255,255,0.04)' }} />
     </div>
   );
 }
@@ -645,23 +667,38 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
           </GlassCard>
         ) : (() => {
           const displayed = showAllTasks ? sortedTasks : sortedTasks.slice(0, TASK_LIMIT);
+          // Index where done starts — we insert a group divider there
+          // so the user's eye can split "still on my plate" from
+          // "already handled" without the two blending together.
+          const firstDoneIdx = displayed.findIndex(t => t.status === 'done');
+          const doneCount = displayed.filter(t => t.status === 'done').length;
           return (
             <>
               <GlassCard className="overflow-hidden">
-                {displayed.map((t, i) => (
-                  <QuickTaskRow
-                    key={t.id}
-                    task={t}
-                    isLast={i === displayed.length - 1}
-                    onToggle={() => toggleTask(t)}
-                    onSetAlarm={(task) => setAlarmTask(task)}
-                    onAddToCal={(task) => {
-                      onSwitchTab?.('calendar', { addEvent: task.title });
-                      showToast('Opening calendar — add the details');
-                    }}
-                    onDelete={() => deleteTask(t)}
-                  />
-                ))}
+                {displayed.map((t, i) => {
+                  const isLast = i === displayed.length - 1;
+                  // The row just before the divider shouldn't draw its
+                  // own bottom border — the divider supplies one.
+                  const hidesBottomBorder = firstDoneIdx > 0 && i === firstDoneIdx - 1;
+                  return (
+                    <React.Fragment key={t.id}>
+                      {i === firstDoneIdx && firstDoneIdx > 0 && (
+                        <DoneDivider count={doneCount} />
+                      )}
+                      <QuickTaskRow
+                        task={t}
+                        isLast={isLast || hidesBottomBorder}
+                        onToggle={() => toggleTask(t)}
+                        onSetAlarm={(task) => setAlarmTask(task)}
+                        onAddToCal={(task) => {
+                          onSwitchTab?.('calendar', { addEvent: task.title });
+                          showToast('Opening calendar — add the details');
+                        }}
+                        onDelete={() => deleteTask(t)}
+                      />
+                    </React.Fragment>
+                  );
+                })}
               </GlassCard>
               {sortedTasks.length > TASK_LIMIT && (
                 <button

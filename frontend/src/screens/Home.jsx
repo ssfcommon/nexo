@@ -5,6 +5,7 @@ import HeaderActions from '../components/HeaderActions.jsx';
 import { SkeletonCard } from '../components/Skeleton.jsx';
 import useLiveUpdates from '../hooks/useLiveUpdates.js';
 import { useOnRefresh } from '../hooks/usePullToRefresh.js';
+import { useBackHandler } from '../hooks/useBackHandler.js';
 import { useToast } from '../context/ToastContext.jsx';
 import AlarmModal from '../components/AlarmModal.jsx';
 import TaskRowMenu from '../components/TaskRowMenu.jsx';
@@ -346,6 +347,8 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
   const [showAllUrgent, setShowAllUrgent] = useState(false);
   const [completingIds, setCompletingIds] = useState(() => new Set());
   const [alarmItem, setAlarmItem] = useState(null);
+  // Wire Android/browser back to close the alarm modal before the app exits.
+  useBackHandler('home-alarm', !!alarmItem, () => setAlarmItem(null));
 
   // Bugs segmented state — default to whichever has items.
   const [bugSeg, setBugSeg] = useState('open');
