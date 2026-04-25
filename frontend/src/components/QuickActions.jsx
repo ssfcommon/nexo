@@ -488,19 +488,32 @@ export function QuickTaskModal({ open, onClose, onCreated }) {
                 <span className={'flex-1 text-[13px] font-medium ' + (addToCalendar ? 'text-[#A8C4FF]' : 'text-ink-500')}>
                   Add to Calendar
                 </span>
-                {/* iOS-style toggle: 44×24 track with a 20px thumb leaves
-                    a uniform 2px gutter on every side, and translateX
-                    keeps the slide animation crisp (no per-frame layout). */}
+                {/* iOS-style toggle. ON state had a "blue thumb on blue
+                    track" wash-out — fix is contrast + depth: track gets
+                    a deeper-blue gradient + inset shadow (recessed), and
+                    the thumb gets a strong drop-shadow + glow halo to
+                    visibly lift off the surface. */}
                 <div
                   role="switch"
                   aria-checked={addToCalendar}
-                  className={'w-11 h-6 rounded-full relative flex-shrink-0 transition-colors duration-200 ' + (addToCalendar ? 'bg-brand-blue' : 'bg-white/15')}
+                  className="w-11 h-6 rounded-full relative flex-shrink-0 transition-all duration-200"
+                  style={{
+                    background: addToCalendar
+                      ? 'linear-gradient(180deg, #4A6CF7 0%, #3B57D9 100%)'
+                      : 'rgba(255,255,255,0.10)',
+                    boxShadow: addToCalendar
+                      ? 'inset 0 1.5px 3px rgba(0,0,0,0.35), inset 0 -1px 0 rgba(255,255,255,0.18), 0 0 0 1px rgba(74,108,247,0.4), 0 0 12px rgba(74,108,247,0.35)'
+                      : 'inset 0 1px 2px rgba(0,0,0,0.25), inset 0 0 0 1px rgba(255,255,255,0.06)',
+                  }}
                 >
                   <span
-                    className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-200"
+                    className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full transition-transform duration-200"
                     style={{
                       transform: addToCalendar ? 'translateX(20px)' : 'translateX(0)',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.35), 0 0 0 0.5px rgba(0,0,0,0.06)',
+                      background: 'linear-gradient(180deg, #FFFFFF 0%, #ECECF0 100%)',
+                      boxShadow: addToCalendar
+                        ? '0 3px 6px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.9)'
+                        : '0 2px 4px rgba(0,0,0,0.4), 0 0 0 0.5px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.9)',
                     }}
                   />
                 </div>
