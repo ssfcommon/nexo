@@ -488,12 +488,20 @@ export function QuickTaskModal({ open, onClose, onCreated }) {
                 <span className={'flex-1 text-[13px] font-medium ' + (addToCalendar ? 'text-[#A8C4FF]' : 'text-ink-500')}>
                   Add to Calendar
                 </span>
+                {/* iOS-style toggle: 44×24 track with a 20px thumb leaves
+                    a uniform 2px gutter on every side, and translateX
+                    keeps the slide animation crisp (no per-frame layout). */}
                 <div
-                  className={'w-9 h-5 rounded-full relative transition ' + (addToCalendar ? 'bg-brand-blue' : 'bg-white/10')}
+                  role="switch"
+                  aria-checked={addToCalendar}
+                  className={'w-11 h-6 rounded-full relative flex-shrink-0 transition-colors duration-200 ' + (addToCalendar ? 'bg-brand-blue' : 'bg-white/15')}
                 >
                   <span
-                    className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all"
-                    style={{ left: addToCalendar ? '18px' : '2px' }}
+                    className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-200"
+                    style={{
+                      transform: addToCalendar ? 'translateX(20px)' : 'translateX(0)',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.35), 0 0 0 0.5px rgba(0,0,0,0.06)',
+                    }}
                   />
                 </div>
               </button>
