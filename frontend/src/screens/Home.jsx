@@ -270,6 +270,56 @@ function BugRow({ bug, intent, onClick }) {
   );
 }
 
+// ── This-Week sub-dividers ───────────────────────────────────
+// Tiny inline rule + label that splits "today" from "later this week".
+// Slight: just enough to give the eye a target for "what's due now"
+// versus "what's coming." Used between today- and later-task groups.
+function LaterThisWeekDivider() {
+  return (
+    <div className="flex items-center gap-2.5 px-1 pt-1">
+      <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+      <span
+        className="text-[10px] font-semibold uppercase"
+        style={{ color: '#6B7280', letterSpacing: '0.1em' }}
+      >
+        Later this week
+      </span>
+      <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+    </div>
+  );
+}
+
+// "Done for today" pill — surfaces when today's plate is clear but the
+// week still has work. Goal: a quiet hit of accomplishment before the
+// user sees the Later list. Confetti fires on the LAST today-completion
+// (handled in handleComplete); this is the persistent badge that stays
+// for the rest of the day.
+function DoneForTodayBadge() {
+  return (
+    <div
+      className="flex items-center gap-2.5 px-4 py-2.5 rounded-[12px]"
+      style={{
+        background: 'linear-gradient(180deg, rgba(16,185,129,0.10) 0%, rgba(16,185,129,0.05) 100%)',
+        border: '1px solid rgba(16,185,129,0.25)',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 0 18px rgba(16,185,129,0.10)',
+      }}
+    >
+      <span
+        className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
+        style={{ background: '#10B981', color: 'white' }}
+      >
+        <CheckIcon width="13" height="13" />
+      </span>
+      <span className="text-[13px] font-semibold" style={{ color: '#A7F3D0' }}>
+        Done for today
+      </span>
+      <span className="text-[11px] flex-1 text-right" style={{ color: '#6EE7B7' }}>
+        nice work ✨
+      </span>
+    </div>
+  );
+}
+
 // ── All-clear card ───────────────────────────────────────────
 
 function AllClearCard({ onGoToTasks }) {
@@ -492,8 +542,21 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
             <><SkeletonCard /><SkeletonCard /></>
           ) : tasks.length === 0 ? (
             <AllClearCard onGoToTasks={() => onSwitchTab?.('projects')} />
-          ) : (
-            (showAllUrgent ? tasks : tasks.slice(0, 3)).map(t => (
+          ) : (() => {
+            // Bifurcate the displayed list: today (overdue + due-today)
+            // first, later-this-week below. The two groups get a thin
+            // divider between them so the eye can lock onto today's
+            // plate without losing the week's context.
+            const displayed = showAllUrgent ? tasks : tasks.slice(0, 3);
+            const todayStr = today; // already computed above for subCopy
+            const todayList = displayed.filter(t => t.deadline && t.deadline <= todayStr);
+            const laterList = displayed.filter(t => !t.deadline || t.deadline > todayStr);
+            // "Done for today" appears when the displayed slice has no
+            // today-tasks but the user does still have later-week work.
+            // Skipped while the celebratory animation is running so the
+            // badge doesn't pop in mid-confetti.
+            const showDoneForToday = todayList.length === 0 && laterList.length > 0;
+            const renderTask = (t) => (
               <TaskCard
                 key={`${t.kind}:${t.id}`}
                 task={t}
@@ -505,8 +568,16 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
                   showToast('Opening calendar — add the details');
                 }}
               />
-            ))
-          )}
+            );
+            return (
+              <>
+                {showDoneForToday && <DoneForTodayBadge />}
+                {todayList.map(renderTask)}
+                {todayList.length > 0 && laterList.length > 0 && <LaterThisWeekDivider />}
+                {laterList.map(renderTask)}
+              </>
+            );
+          })()}
           {showAllUrgent && tasks.length > 3 && (
             <button onClick={() => setShowAllUrgent(false)} className="text-[12px] text-brand-blue w-full text-center pt-1 font-medium">
               Show less
