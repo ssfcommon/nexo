@@ -9,6 +9,7 @@ import KanbanBoard from '../components/KanbanBoard.jsx';
 import GanttChart from '../components/GanttChart.jsx';
 import ConfirmModal from '../components/ConfirmModal.jsx';
 import AlarmModal from '../components/AlarmModal.jsx';
+import RescheduleModal from '../components/RescheduleModal.jsx';
 import RowActions from '../components/RowActions.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import useLiveUpdates from '../hooks/useLiveUpdates.js';
@@ -64,7 +65,7 @@ function SubtaskMenu({ s, meId, depth, onEdit, onDelete, onPoke, onAddSub }) {
   );
 }
 
-function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke, onEdit, onDelete, onReorder, onSetAlarm, onAddToCal }) {
+function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke, onEdit, onDelete, onReorder, onSetAlarm, onAddToCal, onReschedule }) {
   const [newTitle, setNewTitle] = useState('');
   const [ownerId, setOwnerId] = useState('');
   const [deadline, setDeadline] = useState('');
@@ -202,12 +203,13 @@ function Checklist({ subtasks, members, meId, projectId, onToggle, onAdd, onPoke
           {/* Row actions — alarm + add to calendar. Only on the user's own
               active subtasks (matches Quick Tasks semantics) and hidden while
               editing. Kept compact (24px) so the row stays clean. */}
-          {editingId !== s.id && s.status !== 'done' && s.owner_id === meId && (onSetAlarm || onAddToCal) && (
+          {editingId !== s.id && s.status !== 'done' && s.owner_id === meId && (onSetAlarm || onAddToCal || onReschedule) && (
             <RowActions
               item={s}
               size="sm"
               onSetAlarm={onSetAlarm}
               onAddToCal={onAddToCal}
+              onReschedule={onReschedule}
             />
           )}
 
@@ -529,6 +531,7 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
   const [detailView, setDetailView] = useState('list'); // 'list' | 'board' | 'timeline'
   const [confirmDelete, setConfirmDelete] = useState(null); // { type, id, title }
   const [alarmSub, setAlarmSub] = useState(null); // subtask object whose alarm is being edited
+  const [rescheduleSub, setRescheduleSub] = useState(null); // subtask whose deadline is being changed
 
   const load = () => {
     api.project(projectId).then(setP);
@@ -820,6 +823,7 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
               onSwitchTab?.('calendar', { addEvent: sub.title });
               showToast('Opening calendar — add the details');
             }}
+            onReschedule={(sub) => setRescheduleSub(sub)}
           />
         )}
         {detailView === 'board' && (
@@ -868,6 +872,14 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
         item={alarmSub}
         kind="subtask"
         onClose={() => setAlarmSub(null)}
+        onSaved={() => load()}
+      />
+
+      <RescheduleModal
+        open={!!rescheduleSub}
+        item={rescheduleSub}
+        kind="subtask"
+        onClose={() => setRescheduleSub(null)}
         onSaved={() => load()}
       />
 

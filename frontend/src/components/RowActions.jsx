@@ -1,16 +1,17 @@
 import React from 'react';
-import { AlarmIcon, CalendarIcon } from './Icons.jsx';
+import { AlarmIcon, CalendarIcon, ClockIcon } from './Icons.jsx';
 
-// Shared pair of row-level actions used on Quick Tasks, project subtasks,
+// Shared row-level actions used on Quick Tasks, project subtasks,
 // and Home "This Week" cards. Deliberately compact so it fits inside busy
 // rows without overwhelming them.
 //
 // Props:
-//   item         — row (must have id, title, optionally alarm_at)
+//   item         — row (must have id, title, optionally alarm_at, deadline)
 //   onSetAlarm   — (item) => void
 //   onAddToCal   — (item) => void
+//   onReschedule — (item) => void   optional; opens deadline picker
 //   size         — 'sm' (24px, for busy subtask rows) or 'md' (28–32px, default)
-export default function RowActions({ item, onSetAlarm, onAddToCal, size = 'md' }) {
+export default function RowActions({ item, onSetAlarm, onAddToCal, onReschedule, size = 'md' }) {
   const dim = size === 'sm' ? 24 : 28;
   const icon = size === 'sm' ? 12 : 14;
   const alarmOn = !!item?.alarm_at;
@@ -48,6 +49,20 @@ export default function RowActions({ item, onSetAlarm, onAddToCal, size = 'md' }
       >
         <CalendarIcon width={icon} height={icon} />
       </button>
+      {onReschedule && (
+        <button
+          type="button"
+          onClick={stopAnd(onReschedule)}
+          aria-label={`Reschedule ${item?.title}`}
+          title={item?.deadline ? 'Reschedule' : 'Set deadline'}
+          className="rounded-lg flex items-center justify-center transition-all hover:scale-110 active:scale-95 flex-shrink-0"
+          style={{ width: dim, height: dim, color: '#9CA3AF' }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = '#A8C4FF'; e.currentTarget.style.background = 'rgba(91,140,255,0.12)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = '#9CA3AF'; e.currentTarget.style.background = 'transparent'; }}
+        >
+          <ClockIcon width={icon} height={icon} />
+        </button>
+      )}
     </>
   );
 }

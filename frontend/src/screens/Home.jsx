@@ -8,6 +8,7 @@ import { useOnRefresh } from '../hooks/usePullToRefresh.js';
 import { useBackHandler } from '../hooks/useBackHandler.js';
 import { useToast } from '../context/ToastContext.jsx';
 import AlarmModal from '../components/AlarmModal.jsx';
+import RescheduleModal from '../components/RescheduleModal.jsx';
 import TaskRowMenu from '../components/TaskRowMenu.jsx';
 import GlassCard from '../components/GlassCard.jsx';
 import { BugIcon, UmbrellaIcon, CheckIcon, FolderIcon } from '../components/Icons.jsx';
@@ -75,7 +76,7 @@ const URGENCY_STYLES = {
 
 // ── Task card ────────────────────────────────────────────────
 
-function TaskCard({ task, onComplete, completing, onSetAlarm, onAddToCal }) {
+function TaskCard({ task, onComplete, completing, onSetAlarm, onAddToCal, onReschedule }) {
   const urgency = urgencyOf(task.deadline);
   const s = URGENCY_STYLES[urgency];
   const fromCrossAssign = task.creator_name && task.assigned_by && task.assigned_by !== task.owner_id;
@@ -148,12 +149,13 @@ function TaskCard({ task, onComplete, completing, onSetAlarm, onAddToCal }) {
         )}
       </div>
 
-      {(onSetAlarm || onAddToCal) && !completing && (
+      {(onSetAlarm || onAddToCal || onReschedule) && !completing && (
         <TaskRowMenu
           item={task}
           size="sm"
           onSetAlarm={onSetAlarm}
           onAddToCal={onAddToCal}
+          onReschedule={onReschedule}
         />
       )}
 
@@ -397,8 +399,10 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
   const [showAllUrgent, setShowAllUrgent] = useState(false);
   const [completingIds, setCompletingIds] = useState(() => new Set());
   const [alarmItem, setAlarmItem] = useState(null);
-  // Wire Android/browser back to close the alarm modal before the app exits.
-  useBackHandler('home-alarm', !!alarmItem, () => setAlarmItem(null));
+  const [rescheduleItem, setRescheduleItem] = useState(null);
+  // Wire Android/browser back to close any open sheet before the app exits.
+  useBackHandler('home-alarm',      !!alarmItem,      () => setAlarmItem(null));
+  useBackHandler('home-reschedule', !!rescheduleItem, () => setRescheduleItem(null));
 
   // Bugs segmented state — default to whichever has items.
   const [bugSeg, setBugSeg] = useState('open');
@@ -567,6 +571,7 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
                   onSwitchTab?.('calendar', { addEvent: item.title });
                   showToast('Opening calendar — add the details');
                 }}
+                onReschedule={(item) => setRescheduleItem(item)}
               />
             );
             return (
@@ -676,6 +681,24 @@ export default function Home({ me, unreadCount, onOpenNotifications, onSwitchTab
           setTasks(prev => prev.map(t =>
             t.id === alarmItem.id && t.kind === alarmItem.kind ? { ...t, alarm_at: ts } : t
           ));
+        }}
+      />
+
+      <RescheduleModal
+        open={!!rescheduleItem}
+        item={rescheduleItem}
+        kind={rescheduleItem?.kind === 'subtask' ? 'subtask' : 'task'}
+        onClose={() => setRescheduleItem(null)}
+        onSaved={(deadline) => {
+          // Optimistic local update; the next reload will reconcile.
+          setTasks(prev => prev.map(t =>
+            t.id === rescheduleItem.id && t.kind === rescheduleItem.kind
+              ? { ...t, deadline }
+              : t
+          ));
+          // Refresh from server in case the new date pushes it out of
+          // the home window or changes its grouping (today → later).
+          reloadTasks();
         }}
       />
 

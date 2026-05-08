@@ -5,6 +5,7 @@ import HeaderActions from '../components/HeaderActions.jsx';
 import ProjectDetail from './ProjectDetail.jsx';
 import { fireConfetti } from '../components/Confetti.jsx';
 import AlarmModal from '../components/AlarmModal.jsx';
+import RescheduleModal from '../components/RescheduleModal.jsx';
 import TaskRowMenu from '../components/TaskRowMenu.jsx';
 import GlassCard from '../components/GlassCard.jsx';
 import FilterChip from '../components/FilterChip.jsx';
@@ -260,7 +261,7 @@ function ProjectCard({ project, onOpen, index }) {
 
 // ── Quick-task row ───────────────────────────────────────────
 
-function QuickTaskRow({ task, isLast, onToggle, onSetAlarm, onAddToCal, onDelete }) {
+function QuickTaskRow({ task, isLast, onToggle, onSetAlarm, onAddToCal, onReschedule, onDelete }) {
   const done = task.status === 'done';
   // Completed tasks shouldn't borrow the urgency palette — a red "Apr 13"
   // next to a strikethrough title reads like "overdue" when the right
@@ -321,6 +322,7 @@ function QuickTaskRow({ task, isLast, onToggle, onSetAlarm, onAddToCal, onDelete
         item={task}
         onSetAlarm={done ? undefined : onSetAlarm}
         onAddToCal={done ? undefined : onAddToCal}
+        onReschedule={done ? undefined : onReschedule}
         onDelete={() => onDelete()}
         size="sm"
       />
@@ -373,6 +375,7 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const [addTaskOpen, setAddTaskOpen] = useState(false);
   const [alarmTask, setAlarmTask] = useState(null);
+  const [rescheduleTask, setRescheduleTask] = useState(null);
   const [showAllProjects, setShowAllProjects] = useState(false);
   const [showAllTasks, setShowAllTasks] = useState(false);
   const filterWrap = useRef(null);
@@ -381,7 +384,9 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
     if (deepLink?.kind === 'project' && deepLink.id) setOpenId(deepLink.id);
   }, [deepLink]);
 
-  useBackHandler('project-detail', !!openId, () => { setOpenId(null); loadProjects(); });
+  useBackHandler('project-detail',     !!openId,         () => { setOpenId(null); loadProjects(); });
+  useBackHandler('projects-alarm',      !!alarmTask,      () => setAlarmTask(null));
+  useBackHandler('projects-reschedule', !!rescheduleTask, () => setRescheduleTask(null));
   useOnRefresh(() => { loadProjects(); loadTasks(); });
 
   // Notify the shell whenever ProjectDetail closes so it can decide
@@ -694,6 +699,7 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
                           onSwitchTab?.('calendar', { addEvent: task.title });
                           showToast('Opening calendar — add the details');
                         }}
+                        onReschedule={(task) => setRescheduleTask(task)}
                         onDelete={() => deleteTask(t)}
                       />
                     </React.Fragment>
@@ -732,6 +738,17 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
         kind="task"
         onClose={() => setAlarmTask(null)}
         onSaved={(ts) => setQuickTasks(xs => xs.map(x => x.id === alarmTask.id ? { ...x, alarm_at: ts } : x))}
+      />
+
+      <RescheduleModal
+        open={!!rescheduleTask}
+        item={rescheduleTask}
+        kind="task"
+        onClose={() => setRescheduleTask(null)}
+        onSaved={(deadline) => {
+          setQuickTasks(xs => xs.map(x => x.id === rescheduleTask.id ? { ...x, deadline } : x));
+          loadTasks(); // refresh sort order — deadline drives the row position
+        }}
       />
     </div>
   );

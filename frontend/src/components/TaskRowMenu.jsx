@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlarmIcon, CalendarIcon, TrashIcon } from './Icons.jsx';
+import { AlarmIcon, CalendarIcon, TrashIcon, ClockIcon } from './Icons.jsx';
 
 // ─── TaskRowMenu ───────────────────────────────────────────────
 // Compact kebab + popover for task-row actions. Collapses 2–3 inline
@@ -22,6 +22,7 @@ export default function TaskRowMenu({
   item,
   onSetAlarm,
   onAddToCal,
+  onReschedule,
   onDelete,
   size = 'md',
   labelPrefix = '',
@@ -93,6 +94,13 @@ export default function TaskRowMenu({
       label: 'Add to calendar',
       icon: <CalendarIcon width="14" height="14" />,
       action: run(onAddToCal),
+    });
+  }
+  if (onReschedule) {
+    items.push({
+      label: item?.deadline ? 'Reschedule' : 'Set deadline',
+      icon: <ClockIcon width="14" height="14" />,
+      action: run(onReschedule),
     });
   }
   if (onDelete) {
