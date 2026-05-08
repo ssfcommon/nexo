@@ -629,8 +629,8 @@ async function homeTasks({ windowDays = 7 } = {}) {
     .order('deadline', { ascending: true });
 
   let [tasksRes, subtasksRes] = await Promise.all([
-    tasksQuery('id, title, deadline, status, is_quick, project_id, alarm_at, owner_id, assigned_by, creator:users!assigned_by(name)'),
-    subtasksQuery('id, title, deadline, status, project_id, alarm_at, owner_id, assigned_by, project:projects(title), creator:users!assigned_by(name)'),
+    tasksQuery('id, title, deadline, status, is_quick, project_id, alarm_at, owner_id, assigned_by, creator:users!assigned_by(name), project:projects(status)'),
+    subtasksQuery('id, title, deadline, status, project_id, alarm_at, owner_id, assigned_by, project:projects(title, status), creator:users!assigned_by(name)'),
   ]);
 
   if (tasksRes.error && isMissingSchemaError(tasksRes.error)) {
@@ -646,30 +646,37 @@ async function homeTasks({ windowDays = 7 } = {}) {
     }
   }
 
-  const quick = (tasksRes.data || []).map(t => ({
-    id: t.id,
-    title: t.title,
-    deadline: t.deadline,
-    alarm_at: t.alarm_at || null,
-    kind: 'task',
-    project_title: null,
-    project_id: t.project_id || null,
-    owner_id: t.owner_id,
-    assigned_by: t.assigned_by || null,
-    creator_name: t.creator?.name || null,
-  }));
-  const subs = (subtasksRes.data || []).map(s => ({
-    id: s.id,
-    title: s.title,
-    deadline: s.deadline,
-    alarm_at: s.alarm_at || null,
-    kind: 'subtask',
-    project_title: s.project?.title || null,
-    project_id: s.project_id,
-    owner_id: s.owner_id,
-    assigned_by: s.assigned_by || null,
-    creator_name: s.creator?.name || null,
-  }));
+  // Filter out anything attached to a frozen (on_hold) project — the
+  // user's intent when freezing is "stop nagging me about this on the
+  // home screen." Done client-side so the fallback selects stay valid.
+  const quick = (tasksRes.data || [])
+    .filter(t => t.project?.status !== 'on_hold')
+    .map(t => ({
+      id: t.id,
+      title: t.title,
+      deadline: t.deadline,
+      alarm_at: t.alarm_at || null,
+      kind: 'task',
+      project_title: null,
+      project_id: t.project_id || null,
+      owner_id: t.owner_id,
+      assigned_by: t.assigned_by || null,
+      creator_name: t.creator?.name || null,
+    }));
+  const subs = (subtasksRes.data || [])
+    .filter(s => s.project?.status !== 'on_hold')
+    .map(s => ({
+      id: s.id,
+      title: s.title,
+      deadline: s.deadline,
+      alarm_at: s.alarm_at || null,
+      kind: 'subtask',
+      project_title: s.project?.title || null,
+      project_id: s.project_id,
+      owner_id: s.owner_id,
+      assigned_by: s.assigned_by || null,
+      creator_name: s.creator?.name || null,
+    }));
 
   const all = [...quick, ...subs];
   // Rank: overdue → due today → upcoming; tiebreak on deadline then title
@@ -724,8 +731,8 @@ async function assignedByMe({ windowDays = 14 } = {}) {
   // the enriched selects tight and only fall back if the owner join or
   // assigned_by column is genuinely missing.
   let [tasksRes, subtasksRes] = await Promise.all([
-    tasksQuery('id, title, deadline, status, is_quick, project_id, owner_id, assigned_by, owner:users!owner_id(name, initials, avatar_color, avatar_url)'),
-    subtasksQuery('id, title, deadline, status, project_id, owner_id, assigned_by, assignment_status, project:projects(title), owner:users!owner_id(name, initials, avatar_color, avatar_url)'),
+    tasksQuery('id, title, deadline, status, is_quick, project_id, owner_id, assigned_by, owner:users!owner_id(name, initials, avatar_color, avatar_url), project:projects(status)'),
+    subtasksQuery('id, title, deadline, status, project_id, owner_id, assigned_by, assignment_status, project:projects(title, status), owner:users!owner_id(name, initials, avatar_color, avatar_url)'),
   ]);
 
   if (tasksRes.error && isMissingSchemaError(tasksRes.error)) {
@@ -737,38 +744,44 @@ async function assignedByMe({ windowDays = 14 } = {}) {
     subtasksRes = await subtasksQuery('id, title, deadline, status, project_id, owner_id, assigned_by, project:projects(title)');
   }
 
-  const quick = (tasksRes.data || []).map(t => ({
-    id: t.id,
-    title: t.title,
-    deadline: t.deadline,
-    kind: 'task',
-    project_title: null,
-    project_id: t.project_id || null,
-    owner_id: t.owner_id,
-    owner_name: t.owner?.name || null,
-    owner_initials: t.owner?.initials || null,
-    owner_color: t.owner?.avatar_color || null,
-    owner_avatar: t.owner?.avatar_url || null,
-    status: t.status,
-    // Tasks don't expose assignment_status — always null to keep the
-    // AssignedRow's declined-pill branch inert for quick-task items.
-    assignment_status: null,
-  }));
-  const subs = (subtasksRes.data || []).map(s => ({
-    id: s.id,
-    title: s.title,
-    deadline: s.deadline,
-    kind: 'subtask',
-    project_title: s.project?.title || null,
-    project_id: s.project_id,
-    owner_id: s.owner_id,
-    owner_name: s.owner?.name || null,
-    owner_initials: s.owner?.initials || null,
-    owner_color: s.owner?.avatar_color || null,
-    owner_avatar: s.owner?.avatar_url || null,
-    status: s.status,
-    assignment_status: s.assignment_status || null,
-  }));
+  // Skip work that lives under a frozen project — same intent as
+  // homeTasks: a paused project shouldn't keep generating reminders.
+  const quick = (tasksRes.data || [])
+    .filter(t => t.project?.status !== 'on_hold')
+    .map(t => ({
+      id: t.id,
+      title: t.title,
+      deadline: t.deadline,
+      kind: 'task',
+      project_title: null,
+      project_id: t.project_id || null,
+      owner_id: t.owner_id,
+      owner_name: t.owner?.name || null,
+      owner_initials: t.owner?.initials || null,
+      owner_color: t.owner?.avatar_color || null,
+      owner_avatar: t.owner?.avatar_url || null,
+      status: t.status,
+      // Tasks don't expose assignment_status — always null to keep the
+      // AssignedRow's declined-pill branch inert for quick-task items.
+      assignment_status: null,
+    }));
+  const subs = (subtasksRes.data || [])
+    .filter(s => s.project?.status !== 'on_hold')
+    .map(s => ({
+      id: s.id,
+      title: s.title,
+      deadline: s.deadline,
+      kind: 'subtask',
+      project_title: s.project?.title || null,
+      project_id: s.project_id,
+      owner_id: s.owner_id,
+      owner_name: s.owner?.name || null,
+      owner_initials: s.owner?.initials || null,
+      owner_color: s.owner?.avatar_color || null,
+      owner_avatar: s.owner?.avatar_url || null,
+      status: s.status,
+      assignment_status: s.assignment_status || null,
+    }));
 
   const all = [...quick, ...subs];
   // Overdue bubbles to top, then due today, then upcoming, then no-deadline.

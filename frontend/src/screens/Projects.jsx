@@ -162,17 +162,20 @@ function ProjectCard({ project, onOpen, index }) {
   const emoji = getProjectEmoji(project);
   const momentum = getMomentum(project);
   const urgency = getUrgency(project);
+  const isFrozen = project?.status === 'on_hold';
 
   // Right-edge glow reserved for hot/overdue. Calm + warm states get
   // nothing — we don't want ambient amber noise on every card.
-  const urgencyClass =
+  // Frozen projects suppress urgency entirely — the deadline doesn't
+  // matter while paused, so don't pulse red and don't tint amber.
+  const urgencyClass = isFrozen ? '' :
     urgency.state === 'overdue' ? 'urgency-pulse' :
     urgency.state === 'hot'     ? 'urgency-hot'   : '';
 
   return (
     <button
       onClick={onOpen}
-      style={staggerIn(index)}
+      style={{ ...staggerIn(index), opacity: isFrozen ? 0.7 : 1 }}
       className={'project-card-press w-full text-left relative rounded-[14px] overflow-hidden hover:bg-white/[0.02] transition-colors ' + urgencyClass}
       aria-label={`Open ${project.title}`}
     >
@@ -438,10 +441,14 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
   // already ordered by deadline urgency (from `visibleProjects`).
   const groupedProjects = useMemo(() => {
     if (filtersActive) return null;
-    const groups = { fire: [], building: [], quiet: [], clear: [] };
+    // Keep this in sync with MOMENTUM_ORDER — every momentum state must
+    // have a bucket here or `groups[m.state].push` will explode when a
+    // new state lands (e.g. the 'frozen' state added with the freeze
+    // feature).
+    const groups = { fire: [], building: [], quiet: [], clear: [], frozen: [] };
     for (const p of visibleProjects) {
       const m = getMomentum(p);
-      groups[m.state].push(p);
+      (groups[m.state] || (groups[m.state] = [])).push(p);
     }
     return groups;
   }, [visibleProjects, filtersActive]);

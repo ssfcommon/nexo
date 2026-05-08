@@ -86,6 +86,13 @@ export function getProjectEmoji(project) {
 const DAY_MS = 86400000;
 
 export function getMomentum(project) {
+  // Frozen takes precedence over every other signal — a paused project
+  // shouldn't read as "on fire" because it had recent updates before it
+  // was frozen, nor as "all clear" because progress hit 100 and never
+  // shipped. The freeze flag is the user's explicit intent.
+  if (project?.status === 'on_hold') {
+    return { state: 'frozen', emoji: '❄️', label: 'Frozen', chipColor: '#A7C5E8', chipBg: 'rgba(167,197,232,0.12)' };
+  }
   const progress = Number(project?.progress ?? 0);
   if (progress >= 100) {
     return { state: 'clear', emoji: '✨', label: 'All clear', chipColor: '#34D08D', chipBg: 'rgba(52,208,141,0.12)' };
@@ -147,11 +154,15 @@ export function formatDeadline(project) {
 // The order sections appear on the Projects screen. "On fire" first
 // so the heat is visible without scrolling.
 
-export const MOMENTUM_ORDER = ['fire', 'building', 'quiet', 'clear'];
+// Frozen sits at the bottom — out of sight, out of mind. The whole
+// point of freezing is to deprioritise, so we render this group last
+// regardless of how many projects are in it.
+export const MOMENTUM_ORDER = ['fire', 'building', 'quiet', 'clear', 'frozen'];
 
 export const MOMENTUM_GROUP_LABELS = {
   fire:     'On fire',
   building: 'Building momentum',
   quiet:    'Quiet',
   clear:    'All clear',
+  frozen:   'Frozen',
 };

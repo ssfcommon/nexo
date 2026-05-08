@@ -688,6 +688,32 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
           {emoji}
         </span>
         <h1 className="text-[20px] font-bold text-ink-900 flex-1 min-w-0 truncate">{p.title}</h1>
+        {/* Freeze/unfreeze — pauses the project so its tasks stop
+            surfacing on Home. Frozen state tints the icon cyan to
+            match the momentum chip's frozen palette. */}
+        {p.status !== 'completed' && (
+          <button
+            onClick={async () => {
+              const next = p.status === 'on_hold' ? 'active' : 'on_hold';
+              try {
+                await api.updateProject(projectId, { status: next });
+                showToast(next === 'on_hold' ? 'Project frozen' : 'Project unfrozen');
+                load();
+              } catch (e) {
+                showToast(e.message || "Couldn't update project", 'error');
+              }
+            }}
+            className="w-8 h-8 rounded-full border flex items-center justify-center transition"
+            style={
+              p.status === 'on_hold'
+                ? { borderColor: 'rgba(167,197,232,0.45)', color: '#A7C5E8', background: 'rgba(167,197,232,0.10)' }
+                : { borderColor: 'rgba(255,255,255,0.10)', color: '#9CA3AF' }
+            }
+            title={p.status === 'on_hold' ? 'Unfreeze — resume notifications' : 'Freeze — hide from Home until you resume'}
+          >
+            <span className="text-[14px] leading-none">{p.status === 'on_hold' ? '▶' : '❄'}</span>
+          </button>
+        )}
         <button onClick={() => setEditOpen(true)} className="w-8 h-8 rounded-full border border-line-light flex items-center justify-center text-ink-300 hover:text-brand-blue hover:border-brand-blue transition" title="Edit project">
           <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         </button>
@@ -791,6 +817,28 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
             className="text-[11px] text-brand-blue font-medium"
           >
             Reopen
+          </button>
+        </div>
+      )}
+      {p.status === 'on_hold' && (
+        <div
+          className="card flex items-center gap-3 py-3"
+          style={{ backgroundColor: 'rgba(167,197,232,0.06)', borderColor: 'rgba(167,197,232,0.20)' }}
+        >
+          <span className="text-[18px]">❄️</span>
+          <div className="flex-1">
+            <p className="text-[13px] font-semibold" style={{ color: '#A7C5E8' }}>Project Frozen</p>
+            <p className="text-[11px] text-ink-500">Tasks here won't show up on Home until you resume.</p>
+          </div>
+          <button
+            onClick={async () => {
+              await api.updateProject(projectId, { status: 'active' });
+              showToast('Project unfrozen');
+              load();
+            }}
+            className="text-[11px] text-brand-blue font-medium"
+          >
+            Resume
           </button>
         </div>
       )}
