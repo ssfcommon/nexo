@@ -790,19 +790,57 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
           </div>
           <div className="flex items-center justify-between">
             <p className="text-[11px] text-ink-300">{doneCount} of {p.subtasks.length} subtasks complete</p>
-            {/* Tap-target on the avatar stack opens the member sheet.
-                Owners get add/remove; everyone else just sees the
-                roster, which is still useful as a "who's on this?"
-                quick-reference. */}
-            <button
-              type="button"
-              onClick={() => setMembersOpen(true)}
-              className="rounded-full -mr-1 px-1 py-0.5 transition-colors hover:bg-white/[0.05] active:scale-95"
-              aria-label="Manage members"
-              title={p.owner_id === me?.id ? 'Manage members' : 'View members'}
-            >
-              <AvatarStack users={p.members} max={3} size={26} />
-            </button>
+            {/* Member chip — tappable button rendered as a glass pill
+                so it actually reads as interactive. Owners see a
+                trailing "+" affordance because their primary action
+                here is "add someone"; non-owners get a chevron since
+                their action is "see who's on this". */}
+            {(() => {
+              const isOwner = p.owner_id === me?.id;
+              return (
+                <button
+                  type="button"
+                  onClick={() => setMembersOpen(true)}
+                  className="flex items-center gap-1.5 h-8 pl-1.5 pr-2 rounded-full transition-colors active:scale-[0.97]"
+                  style={{
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.18)',
+                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
+                    color: '#D1D5DB',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(91,140,255,0.10)';
+                    e.currentTarget.style.borderColor = 'rgba(91,140,255,0.40)';
+                    e.currentTarget.style.color = '#A8C4FF';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)';
+                    e.currentTarget.style.color = '#D1D5DB';
+                  }}
+                  aria-label={isOwner ? 'Manage members' : 'View members'}
+                  title={isOwner ? 'Add or remove members' : 'View members'}
+                >
+                  {p.members?.length > 0 ? (
+                    <AvatarStack users={p.members} max={3} size={22} />
+                  ) : (
+                    <span className="text-[11px] font-semibold pl-1">No members yet</span>
+                  )}
+                  <span className="flex items-center justify-center w-4 h-4">
+                    {isOwner ? (
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                    ) : (
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                    )}
+                  </span>
+                </button>
+              );
+            })()}
           </div>
         </div>
       </div>
