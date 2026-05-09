@@ -21,9 +21,12 @@ export default function ManageMembersModal({ open, project, meId, onChanged, onC
   const [busyId, setBusyId] = useState(null);     // user id currently being added/removed
   const [search, setSearch] = useState('');
 
-  const isOwner = !!project && project.owner_id === meId;
   const members = project?.members || [];
   const memberIds = new Set(members.map(m => String(m.id)));
+  // Any member of the project can manage the roster. The only thing
+  // that's locked is the owner row — it can't be removed (transfer
+  // ownership or delete the project to do that).
+  const isMember = memberIds.has(String(meId));
 
   useEffect(() => {
     if (!open) return;
@@ -73,7 +76,8 @@ export default function ManageMembersModal({ open, project, meId, onChanged, onC
       <div className="space-y-1.5 mb-5">
         {members.map(u => {
           const isProjOwner = String(project?.owner_id) === String(u.id);
-          const canRemove = isOwner && !isProjOwner;
+          // Any team member can remove anyone except the owner.
+          const canRemove = isMember && !isProjOwner;
           return (
             <div
               key={u.id}
@@ -115,7 +119,7 @@ export default function ManageMembersModal({ open, project, meId, onChanged, onC
         })}
       </div>
 
-      {isOwner ? (
+      {isMember ? (
         <>
           <p className="text-[11px] uppercase tracking-wide font-semibold text-ink-400 mb-2">Add someone</p>
           <input
@@ -160,7 +164,7 @@ export default function ManageMembersModal({ open, project, meId, onChanged, onC
         </>
       ) : (
         <p className="text-[12px] text-ink-500 text-center py-2">
-          Only the project owner can add or remove members.
+          Only project members can change the roster.
         </p>
       )}
     </Modal>

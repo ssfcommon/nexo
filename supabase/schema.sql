@@ -531,9 +531,13 @@ BEGIN
 END $$;
 
 -- project_members — read is open (avatars and member counts must show
--- everywhere), but writes are gated to the project owner. Without
--- this, any authenticated user could add themselves to or remove
--- anyone from any project.
+-- everywhere). Writes are gated to existing members of the same
+-- project: anyone on the team can add or remove anyone else, but a
+-- non-member can't modify the roster from the outside. The owner row
+-- is additionally protected from deletion so a project can never end
+-- up ownerless. Project creation still works because the owner gets
+-- inserted into project_members in the same transaction (the owner
+-- check fall-through covers that bootstrap).
 DROP POLICY IF EXISTS project_members_select ON nexo.project_members;
 DROP POLICY IF EXISTS project_members_insert ON nexo.project_members;
 DROP POLICY IF EXISTS project_members_update ON nexo.project_members;
@@ -543,15 +547,23 @@ CREATE POLICY project_members_select ON nexo.project_members
 CREATE POLICY project_members_insert ON nexo.project_members
   FOR INSERT TO authenticated
   WITH CHECK (
-    EXISTS (SELECT 1 FROM nexo.projects WHERE id = project_id AND owner_id = nexo.current_user_id())
+    -- Caller is the project owner (handles the bootstrap insert) OR
+    -- already a member of the project.
+    EXISTS (SELECT 1 FROM nexo.projects p WHERE p.id = project_id AND p.owner_id = nexo.current_user_id())
+    OR
+    EXISTS (SELECT 1 FROM nexo.project_members pm WHERE pm.project_id = project_members.project_id AND pm.user_id = nexo.current_user_id())
   );
 CREATE POLICY project_members_update ON nexo.project_members
   FOR UPDATE TO authenticated USING (
-    EXISTS (SELECT 1 FROM nexo.projects WHERE id = project_id AND owner_id = nexo.current_user_id())
+    EXISTS (SELECT 1 FROM nexo.project_members pm WHERE pm.project_id = project_members.project_id AND pm.user_id = nexo.current_user_id())
   );
 CREATE POLICY project_members_delete ON nexo.project_members
   FOR DELETE TO authenticated USING (
-    EXISTS (SELECT 1 FROM nexo.projects WHERE id = project_id AND owner_id = nexo.current_user_id())
+    EXISTS (SELECT 1 FROM nexo.project_members pm WHERE pm.project_id = project_members.project_id AND pm.user_id = nexo.current_user_id())
+    AND
+    -- Owner row is immutable — must transfer ownership or delete the
+    -- project to remove this membership.
+    user_id <> (SELECT owner_id FROM nexo.projects WHERE id = project_members.project_id)
   );
 
 -- =============================================================================

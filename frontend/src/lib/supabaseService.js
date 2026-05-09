@@ -299,15 +299,19 @@ async function addProjectMember(projectId, userId) {
     .eq('id', projectId)
     .single()
   );
-  if (proj.owner_id !== me) {
-    throw new Error('Only the project owner can add members');
-  }
   if (!userId) throw new Error('Pick a user');
-  if (userId === me) {
-    // Inserting yourself is fine, but it's almost certainly a no-op
-    // on the only project where you'd have owner permissions, so
-    // surface it instead of silently upserting.
-    throw new Error("You're already on this project");
+
+  // Any project member can add, but they have to be a member first.
+  // Owner check is implicit — owners are always inserted into
+  // project_members at creation time.
+  const { data: meRow } = await supabase
+    .from('project_members')
+    .select('user_id')
+    .eq('project_id', projectId)
+    .eq('user_id', me)
+    .maybeSingle();
+  if (!meRow) {
+    throw new Error('You need to be on the project to add others');
   }
 
   await supabase
@@ -319,16 +323,19 @@ async function addProjectMember(projectId, userId) {
 
   // Mirror createProject's notification — being added to an existing
   // project is the same emotional event as being added at creation.
-  try {
-    const { data: adder } = await supabase.from('users').select('name').eq('id', me).single();
-    await supabase.from('notifications').insert({
-      user_id: userId,
-      type: 'project_member_added',
-      title: `Added to project: ${proj.title}`,
-      body: `${adder?.name || 'Someone'} added you to "${proj.title}"${proj.deadline ? ' · Due ' + proj.deadline : ''}`,
-      ref_project: projectId,
-    });
-  } catch (e) { console.warn('add_member notification failed:', e); }
+  // Skip if the user added themselves (no-op upsert, no surprise).
+  if (userId !== me) {
+    try {
+      const { data: adder } = await supabase.from('users').select('name').eq('id', me).single();
+      await supabase.from('notifications').insert({
+        user_id: userId,
+        type: 'project_member_added',
+        title: `Added to project: ${proj.title}`,
+        body: `${adder?.name || 'Someone'} added you to "${proj.title}"${proj.deadline ? ' · Due ' + proj.deadline : ''}`,
+        ref_project: projectId,
+      });
+    } catch (e) { console.warn('add_member notification failed:', e); }
+  }
 
   return { ok: true };
 }
@@ -341,14 +348,24 @@ async function removeProjectMember(projectId, userId) {
     .eq('id', projectId)
     .single()
   );
-  if (proj.owner_id !== me) {
-    throw new Error('Only the project owner can remove members');
-  }
   if (userId === proj.owner_id) {
-    // The owner row exists for permissions/visibility consistency.
-    // Removing it would leave a project ownerless from the join's
-    // perspective even if owner_id still points at them.
+    // Owner is the one immutable row — even they can't kick themselves.
+    // Project ownership should be transferred or the project deleted
+    // outright; leaving a project ownerless from the join's perspective
+    // would break a number of downstream assumptions.
     throw new Error("Can't remove the project owner");
+  }
+
+  // Caller must be a member to remove anyone. RLS enforces this on
+  // the server too, but checking here gives a clearer error message.
+  const { data: meRow } = await supabase
+    .from('project_members')
+    .select('user_id')
+    .eq('project_id', projectId)
+    .eq('user_id', me)
+    .maybeSingle();
+  if (!meRow) {
+    throw new Error('You need to be on the project to remove members');
   }
 
   const { error } = await supabase

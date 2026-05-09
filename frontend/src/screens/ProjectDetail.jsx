@@ -791,12 +791,11 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
           <div className="flex items-center justify-between">
             <p className="text-[11px] text-ink-300">{doneCount} of {p.subtasks.length} subtasks complete</p>
             {/* Member chip — tappable button rendered as a glass pill
-                so it actually reads as interactive. Owners see a
-                trailing "+" affordance because their primary action
-                here is "add someone"; non-owners get a chevron since
-                their action is "see who's on this". */}
+                so it actually reads as interactive. Members see a
+                trailing "+" affordance (they can add anyone);
+                outsiders get a chevron since they can only view. */}
             {(() => {
-              const isOwner = p.owner_id === me?.id;
+              const isMember = (p.members || []).some(m => String(m.id) === String(me?.id));
               return (
                 <button
                   type="button"
@@ -818,8 +817,8 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
                     e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)';
                     e.currentTarget.style.color = '#D1D5DB';
                   }}
-                  aria-label={isOwner ? 'Manage members' : 'View members'}
-                  title={isOwner ? 'Add or remove members' : 'View members'}
+                  aria-label={isMember ? 'Manage members' : 'View members'}
+                  title={isMember ? 'Add or remove members' : 'View members'}
                 >
                   {p.members?.length > 0 ? (
                     <AvatarStack users={p.members} max={3} size={22} />
@@ -827,7 +826,7 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
                     <span className="text-[11px] font-semibold pl-1">No members yet</span>
                   )}
                   <span className="flex items-center justify-center w-4 h-4">
-                    {isOwner ? (
+                    {isMember ? (
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                         <line x1="12" y1="5" x2="12" y2="19" />
                         <line x1="5" y1="12" x2="19" y2="12" />
