@@ -241,6 +241,39 @@ aside {
   box-shadow: inset 0 2px 6px rgba(0,0,0,0.4), 0 0 0 3px rgba(91,140,255,0.15) !important;
 }
 
+/* ─── Native date / time pickers on dark surfaces ─────────────────
+   The calendar / clock icon Chrome paints on the right edge of
+   <input type="date"> / "time" / "datetime-local" defaults to near-
+   black, which disappears on our dark backgrounds. `color-scheme: dark`
+   asks the browser for the dark variant of all native controls (icon
+   inverts to light grey, popup picker matches our theme). Webkit's
+   indicator pseudo-element gets a small contrast boost too, since the
+   color-scheme darkening alone leaves the icon a bit muted. */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="month"],
+input[type="week"] {
+  color-scheme: dark;
+}
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="month"]::-webkit-calendar-picker-indicator,
+input[type="week"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.85) brightness(1.1);
+  opacity: 0.75;
+  cursor: pointer;
+  transition: opacity 150ms ease;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
+input[type="month"]::-webkit-calendar-picker-indicator:hover,
+input[type="week"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
 /* ─── Hero input (modal title fields — borderless, underlined) ─── */
 .hero-input {
   width: 100%;
