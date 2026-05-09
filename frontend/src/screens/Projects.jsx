@@ -409,6 +409,11 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
   const [rescheduleTask, setRescheduleTask] = useState(null);
   const [showAllProjects, setShowAllProjects] = useState(false);
   const [showAllTasks, setShowAllTasks] = useState(false);
+  // Frozen group is collapsed by default — the whole point of freezing
+  // is to get a project out of sight, so showing the cards anyway
+  // would defeat the purpose. Header label remains visible as the
+  // tap-target to expand.
+  const [frozenExpanded, setFrozenExpanded] = useState(false);
   const filterWrap = useRef(null);
 
   useEffect(() => {
@@ -666,17 +671,45 @@ export default function Projects({ me, unreadCount, onOpenNotifications, deepLin
             {MOMENTUM_ORDER.map(groupKey => {
               const list = groupedProjects?.[groupKey] || [];
               if (list.length === 0) return null;
+              const isFrozenGroup = groupKey === 'frozen';
+              const collapsed = isFrozenGroup && !frozenExpanded;
+              // Frozen header is a button so the whole row is tappable;
+              // other groups stay as a plain label since they have no
+              // collapse behaviour.
+              const HeaderTag = isFrozenGroup ? 'button' : 'p';
               return (
                 <div key={groupKey}>
-                  <p className="section-label mb-2.5">
+                  <HeaderTag
+                    {...(isFrozenGroup
+                      ? {
+                          type: 'button',
+                          onClick: () => setFrozenExpanded(v => !v),
+                          'aria-expanded': frozenExpanded,
+                          className: 'section-label mb-2.5 flex items-center gap-1.5 hover:text-ink-700 transition-colors',
+                        }
+                      : { className: 'section-label mb-2.5' })}
+                  >
                     {MOMENTUM_GROUP_LABELS[groupKey]}
                     <span className="ml-1.5 text-ink-400 font-normal normal-case tracking-normal">· {list.length}</span>
-                  </p>
-                  <div className="space-y-2.5">
-                    {list.map((p, i) => (
-                      <ProjectCard key={p.id} project={p} index={i} onOpen={() => setOpenId(p.id)} />
-                    ))}
-                  </div>
+                    {isFrozenGroup && (
+                      <span
+                        className="text-ink-400 normal-case tracking-normal transition-transform duration-200"
+                        style={{ transform: frozenExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                        aria-hidden
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                      </span>
+                    )}
+                  </HeaderTag>
+                  {!collapsed && (
+                    <div className="space-y-2.5">
+                      {list.map((p, i) => (
+                        <ProjectCard key={p.id} project={p} index={i} onOpen={() => setOpenId(p.id)} />
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
