@@ -157,12 +157,29 @@ function FilterPopover({ open, onClose, scope, setScope, departments, department
 // Press feedback is CSS-only via `.project-card-press` so it composites
 // on the GPU (no React re-render on every tap).
 
+// Cool, muted palette for frozen cards. Picked to read as "ice / on
+// pause" — deliberately desaturated so it never competes with active
+// projects' identity colors. Same shape as a normal accent so it
+// drops in wherever the card consumes one.
+const FROST_ACCENT = {
+  from:  '#6B8AA8',
+  to:    '#A7C5E8',
+  solid: '#7E97B3',
+  glow:  'rgba(167,197,232,0.14)',
+};
+
 function ProjectCard({ project, onOpen, index }) {
-  const accent = getProjectAccent(project);
+  const baseAccent = getProjectAccent(project);
   const emoji = getProjectEmoji(project);
   const momentum = getMomentum(project);
   const urgency = getUrgency(project);
   const isFrozen = project?.status === 'on_hold';
+
+  // Swap the project's identity colors out for the frost palette while
+  // it's paused. This catches the top stripe, emoji halo, and progress
+  // ring in one stroke — they all read off `accent`. The user's
+  // explicit "freeze" intent should outrank visual identity.
+  const accent = isFrozen ? FROST_ACCENT : baseAccent;
 
   // Right-edge glow reserved for hot/overdue. Calm + warm states get
   // nothing — we don't want ambient amber noise on every card.
@@ -171,6 +188,14 @@ function ProjectCard({ project, onOpen, index }) {
   const urgencyClass = isFrozen ? '' :
     urgency.state === 'overdue' ? 'urgency-pulse' :
     urgency.state === 'hot'     ? 'urgency-hot'   : '';
+
+  // Frozen cards don't shout about overdueness — strip the urgency
+  // colour and the "Overdue · " prefix so the date reads as neutral
+  // metadata, not as something demanding attention.
+  const deadlineColor = isFrozen ? '#6B7280' : urgency.color;
+  const deadlineText  = isFrozen
+    ? formatDeadline(project).replace(/^Overdue · /, '')
+    : `${urgency.prefix}${formatDeadline(project)}`;
 
   return (
     <button
@@ -198,7 +223,7 @@ function ProjectCard({ project, onOpen, index }) {
           className="absolute top-0 left-0 right-0 h-[2px]"
           style={{
             background: `linear-gradient(90deg, ${accent.from} 0%, ${accent.to} 100%)`,
-            opacity: 0.75,
+            opacity: isFrozen ? 0.5 : 0.75,
           }}
         />
 
@@ -211,6 +236,9 @@ function ProjectCard({ project, onOpen, index }) {
               background: `radial-gradient(circle at 30% 30%, ${accent.glow} 0%, rgba(255,255,255,0.03) 70%)`,
               border: `1px solid ${accent.solid}33`,
               boxShadow: `0 0 12px ${accent.glow}`,
+              // Drain the saturation from the emoji itself so it reads
+              // as paused identity rather than a colourful bookmark.
+              filter: isFrozen ? 'grayscale(0.6)' : 'none',
             }}
             aria-hidden
           >
@@ -250,9 +278,9 @@ function ProjectCard({ project, onOpen, index }) {
             {project.deadline && (
               <span
                 className="text-[11px] font-semibold tabular-nums ml-auto whitespace-nowrap"
-                style={{ color: urgency.color }}
+                style={{ color: deadlineColor }}
               >
-                {urgency.prefix}{formatDeadline(project)}
+                {deadlineText}
               </span>
             )}
           </div>
