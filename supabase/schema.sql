@@ -521,7 +521,7 @@ DECLARE
 BEGIN
   FOR tbl IN SELECT unnest(ARRAY[
     'subtasks', 'comments', 'attachments', 'events', 'event_attendees',
-    'streaks', 'focus_sessions', 'templates', 'activity_log', 'departments', 'project_members'
+    'streaks', 'focus_sessions', 'templates', 'activity_log', 'departments'
   ]) LOOP
     EXECUTE format('CREATE POLICY %I_select ON nexo.%I FOR SELECT TO authenticated USING (true)', tbl, tbl);
     EXECUTE format('CREATE POLICY %I_insert ON nexo.%I FOR INSERT TO authenticated WITH CHECK (true)', tbl, tbl);
@@ -529,6 +529,30 @@ BEGIN
     EXECUTE format('CREATE POLICY %I_delete ON nexo.%I FOR DELETE TO authenticated USING (true)', tbl, tbl);
   END LOOP;
 END $$;
+
+-- project_members — read is open (avatars and member counts must show
+-- everywhere), but writes are gated to the project owner. Without
+-- this, any authenticated user could add themselves to or remove
+-- anyone from any project.
+DROP POLICY IF EXISTS project_members_select ON nexo.project_members;
+DROP POLICY IF EXISTS project_members_insert ON nexo.project_members;
+DROP POLICY IF EXISTS project_members_update ON nexo.project_members;
+DROP POLICY IF EXISTS project_members_delete ON nexo.project_members;
+CREATE POLICY project_members_select ON nexo.project_members
+  FOR SELECT TO authenticated USING (true);
+CREATE POLICY project_members_insert ON nexo.project_members
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    EXISTS (SELECT 1 FROM nexo.projects WHERE id = project_id AND owner_id = nexo.current_user_id())
+  );
+CREATE POLICY project_members_update ON nexo.project_members
+  FOR UPDATE TO authenticated USING (
+    EXISTS (SELECT 1 FROM nexo.projects WHERE id = project_id AND owner_id = nexo.current_user_id())
+  );
+CREATE POLICY project_members_delete ON nexo.project_members
+  FOR DELETE TO authenticated USING (
+    EXISTS (SELECT 1 FROM nexo.projects WHERE id = project_id AND owner_id = nexo.current_user_id())
+  );
 
 -- =============================================================================
 -- TRIGGERS: auto-update `updated_at`

@@ -286,6 +286,80 @@ async function deleteProject(id) {
   return { ok: true };
 }
 
+// ── Project membership (post-creation) ───────────────────────
+// Both functions check ownership client-side as a fast UX guard, but
+// the real enforcement is the project_members RLS policy. The owner
+// is the only role allowed to mutate membership.
+
+async function addProjectMember(projectId, userId) {
+  const me = uid();
+  const proj = unwrap(await supabase
+    .from('projects')
+    .select('owner_id, title, deadline')
+    .eq('id', projectId)
+    .single()
+  );
+  if (proj.owner_id !== me) {
+    throw new Error('Only the project owner can add members');
+  }
+  if (!userId) throw new Error('Pick a user');
+  if (userId === me) {
+    // Inserting yourself is fine, but it's almost certainly a no-op
+    // on the only project where you'd have owner permissions, so
+    // surface it instead of silently upserting.
+    throw new Error("You're already on this project");
+  }
+
+  await supabase
+    .from('project_members')
+    .upsert(
+      { project_id: projectId, user_id: userId },
+      { onConflict: 'project_id,user_id' }
+    );
+
+  // Mirror createProject's notification — being added to an existing
+  // project is the same emotional event as being added at creation.
+  try {
+    const { data: adder } = await supabase.from('users').select('name').eq('id', me).single();
+    await supabase.from('notifications').insert({
+      user_id: userId,
+      type: 'project_member_added',
+      title: `Added to project: ${proj.title}`,
+      body: `${adder?.name || 'Someone'} added you to "${proj.title}"${proj.deadline ? ' · Due ' + proj.deadline : ''}`,
+      ref_project: projectId,
+    });
+  } catch (e) { console.warn('add_member notification failed:', e); }
+
+  return { ok: true };
+}
+
+async function removeProjectMember(projectId, userId) {
+  const me = uid();
+  const proj = unwrap(await supabase
+    .from('projects')
+    .select('owner_id')
+    .eq('id', projectId)
+    .single()
+  );
+  if (proj.owner_id !== me) {
+    throw new Error('Only the project owner can remove members');
+  }
+  if (userId === proj.owner_id) {
+    // The owner row exists for permissions/visibility consistency.
+    // Removing it would leave a project ownerless from the join's
+    // perspective even if owner_id still points at them.
+    throw new Error("Can't remove the project owner");
+  }
+
+  const { error } = await supabase
+    .from('project_members')
+    .delete()
+    .eq('project_id', projectId)
+    .eq('user_id', userId);
+  if (error) throw error;
+  return { ok: true };
+}
+
 // ── Subtasks ─────────────────────────────────────────────
 
 async function createSubtask(projectId, data) {
@@ -2042,6 +2116,8 @@ export const api = {
   createProject,
   updateProject,
   deleteProject,
+  addProjectMember,
+  removeProjectMember,
   createSubtask,
   updateSubtask,
   deleteSubtask,

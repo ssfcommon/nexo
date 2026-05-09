@@ -10,6 +10,7 @@ import GanttChart from '../components/GanttChart.jsx';
 import ConfirmModal from '../components/ConfirmModal.jsx';
 import AlarmModal from '../components/AlarmModal.jsx';
 import RescheduleModal from '../components/RescheduleModal.jsx';
+import ManageMembersModal from '../components/ManageMembersModal.jsx';
 import RowActions from '../components/RowActions.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import useLiveUpdates from '../hooks/useLiveUpdates.js';
@@ -532,6 +533,7 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
   const [confirmDelete, setConfirmDelete] = useState(null); // { type, id, title }
   const [alarmSub, setAlarmSub] = useState(null); // subtask object whose alarm is being edited
   const [rescheduleSub, setRescheduleSub] = useState(null); // subtask whose deadline is being changed
+  const [membersOpen, setMembersOpen] = useState(false);
 
   const load = () => {
     api.project(projectId).then(setP);
@@ -763,7 +765,19 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
           </div>
           <div className="flex items-center justify-between">
             <p className="text-[11px] text-ink-300">{doneCount} of {p.subtasks.length} subtasks complete</p>
-            <AvatarStack users={p.members} max={3} size={26} />
+            {/* Tap-target on the avatar stack opens the member sheet.
+                Owners get add/remove; everyone else just sees the
+                roster, which is still useful as a "who's on this?"
+                quick-reference. */}
+            <button
+              type="button"
+              onClick={() => setMembersOpen(true)}
+              className="rounded-full -mr-1 px-1 py-0.5 transition-colors hover:bg-white/[0.05] active:scale-95"
+              aria-label="Manage members"
+              title={p.owner_id === me?.id ? 'Manage members' : 'View members'}
+            >
+              <AvatarStack users={p.members} max={3} size={26} />
+            </button>
           </div>
         </div>
       </div>
@@ -929,6 +943,14 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
         kind="subtask"
         onClose={() => setRescheduleSub(null)}
         onSaved={() => load()}
+      />
+
+      <ManageMembersModal
+        open={membersOpen}
+        project={p}
+        meId={me?.id}
+        onClose={() => setMembersOpen(false)}
+        onChanged={load}
       />
 
       <ConfirmModal
