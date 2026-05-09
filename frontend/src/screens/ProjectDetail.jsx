@@ -693,6 +693,10 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
         {/* Freeze/unfreeze — pauses the project so its tasks stop
             surfacing on Home. Frozen state tints the icon cyan to
             match the momentum chip's frozen palette. */}
+        {/* Header actions — same dimensions as before, but rendered as
+            recessed glass chips instead of thin grey-on-grey borders.
+            They now read as buttons even before hover. Print was
+            removed; nobody was reaching for it from this view. */}
         {p.status !== 'completed' && (
           <button
             onClick={async () => {
@@ -705,25 +709,46 @@ export default function ProjectDetail({ projectId, me, onBack, onSwitchTab }) {
                 showToast(e.message || "Couldn't update project", 'error');
               }
             }}
-            className="w-8 h-8 rounded-full border flex items-center justify-center transition"
+            className="w-8 h-8 rounded-full flex items-center justify-center transition-colors active:scale-95"
             style={
               p.status === 'on_hold'
-                ? { borderColor: 'rgba(167,197,232,0.45)', color: '#A7C5E8', background: 'rgba(167,197,232,0.10)' }
-                : { borderColor: 'rgba(255,255,255,0.10)', color: '#9CA3AF' }
+                ? { background: 'rgba(167,197,232,0.16)', color: '#A7C5E8', border: '1px solid rgba(167,197,232,0.45)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)' }
+                : { background: 'rgba(255,255,255,0.06)', color: '#D1D5DB', border: '1px solid rgba(255,255,255,0.18)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)' }
             }
             title={p.status === 'on_hold' ? 'Unfreeze — resume notifications' : 'Freeze — hide from Home until you resume'}
           >
             <span className="text-[14px] leading-none">{p.status === 'on_hold' ? '▶' : '❄'}</span>
           </button>
         )}
-        <button onClick={() => setEditOpen(true)} className="w-8 h-8 rounded-full border border-line-light flex items-center justify-center text-ink-300 hover:text-brand-blue hover:border-brand-blue transition" title="Edit project">
-          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        <button
+          onClick={() => setEditOpen(true)}
+          className="w-8 h-8 rounded-full flex items-center justify-center transition-colors active:scale-95"
+          style={{
+            background: 'rgba(255,255,255,0.06)',
+            color: '#D1D5DB',
+            border: '1px solid rgba(255,255,255,0.18)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = '#A8C4FF'; e.currentTarget.style.borderColor = 'rgba(91,140,255,0.45)'; e.currentTarget.style.background = 'rgba(91,140,255,0.10)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = '#D1D5DB'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+          title="Edit project"
+        >
+          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         </button>
-        <button onClick={() => setConfirmDelete({ type: 'project', id: projectId, title: p.title })} className="w-8 h-8 rounded-full border border-line-light flex items-center justify-center text-ink-300 hover:text-danger hover:border-danger transition" title="Delete project">
-          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-        </button>
-        <button onClick={() => window.print()} className="w-8 h-8 rounded-full border border-line-light flex items-center justify-center text-ink-300 hover:text-ink-900 transition" title="Print / Save PDF">
-          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        <button
+          onClick={() => setConfirmDelete({ type: 'project', id: projectId, title: p.title })}
+          className="w-8 h-8 rounded-full flex items-center justify-center transition-colors active:scale-95"
+          style={{
+            background: 'rgba(255,255,255,0.06)',
+            color: '#D1D5DB',
+            border: '1px solid rgba(255,255,255,0.18)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = '#F87171'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.50)'; e.currentTarget.style.background = 'rgba(239,68,68,0.10)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = '#D1D5DB'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+          title="Delete project"
+        >
+          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
         </button>
       </div>
 
