@@ -1139,6 +1139,7 @@ export function ReportBugModal({ open, onClose, onCreated }) {
             <option value="XPNS">XPNS</option>
             <option value="Nexo">Nexo</option>
             <option value="Milaan">Milaan</option>
+            <option value="Chigo">Chigo</option>
             <option value="CEO Dashboard">CEO Dashboard</option>
           </select>
         </Field>
